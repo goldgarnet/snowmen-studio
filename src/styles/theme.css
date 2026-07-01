@@ -52,6 +52,10 @@
   --star: #f2a43a;
   --star-empty: #d6e2ef;
 
+  /* comment spoiler block */
+  --spoiler-bg: #2a3340;
+  --spoiler-bg-hover: #39465a;
+
   /* feedback */
   --danger: #c8554d;
   --danger-hover: #d5665e;
@@ -110,6 +114,9 @@
 
   --star: #f2b53a;
   --star-empty: #2c3a4f;
+
+  --spoiler-bg: #3a4658;
+  --spoiler-bg-hover: #4a5a72;
 
   --danger: #ef7b74;
   --danger-hover: #f58c85;

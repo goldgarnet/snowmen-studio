@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { listComments, addComment, deleteComment } from '../../api/comments';
 import type { CommentRow } from '../../api/types';
+import SpoilerText from './SpoilerText';
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -13,6 +14,24 @@ export default function CommentList({ mapId }: { mapId: string }) {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Wrap the selected text (or a placeholder) in ||spoiler|| markers.
+  const wrapSpoiler = () => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = body.slice(start, end);
+    const inner = selected || '스포일러';
+    const next = `${body.slice(0, start)}||${inner}||${body.slice(end)}`;
+    setBody(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + 2;
+      ta.setSelectionRange(pos, pos + inner.length);
+    });
+  };
 
   const load = useCallback(async () => {
     try { setComments(await listComments(mapId)); }
@@ -43,14 +62,26 @@ export default function CommentList({ mapId }: { mapId: string }) {
       <h4 className="comments-title">피드백 ({comments.length})</h4>
 
       <div className="comment-compose">
-        <textarea
-          className="field-textarea"
-          rows={2}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="피드백을 남겨주세요…"
-          disabled={busy}
-        />
+        <div className="comment-input-wrap">
+          <textarea
+            ref={taRef}
+            className="field-textarea"
+            rows={2}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="피드백을 남겨주세요…  (선택한 글자를 스포일러로 가릴 수 있어요)"
+            disabled={busy}
+          />
+          <button
+            type="button"
+            className="btn btn-sm comment-spoiler-btn"
+            onClick={wrapSpoiler}
+            disabled={busy}
+            title="선택한 글자를 ||스포일러||로 감쌉니다"
+          >
+            ⬛ 스포일러
+          </button>
+        </div>
         <button className="btn btn-primary" onClick={submit} disabled={busy || !body.trim()}>등록</button>
       </div>
 
@@ -67,7 +98,7 @@ export default function CommentList({ mapId }: { mapId: string }) {
                   <button className="comment-del" onClick={() => remove(c.id)} aria-label="삭제">✕</button>
                 )}
               </div>
-              <div className="comment-body">{c.body}</div>
+              <div className="comment-body"><SpoilerText text={c.body} /></div>
             </li>
           ))}
         </ul>

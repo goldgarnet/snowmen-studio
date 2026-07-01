@@ -192,7 +192,9 @@
 .comments { }
 .comments-title { font-size: 13px; font-weight: 700; color: var(--text-dim); margin-bottom: 10px; }
 .comment-compose { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 14px; }
-.comment-compose .field-textarea { flex: 1; min-height: 60px; }
+.comment-input-wrap { flex: 1; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.comment-input-wrap .field-textarea { width: 100%; min-height: 60px; }
+.comment-spoiler-btn { align-self: flex-start; }
 .comments-empty { color: var(--text-faint); font-size: 13px; padding: 6px 0; }
 .comment-items { list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .comment-item { display: flex; flex-direction: column; }

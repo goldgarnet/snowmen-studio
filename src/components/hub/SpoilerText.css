@@ -1,0 +1,9 @@
+/* Layout only — hidden/revealed colors are applied inline in SpoilerText.tsx
+   so state always wins over the cascade. */
+.spoiler {
+  border-radius: 4px;
+  padding: 0 3px;
+  transition: background 0.12s ease, color 0.12s ease;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
