@@ -13,8 +13,8 @@ export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps)
   return (
     <header className="topnav">
       <div className="topnav-brand">
-        <span className="topnav-logo">⛄</span>
-        <span className="topnav-name">Snowmen Studio</span>
+        <div className="topnav-logo">❄</div>
+        <div className="topnav-name">Snowmen <span>Studio</span></div>
       </div>
 
       <nav className="topnav-tabs">

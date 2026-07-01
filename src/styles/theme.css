@@ -1,62 +1,64 @@
 /* ============================================================
-   Snowmen Studio — design tokens
-   These CSS variables are the single source of truth for the
-   app's color scheme. The map-hub screens and the reworked
-   editor/simulator all read from here. (When the reference
-   design `Snowmen Studio.dc.html` is provided, tune these
-   values to match — no component markup needs to change.)
+   Snowmen Studio — design tokens (light / frosty theme)
+   Derived from the reference design "Snowmen Studio.dc.html":
+   Pretendard type, icy-blue accent, white surfaces on a soft
+   sky-blue gradient. Single source of truth for all screens.
    ============================================================ */
 :root {
+  /* page background gradient */
+  --bg-grad: radial-gradient(1200px 600px at 80% -10%, #eef5fc 0%, #e6eef8 45%, #e1ebf6 100%);
+  --bg: #e8eef7;              /* inset tracks / subtle fills */
+
   /* surfaces */
-  --bg: #0d1424;
-  --bg-grad-top: #14203a;
-  --bg-grad-bottom: #0d1424;
-  --surface: #16223c;
-  --surface-2: #1d2c4c;
-  --surface-3: #24365c;
-  --surface-hover: #26395f;
+  --surface: #ffffff;
+  --surface-2: #f6faff;
+  --surface-3: #eef4fb;
+  --surface-hover: #f1f7fd;
 
   /* borders */
-  --border: rgba(140, 180, 240, 0.14);
-  --border-strong: rgba(140, 180, 240, 0.28);
+  --line: #e0e9f3;
+  --border: #e0e9f3;
+  --border-strong: #d2e0f0;
 
-  /* text */
-  --text: #eaf1fb;
-  --text-dim: #9fb2cf;
-  --text-faint: #6c809f;
+  /* text (ink scale) */
+  --text: #283a4e;
+  --text-dim: #5b6e83;
+  --text-faint: #8a9bad;
 
   /* brand accent — icy blue */
-  --accent: #4aa8ff;
-  --accent-hover: #6bb9ff;
-  --accent-press: #3a92e6;
-  --accent-soft: rgba(74, 168, 255, 0.16);
-  --accent-contrast: #06121f;
+  --accent: #4f86d6;
+  --accent-hover: #5f93e0;
+  --accent-press: #3f76c6;
+  --accent-grad: linear-gradient(150deg, #4f86d6, #7aa8e8);
+  --accent-soft: #eaf1fc;
+  --accent-contrast: #ffffff;
 
-  /* status (채택/보류/반려/미검토) */
-  --status-accepted: #37c98a;
-  --status-accepted-soft: rgba(55, 201, 138, 0.16);
-  --status-held: #f0b429;
-  --status-held-soft: rgba(240, 180, 41, 0.16);
-  --status-rejected: #f2596b;
-  --status-rejected-soft: rgba(242, 89, 107, 0.16);
-  --status-pending: #7d92b3;
-  --status-pending-soft: rgba(125, 146, 179, 0.16);
+  /* status (검토중 / 채택 / 보류 / 반려) */
+  --status-pending: #3a72c4;
+  --status-pending-soft: #e8f0fc;
+  --status-accepted: #2f8a52;
+  --status-accepted-soft: #e7f5ee;
+  --status-held: #b07d1f;
+  --status-held-soft: #fbf2df;
+  --status-rejected: #c8554d;
+  --status-rejected-soft: #fbe8e7;
 
   /* difficulty stars */
-  --star: #ffcf4d;
-  --star-empty: rgba(255, 255, 255, 0.16);
+  --star: #f2a43a;
+  --star-empty: #d6e2ef;
 
   /* feedback */
-  --danger: #f2596b;
-  --danger-hover: #ff6f80;
+  --danger: #c8554d;
+  --danger-hover: #d5665e;
 
   /* geometry */
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 16px;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --radius-sm: 9px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow-sm: 0 1px 3px rgba(40, 70, 110, 0.10);
+  --shadow: 0 8px 22px -16px rgba(40, 70, 110, 0.5);
+  --shadow-lg: 0 30px 70px -20px rgba(20, 40, 70, 0.35);
+  --shadow-accent: 0 6px 14px -6px var(--accent);
 
-  --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif;
+  --font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Segoe UI', sans-serif;
 }

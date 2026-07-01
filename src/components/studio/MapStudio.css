@@ -48,7 +48,7 @@
 .studio-card-meta { font-size: 12px; color: var(--text-faint); margin-bottom: 14px; }
 .studio-card-actions { display: flex; gap: 8px; }
 
-.btn-sm { padding: 6px 11px; font-size: 12px; }
+.btn-sm { height: 30px; padding: 0 11px; font-size: 12px; }
 
 /* ===== editor host ===== */
 .studio-editor {

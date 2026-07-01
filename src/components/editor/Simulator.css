@@ -11,39 +11,20 @@
   align-items: center;
   gap: 13px;
   padding: 10px 22px;
-  background: linear-gradient(180deg, #1a1a2e, #161628);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.55);
+  border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
 
-.sim-info {
-  font-size: 14px;
-  color: #8899aa;
-  margin-right: auto;
-  font-weight: 500;
-}
+.sim-info { font-size: 14px; color: var(--text-dim); margin-right: auto; font-weight: 700; }
 
 .sim-controls button {
-  padding: 7px 15px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #222238;
-  color: #99aabb;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.12s ease;
+  padding: 8px 15px;
+  border: 1px solid var(--line); background: #fff; color: var(--text-dim);
+  border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.12s ease;
 }
-
-.sim-controls button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.sim-controls button:hover:not(:disabled) {
-  background: #2a2a44;
-  color: #c0cdd8;
-}
+.sim-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+.sim-controls button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
 
 .sim-body {
   flex: 1;
@@ -51,19 +32,13 @@
   align-items: center;
   justify-content: center;
   gap: 32px;
-  padding: 20px;
-  background: #12121f;
+  padding: 24px;
+  background: transparent;
   min-height: 0;
   overflow: hidden;
 }
 
-.sim-touch-pad {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  flex-shrink: 0;
-}
+.sim-touch-pad { display: flex; flex-direction: column; align-items: center; gap: 14px; flex-shrink: 0; }
 
 .dpad {
   display: grid;
@@ -73,203 +48,73 @@
 }
 
 .dpad-btn {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, #2a2a44, #1f1f36);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #c0d0e0;
-  font-size: 22px;
-  border-radius: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.12s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  padding: 0;
+  width: 64px; height: 64px;
+  background: #fff; border: 1px solid var(--line); color: var(--text);
+  font-size: 22px; border-radius: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.12s ease;
+  box-shadow: 0 3px 8px -4px rgba(40, 70, 110, 0.4);
+  user-select: none; -webkit-tap-highlight-color: transparent; padding: 0;
 }
-
-.dpad-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #34344f, #292942);
-  color: #fff;
-}
-
-.dpad-btn:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-
-.dpad-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
+.dpad-btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-strong); }
+.dpad-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 3px rgba(40, 70, 110, 0.3); }
+.dpad-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .dpad-up    { grid-column: 2; grid-row: 1; }
 .dpad-left  { grid-column: 1; grid-row: 2; }
-.dpad-center{ grid-column: 2; grid-row: 2; background: linear-gradient(135deg, #4a3a6a, #36284f); }
+.dpad-center{ grid-column: 2; grid-row: 2; background: var(--accent); color: #fff; border-color: transparent; font-size: 13px; font-weight: 700; box-shadow: var(--shadow-accent); }
 .dpad-right { grid-column: 3; grid-row: 2; }
 .dpad-down  { grid-column: 2; grid-row: 3; }
 
-.dpad-aux {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-}
-
+.dpad-aux { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .dpad-aux button {
-  padding: 9px 12px;
-  background: #222238;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #99aabb;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.12s ease;
+  padding: 10px 12px; background: #fff; border: 1px solid var(--line); color: var(--text-dim);
+  border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.12s ease;
 }
-
-.dpad-aux button:hover:not(:disabled) {
-  background: #2a2a44;
-  color: #c0cdd8;
-}
-
-.dpad-aux button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
+.dpad-aux button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.dpad-aux button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .sim-grid-area {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  min-height: 0;
-  max-width: 100%;
-  max-height: 100%;
-  height: 100%;
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
+  min-width: 0; min-height: 0; max-width: 100%; max-height: 100%; height: 100%;
 }
 
 .sim-help {
-  display: flex;
-  justify-content: center;
-  gap: 22px;
-  padding: 8px 22px;
-  background: linear-gradient(180deg, #161628, #131322);
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-  flex-wrap: wrap;
+  display: flex; justify-content: center; gap: 22px; padding: 9px 22px;
+  background: rgba(255, 255, 255, 0.5); border-top: 1px solid var(--line); flex-wrap: wrap;
 }
+.sim-help span { font-size: 12px; color: var(--text-faint); letter-spacing: 0.02em; }
 
-.sim-help span {
-  font-size: 12px;
-  color: #556677;
-  letter-spacing: 0.02em;
-}
-
-/* Mobile / tablet landscape: shrink dpad, tighten gap */
 @media (max-width: 900px) {
-  .sim-body {
-    gap: 16px;
-    padding: 12px;
-  }
-  .dpad {
-    grid-template-columns: repeat(3, 52px);
-    grid-template-rows: repeat(3, 52px);
-    gap: 5px;
-  }
-  .dpad-btn {
-    width: 52px;
-    height: 52px;
-    font-size: 18px;
-    border-radius: 10px;
-  }
-  .dpad-aux button {
-    padding: 7px 8px;
-    font-size: 11px;
-  }
-  .sim-help {
-    gap: 12px;
-    padding: 6px 12px;
-  }
-  .sim-help span {
-    font-size: 11px;
-  }
+  .sim-body { gap: 16px; padding: 12px; }
+  .dpad { grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 5px; }
+  .dpad-btn { width: 52px; height: 52px; font-size: 18px; border-radius: 12px; }
+  .dpad-aux button { padding: 7px 8px; font-size: 11px; }
+  .sim-help { gap: 12px; padding: 6px 12px; }
+  .sim-help span { font-size: 11px; }
 }
 
 @media (max-height: 480px) {
-  .sim-help {
-    display: none;
-  }
-  .sim-controls {
-    padding: 6px 14px;
-  }
-  .sim-body {
-    padding: 8px;
-    gap: 12px;
-  }
-  .sim-touch-pad {
-    gap: 8px;
-  }
+  .sim-help { display: none; }
+  .sim-controls { padding: 6px 14px; }
+  .sim-body { padding: 8px; gap: 12px; }
+  .sim-touch-pad { gap: 8px; }
 }
 
 .overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  backdrop-filter: blur(3px);
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  z-index: 50; backdrop-filter: blur(3px);
 }
-
-.overlay.cleared {
-  background: rgba(35, 110, 55, 0.75);
-}
-
-.overlay.gameover {
-  background: rgba(110, 30, 30, 0.75);
-}
+.overlay.cleared { background: rgba(47, 138, 82, 0.5); }
+.overlay.gameover { background: rgba(200, 85, 77, 0.45); }
 
 .overlay-content {
-  background: linear-gradient(180deg, #1e1e34, #1a1a2e);
-  padding: 40px 53px;
-  border-radius: 16px;
-  text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  background: #fff; padding: 40px 53px; border-radius: 20px; text-align: center;
+  border: 1px solid var(--line); box-shadow: var(--shadow-lg); animation: popIn 0.2s ease;
 }
-
-.overlay-content h2 {
-  margin-bottom: 11px;
-  font-size: 29px;
-  font-weight: 700;
-  color: #e8ecf0;
-}
-
-.overlay-content p {
-  margin-bottom: 22px;
-  color: #8899aa;
-  font-size: 15px;
-}
-
+.overlay-content h2 { margin-bottom: 11px; font-size: 29px; font-weight: 800; color: var(--text); }
+.overlay-content p { margin-bottom: 22px; color: var(--text-dim); font-size: 15px; }
 .overlay-content button {
-  padding: 9px 24px;
-  margin: 0 7px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #222238;
-  color: #99aabb;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 500;
-  transition: all 0.12s ease;
+  padding: 10px 24px; margin: 0 7px; border: 1px solid var(--line); background: #fff; color: var(--text-dim);
+  border-radius: 10px; cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.12s ease;
 }
-
-.overlay-content button:hover {
-  background: #4a6fa5;
-  color: #fff;
-  border-color: transparent;
-}
+.overlay-content button:hover { background: var(--accent); color: #fff; border-color: transparent; }

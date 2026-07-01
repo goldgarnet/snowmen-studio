@@ -15,6 +15,11 @@ interface MapDetailProps {
   onChanged: (updated?: MapRow) => void;
 }
 
+function fullDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: MapDetailProps) {
   const { profile } = useAuth();
   const [map, setMap] = useState<MapRow>(initial);
@@ -64,59 +69,79 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
   return (
     <div className="map-detail">
       <div className="detail-topbar">
-        <button className="btn btn-ghost" onClick={onBack}>← 허브</button>
-        {flash && <span className="studio-flash">{flash}</span>}
+        <button className="btn" onClick={onBack}>← 허브로</button>
+        {flash && <span className="detail-flash">{flash}</span>}
         {isOwner && (
           <div className="detail-owner-actions">
-            <button className="btn btn-sm" onClick={() => setEditing(true)}>수정</button>
-            <button className="btn btn-sm btn-danger" onClick={remove}>삭제</button>
+            <button className="btn" onClick={() => setEditing(true)}>수정</button>
+            <button className="btn btn-danger" onClick={remove}>삭제</button>
           </div>
         )}
       </div>
 
-      <div className="detail-body">
-        <div className="detail-header">
-          <div>
-            <h2 className="detail-title">{map.title || '제목 없음'}</h2>
-            <div className="detail-author">🎨 {map.author_name || '익명'}</div>
-          </div>
-          <span className={`badge badge-${map.status}`}>{STATUS_LABEL[map.status]}</span>
-        </div>
+      <div className="detail-scroll">
+        <div className="detail-columns">
+          {/* ---- left ---- */}
+          <div className="detail-main">
+            <div className="detail-header">
+              <h1 className="detail-title">{map.title || '제목 없음'}</h1>
+              <span className={`badge badge-${map.status}`}>{STATUS_LABEL[map.status]}</span>
+            </div>
 
-        <button className="btn btn-primary detail-play" onClick={() => onPlay(map)}>▶ 플레이하기</button>
+            <button className="btn btn-primary detail-play" onClick={() => onPlay(map)}>▶ 바로 플레이</button>
 
-        {map.comment && (
-          <div className="detail-section">
-            <div className="detail-label">코멘트</div>
-            <p className="detail-comment">{map.comment}</p>
-          </div>
-        )}
+            {map.comment && (
+              <div className="detail-comment-card">
+                <div className="detail-mini-label">코멘트</div>
+                <p>{map.comment}</p>
+              </div>
+            )}
 
-        <div className="detail-review">
-          <div className="detail-review-col">
-            <div className="detail-label">난이도 <span className="detail-hint">(누구나 조정 가능)</span></div>
-            <div className="detail-diff-row">
-              <StarRating value={map.difficulty} onChange={changeDifficulty} size={26} />
-              <span className="difficulty-num">
-                {map.difficulty != null ? map.difficulty.toFixed(1) : '미지정'}
-              </span>
+            <div className="detail-info-grid">
+              <div className="detail-info">
+                <div className="detail-mini-label">제작자</div>
+                <div className="detail-info-val">{map.author_name || '익명'}</div>
+              </div>
+              <div className="detail-info">
+                <div className="detail-mini-label">등록일</div>
+                <div className="detail-info-val">{fullDate(map.created_at)}</div>
+              </div>
+              <div className="detail-info">
+                <div className="detail-mini-label">난이도</div>
+                <div className="detail-info-val">
+                  {map.difficulty != null ? <StarRating value={map.difficulty} size={16} /> : <span className="detail-muted">미지정</span>}
+                </div>
+              </div>
+              <div className="detail-info detail-info-clickable" onClick={copyCode}>
+                <div className="detail-mini-label">맵 코드 (복사)</div>
+                <div className="detail-info-code">{map.code.slice(0, 18)}{map.code.length > 18 ? '…' : ''}</div>
+              </div>
             </div>
           </div>
-          <div className="detail-review-col">
-            <div className="detail-label">회의 결정 <span className="detail-hint">(누구나 변경 가능)</span></div>
-            <StatusControl value={map.status} disabled={busy} onChange={changeStatus} />
+
+          {/* ---- right: review ---- */}
+          <div className="detail-review">
+            <div className="review-title">회의 검토</div>
+            <div className="review-sub">결정 사항과 피드백을 기록해요.</div>
+
+            <div className="review-block">
+              <div className="review-label">난이도 <span className="review-hint">누구나 조정</span></div>
+              <div className="review-diff-row">
+                <StarRating value={map.difficulty} onChange={changeDifficulty} size={26} />
+                <span className="difficulty-num">{map.difficulty != null ? map.difficulty.toFixed(1) : '—'}</span>
+              </div>
+            </div>
+
+            <div className="review-block">
+              <div className="review-label">회의 결정 <span className="review-hint">누구나 변경</span></div>
+              <StatusControl value={map.status} disabled={busy} onChange={changeStatus} />
+            </div>
+
+            <div className="review-block">
+              <CommentList mapId={map.id} />
+            </div>
           </div>
         </div>
-
-        <div className="detail-section">
-          <div className="detail-label">맵 코드</div>
-          <div className="detail-code-row">
-            <code className="detail-code">{map.code}</code>
-            <button className="btn btn-sm" onClick={copyCode}>복사</button>
-          </div>
-        </div>
-
-        <CommentList mapId={map.id} />
       </div>
 
       {editing && (

@@ -33,7 +33,7 @@ export interface CommentRow {
 }
 
 export const STATUS_LABEL: Record<MapStatus, string> = {
-  pending: '미검토',
+  pending: '검토중',
   accepted: '채택',
   held: '보류',
   rejected: '반려',

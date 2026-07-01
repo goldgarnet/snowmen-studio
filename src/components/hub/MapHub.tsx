@@ -1,13 +1,22 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { listPublishedMaps, insertMap, fetchAllForBackup } from '../../api/maps';
-import type { MapRow } from '../../api/types';
+import type { MapRow, MapStatus } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import MapCard from './MapCard';
 import MapDetail from './MapDetail';
 import UploadForm, { UploadPayload } from './UploadForm';
 import PlayView from '../editor/PlayView';
 import './hub.css';
+
+type Filter = 'all' | MapStatus;
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'pending', label: '검토중' },
+  { key: 'accepted', label: '채택' },
+  { key: 'held', label: '보류' },
+  { key: 'rejected', label: '반려' },
+];
 
 function buildBackupText(maps: MapRow[]): string {
   const lines: string[] = [];
@@ -36,7 +45,7 @@ export default function MapHub() {
   const { profile } = useAuth();
   const [maps, setMaps] = useState<MapRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [acceptedOnly, setAcceptedOnly] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const [selected, setSelected] = useState<MapRow | null>(null);
@@ -54,14 +63,20 @@ export default function MapHub() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return maps.filter((m) => {
-      if (acceptedOnly && m.status !== 'accepted') return false;
+      if (filter !== 'all' && m.status !== filter) return false;
       if (q) {
         const hay = `${m.title ?? ''} ${m.author_name ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [maps, acceptedOnly, query]);
+  }, [maps, filter, query]);
+
+  const stats = useMemo(() => ({
+    total: maps.length,
+    adopted: maps.filter((m) => m.status === 'accepted').length,
+    review: maps.filter((m) => m.status === 'pending').length,
+  }), [maps]);
 
   const doUpload = async (p: UploadPayload) => {
     if (!profile) return;
@@ -93,18 +108,12 @@ export default function MapHub() {
     } catch (e) { alert('백업 실패: ' + (e as Error).message); }
   };
 
-  // ---- play ----
   if (playMap) {
     return (
-      <PlayView
-        code={playMap.code}
-        title={playMap.title || '플레이'}
-        onClose={() => setPlayMap(null)}
-      />
+      <PlayView code={playMap.code} title={playMap.title || '플레이'} onClose={() => setPlayMap(null)} />
     );
   }
 
-  // ---- detail ----
   if (selected) {
     return (
       <MapDetail
@@ -116,37 +125,50 @@ export default function MapHub() {
     );
   }
 
-  // ---- grid ----
   return (
     <div className="hub">
       <div className="hub-head">
         <div>
-          <h2>맵 허브</h2>
-          <p className="studio-sub">팀원들이 올린 맵을 플레이하고 피드백을 남겨보세요.</p>
+          <h1 className="hub-title">맵 허브</h1>
+          <p className="hub-sub">팀이 만든 맵을 모으고, 함께 검토하고, 챕터에 배치해요.</p>
         </div>
-        <div className="hub-head-actions">
-          <button className="btn" onClick={exportBackup}>⭳ 전체 백업</button>
-          <button className="btn btn-primary" onClick={() => setShowUpload(true)}>+ 맵 업로드</button>
+        <div className="hub-head-right">
+          <div className="hub-stats">
+            <div className="hub-stat"><div className="hub-stat-num">{stats.total}</div><div className="hub-stat-label">전체 맵</div></div>
+            <div className="hub-stat"><div className="hub-stat-num accepted">{stats.adopted}</div><div className="hub-stat-label">채택</div></div>
+            <div className="hub-stat"><div className="hub-stat-num review">{stats.review}</div><div className="hub-stat-label">검토중</div></div>
+          </div>
+          <div className="hub-head-actions">
+            <button className="btn" onClick={exportBackup}>⭳ 전체 백업</button>
+            <button className="btn btn-primary" onClick={() => setShowUpload(true)}>＋ 맵 올리기</button>
+          </div>
         </div>
       </div>
 
       <div className="hub-toolbar">
+        <div className="hub-filters">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              className={`chip${filter === f.key ? ' active' : ''}`}
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
         <input
           className="field-input hub-search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="제목 · 제작자 검색"
         />
-        <label className="hub-filter">
-          <input type="checkbox" checked={acceptedOnly} onChange={(e) => setAcceptedOnly(e.target.checked)} />
-          채택된 맵만 보기
-        </label>
       </div>
 
       {loading ? (
-        <div className="studio-empty">불러오는 중…</div>
+        <div className="hub-empty">불러오는 중…</div>
       ) : visible.length === 0 ? (
-        <div className="studio-empty">
+        <div className="hub-empty">
           {maps.length === 0 ? '아직 업로드된 맵이 없습니다. 첫 맵을 올려보세요!' : '조건에 맞는 맵이 없습니다.'}
         </div>
       ) : (
@@ -157,8 +179,8 @@ export default function MapHub() {
 
       {showUpload && (
         <UploadForm
-          title="맵 업로드"
-          submitLabel="업로드"
+          title="맵 올리기"
+          submitLabel="허브에 등록"
           initial={{ author_name: profile?.name ?? '' }}
           onSubmit={doUpload}
           onCancel={() => setShowUpload(false)}
