@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Level } from '../../types';
 import { createLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
 import { useAuth } from '../../context/AuthContext';
-import { listMyMaps, insertMap, updateMap, deleteMap } from '../../api/maps';
+import { useGuard, StudioApi } from '../../context/GuardContext';
+import { listMyMaps, insertMap, updateMap, deleteMap, registeredToISO } from '../../api/maps';
 import type { MapRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import Editor from '../editor/Editor';
 import PlayView from '../editor/PlayView';
 import UploadForm, { UploadPayload } from '../hub/UploadForm';
+import MapThumbnail from '../hub/MapThumbnail';
 import './MapStudio.css';
 
 type View = 'list' | 'editor' | 'play';
@@ -20,6 +22,7 @@ function formatDate(iso: string): string {
 
 export default function MapStudio() {
   const { profile } = useAuth();
+  const guard = useGuard();
   const [maps, setMaps] = useState<MapRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('list');
@@ -29,6 +32,8 @@ export default function MapStudio() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [published, setPublished] = useState(false);
+  // The map code as of the last save/open — used to detect unsaved changes.
+  const [savedCode, setSavedCode] = useState('');
   const [flash, setFlash] = useState<string | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [playCode, setPlayCode] = useState('');
@@ -46,7 +51,9 @@ export default function MapStudio() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const openNew = () => {
-    setLevel(createLevel(8, 8));
+    const fresh = createLevel(8, 8);
+    setLevel(fresh);
+    setSavedCode(encodeLevelCode(fresh));
     setEditId(null); setEditTitle('새 맵'); setPublished(false);
     setView('editor');
   };
@@ -55,6 +62,7 @@ export default function MapStudio() {
     const lv = decodeLevelCode(m.code);
     if (!lv) { alert('맵 코드를 해석할 수 없어 열 수 없습니다.'); return; }
     setLevel(lv);
+    setSavedCode(encodeLevelCode(lv));
     setEditId(m.id); setEditTitle(m.title ?? '제목 없음'); setPublished(m.published);
     setView('editor');
   };
@@ -69,6 +77,7 @@ export default function MapStudio() {
         const row = await insertMap({ owner_id: profile.id, title: editTitle || null, code, published: false });
         setEditId(row.id);
       }
+      setSavedCode(code);
       showFlash('저장됨');
       refresh();
     } catch (e) { alert('저장 실패: ' + (e as Error).message); }
@@ -83,16 +92,22 @@ export default function MapStudio() {
 
   const doPublish = async (p: UploadPayload) => {
     if (!profile) return;
+    const created_at = registeredToISO(p.registered_on);
     if (editId) {
       await updateMap(editId, {
         title: p.title, author_name: p.author_name, comment: p.comment,
-        difficulty: p.difficulty, code: p.code, published: true,
+        difficulty: p.difficulty, code: p.code, created_at, published: true,
       });
       setPublished(true);
     } else {
-      const row = await insertMap({ owner_id: profile.id, ...p, published: true });
+      const row = await insertMap({
+        owner_id: profile.id,
+        author_name: p.author_name, code: p.code, title: p.title,
+        comment: p.comment, difficulty: p.difficulty, created_at, published: true,
+      });
       setEditId(row.id); setPublished(true);
     }
+    setSavedCode(p.code);
     setShowPublish(false);
     showFlash('허브에 올렸습니다');
     refresh();
@@ -104,6 +119,28 @@ export default function MapStudio() {
     catch (e) { alert('삭제 실패: ' + (e as Error).message); }
   };
 
+  // --- unsaved-changes guard: expose isDirty/save to the app via a stable api
+  // that delegates to the latest closures. ---
+  const isDirty = view === 'editor' && encodeLevelCode(level) !== savedCode;
+  const latest = useRef<StudioApi>({ isDirty: () => false, save: async () => {} });
+  latest.current = { isDirty: () => isDirty, save };
+
+  useEffect(() => {
+    const api: StudioApi = { isDirty: () => latest.current.isDirty(), save: () => latest.current.save() };
+    guard.register(api);
+    return () => guard.register(null);
+  }, [guard]);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  const leaveToList = () => guard.attempt(() => { setView('list'); refresh(); });
+
   // ---------- play submode ----------
   if (view === 'play') {
     return <PlayView code={playCode} title={editTitle} onClose={() => setView('editor')} />;
@@ -114,7 +151,7 @@ export default function MapStudio() {
     return (
       <div className="studio-editor">
         <div className="studio-toolbar">
-          <button className="btn btn-ghost" onClick={() => { setView('list'); refresh(); }}>← 목록</button>
+          <button className="btn btn-ghost" onClick={leaveToList}>← 목록</button>
           <input
             className="field-input studio-title-input"
             value={editTitle}
@@ -122,6 +159,7 @@ export default function MapStudio() {
             placeholder="맵 제목"
           />
           {published && <span className="badge badge-accepted">허브 공개됨</span>}
+          {isDirty && <span className="studio-dirty">● 저장 안 됨</span>}
           <div className="studio-toolbar-spacer" />
           {flash && <span className="studio-flash">{flash}</span>}
           <button className="btn" onClick={copyCode}>맵 코드 복사</button>
@@ -173,18 +211,21 @@ export default function MapStudio() {
         <div className="studio-grid">
           {maps.map((m) => (
             <div className="studio-card" key={m.id} onClick={() => openExisting(m)}>
-              <div className="studio-card-top">
-                <span className="studio-card-title">{m.title || '제목 없음'}</span>
+              <div className="studio-card-thumb">
+                <MapThumbnail code={m.code} />
                 {m.published
-                  ? <span className={`badge badge-${m.status}`}>{STATUS_LABEL[m.status]}</span>
-                  : <span className="badge badge-pending">초안</span>}
+                  ? <span className={`badge badge-${m.status} studio-card-badge`}>{STATUS_LABEL[m.status]}</span>
+                  : <span className="badge badge-pending studio-card-badge">초안</span>}
               </div>
-              <div className="studio-card-meta">
-                {m.published ? '허브 공개' : '개인 초안'} · {formatDate(m.updated_at)}
-              </div>
-              <div className="studio-card-actions" onClick={(e) => e.stopPropagation()}>
-                <button className="btn btn-sm" onClick={() => openExisting(m)}>이어서 만들기</button>
-                <button className="btn btn-sm btn-danger" onClick={() => removeMap(m)}>삭제</button>
+              <div className="studio-card-body">
+                <div className="studio-card-title">{m.title || '제목 없음'}</div>
+                <div className="studio-card-meta">
+                  {m.published ? '허브 공개' : '개인 초안'} · {formatDate(m.updated_at)}
+                </div>
+                <div className="studio-card-actions" onClick={(e) => e.stopPropagation()}>
+                  <button className="btn btn-sm" onClick={() => openExisting(m)}>이어서 만들기</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => removeMap(m)}>삭제</button>
+                </div>
               </div>
             </div>
           ))}

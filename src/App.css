@@ -1,8 +1,9 @@
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
+  /* Divided by the body zoom (1.05) so the app still fills exactly one screen. */
+  height: calc(100vh / 1.05);
+  height: calc(100dvh / 1.05);
   overflow: hidden;
 }
 
@@ -13,10 +14,18 @@
 }
 
 .app-loading {
-  min-height: 100dvh;
+  min-height: calc(100dvh / 1.05);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-dim);
   font-size: 15px;
+}
+
+.unsaved-modal { max-width: 420px; width: 100%; }
+.unsaved-text {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 20px;
 }

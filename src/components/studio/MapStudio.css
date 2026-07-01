@@ -31,21 +31,23 @@
 .studio-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+  border-radius: 16px;
+  overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.15s ease, transform 0.08s ease, background 0.15s ease;
+  box-shadow: 0 8px 22px -16px rgba(40, 70, 110, 0.5);
+  transition: border-color 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
 }
-.studio-card:hover { border-color: var(--border-strong); background: var(--surface-2); transform: translateY(-2px); }
-.studio-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+.studio-card:hover { border-color: #c9dcf0; box-shadow: 0 16px 34px -16px rgba(40, 70, 110, 0.55); transform: translateY(-3px); }
+.studio-card-thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #eef4fa;
 }
+.studio-card-badge { position: absolute; top: 10px; right: 10px; z-index: 2; box-shadow: 0 1px 4px rgba(20, 40, 70, 0.18); }
+.studio-card-body { padding: 13px 14px 15px; }
 .studio-card-title { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.studio-card-meta { font-size: 12px; color: var(--text-faint); margin-bottom: 14px; }
+.studio-card-meta { font-size: 12px; color: var(--text-faint); margin: 6px 0 12px; }
 .studio-card-actions { display: flex; gap: 8px; }
 
 .btn-sm { height: 30px; padding: 0 11px; font-size: 12px; }
@@ -70,6 +72,7 @@
 .studio-title-input { width: 220px; max-width: 40vw; padding: 8px 10px; }
 .studio-toolbar-spacer { flex: 1; }
 .studio-flash { color: var(--status-accepted); font-size: 13px; font-weight: 600; }
+.studio-dirty { color: var(--status-held); font-size: 12px; font-weight: 700; }
 
 .studio-editor-body {
   flex: 1;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { listPublishedMaps, insertMap, fetchAllForBackup } from '../../api/maps';
+import { listPublishedMaps, insertMap, fetchAllForBackup, registeredToISO } from '../../api/maps';
 import type { MapRow, MapStatus } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import MapCard from './MapCard';
@@ -80,9 +80,29 @@ export default function MapHub() {
 
   const doUpload = async (p: UploadPayload) => {
     if (!profile) return;
-    await insertMap({ owner_id: profile.id, ...p, published: true });
+    await insertMap({
+      owner_id: profile.id,
+      author_name: p.author_name,
+      code: p.code,
+      title: p.title,
+      comment: p.comment,
+      difficulty: p.difficulty,
+      created_at: registeredToISO(p.registered_on),
+      published: true,
+    });
     setShowUpload(false);
     refresh();
+  };
+
+  const exportAcceptedIds = () => {
+    const ids = maps.filter((m) => m.status === 'accepted').map((m) => m.id);
+    const blob = new Blob([JSON.stringify(ids, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `accepted-map-ids-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const onDetailChanged = (updated?: MapRow) => {
@@ -139,6 +159,7 @@ export default function MapHub() {
             <div className="hub-stat"><div className="hub-stat-num review">{stats.review}</div><div className="hub-stat-label">검토중</div></div>
           </div>
           <div className="hub-head-actions">
+            <button className="btn" onClick={exportAcceptedIds} title="채택된 모든 맵의 ID를 JSON 파일로 저장">채택 맵 ID 저장</button>
             <button className="btn" onClick={exportBackup}>⭳ 전체 백업</button>
             <button className="btn btn-primary" onClick={() => setShowUpload(true)}>＋ 맵 올리기</button>
           </div>

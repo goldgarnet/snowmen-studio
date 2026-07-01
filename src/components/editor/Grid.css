@@ -11,11 +11,15 @@
 .grid {
   display: grid;
   border: 1px solid #cdddec;
-  border-radius: 10px;
+  border-radius: 12px;
   user-select: none;
-  overflow: visible;
+  /* Clip cells to the rounded border so the four corner cells appear rounded
+     (instead of square cells poking out past a separate rounded-border layer).
+     Grid overlays (laser beams, arches, edge-hit strips) live in .grid-stack,
+     OUTSIDE .grid, so they are never clipped. */
+  overflow: hidden;
   position: relative;
-  box-shadow: 0 18px 46px -24px rgba(40, 70, 110, 0.45), 0 0 0 4px rgba(255, 255, 255, 0.5);
+  box-shadow: 0 18px 46px -24px rgba(40, 70, 110, 0.45), 0 0 0 4px var(--board-ring, rgba(255, 255, 255, 0.5));
   background: #eef4fa;
 }
 

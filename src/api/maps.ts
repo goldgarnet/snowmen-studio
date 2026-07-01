@@ -1,6 +1,18 @@
 import { supabase } from '../lib/supabase';
 import type { MapRow, MapStatus } from './types';
 
+// A 'YYYY-MM-DD' registration date → ISO timestamp (noon local, to avoid the
+// date shifting a day across time zones).
+export function registeredToISO(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00`).toISOString();
+}
+
+// ISO timestamp → 'YYYY-MM-DD' for prefilling the 등록일 date input.
+export function isoToDateStr(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export interface NewMap {
   owner_id: string;
   title?: string | null;
@@ -10,9 +22,11 @@ export interface NewMap {
   difficulty?: number | null;
   status?: MapStatus;
   published?: boolean;
+  created_at?: string;   // 등록일 (편집 가능)
 }
 
-export type MapPatch = Partial<Omit<MapRow, 'id' | 'owner_id' | 'created_at'>>;
+// created_at is editable (등록일) so it is NOT omitted here.
+export type MapPatch = Partial<Omit<MapRow, 'id' | 'owner_id'>>;
 
 // My saved maps (drafts + my published maps), newest activity first.
 export async function listMyMaps(ownerId: string): Promise<MapRow[]> {

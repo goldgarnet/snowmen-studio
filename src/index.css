@@ -15,6 +15,10 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Enlarge the whole UI ~5% while keeping proportions. Full-viewport roots
+     divide their height by this factor (see .app / .login-screen) so they
+     still fit exactly one screen after scaling. */
+  zoom: 1.05;
 }
 
 button { font-family: inherit; }

@@ -1,6 +1,7 @@
 import type { MapRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import StarRating from './StarRating';
+import MapThumbnail from './MapThumbnail';
 
 interface MapCardProps {
   map: MapRow;
@@ -15,12 +16,8 @@ function shortDate(iso: string): string {
 export default function MapCard({ map, onOpen }: MapCardProps) {
   return (
     <button className="map-card" onClick={() => onOpen(map)}>
-      <div className={`map-card-thumb thumb-${map.status}`}>
-        <div className="map-card-grid-pattern" />
-        <div className="map-card-snowman">
-          <span className="mcs-head" />
-          <span className="mcs-body" />
-        </div>
+      <div className="map-card-thumb">
+        <MapThumbnail code={map.code} />
         <span className={`badge badge-${map.status} map-card-badge`}>{STATUS_LABEL[map.status]}</span>
       </div>
       <div className="map-card-body">

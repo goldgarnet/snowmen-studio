@@ -1,8 +1,8 @@
 /* ============================================================
-   Snowmen Studio — design tokens (light / frosty theme)
-   Derived from the reference design "Snowmen Studio.dc.html":
-   Pretendard type, icy-blue accent, white surfaces on a soft
-   sky-blue gradient. Single source of truth for all screens.
+   Snowmen Studio — design tokens
+   Light (default) + dark theme. All screens read from these
+   variables; the dark palette overrides them under
+   [data-theme="dark"] (set on <html> by ThemeContext).
    ============================================================ */
 :root {
   /* page background gradient */
@@ -14,6 +14,11 @@
   --surface-2: #f6faff;
   --surface-3: #eef4fb;
   --surface-hover: #f1f7fd;
+
+  /* translucent panels (header / editor sidebar / sim bars) */
+  --panel-strong: rgba(255, 255, 255, 0.82);
+  --panel: rgba(255, 255, 255, 0.65);
+  --panel-soft: rgba(255, 255, 255, 0.55);
 
   /* borders */
   --line: #e0e9f3;
@@ -60,5 +65,58 @@
   --shadow-lg: 0 30px 70px -20px rgba(20, 40, 70, 0.35);
   --shadow-accent: 0 6px 14px -6px var(--accent);
 
+  --board-ring: rgba(255, 255, 255, 0.5);
+
   --font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Segoe UI', sans-serif;
+}
+
+/* ---------------- dark theme ---------------- */
+:root[data-theme="dark"] {
+  --bg-grad: radial-gradient(1200px 600px at 80% -10%, #1a2740 0%, #121b2c 45%, #0d1420 100%);
+  --bg: #0f1826;
+
+  --surface: #16202f;
+  --surface-2: #1b2739;
+  --surface-3: #202d42;
+  --surface-hover: #223047;
+
+  --panel-strong: rgba(18, 26, 40, 0.85);
+  --panel: rgba(255, 255, 255, 0.035);
+  --panel-soft: rgba(255, 255, 255, 0.025);
+
+  --line: #26344a;
+  --border: #26344a;
+  --border-strong: #33465f;
+
+  --text: #e6edf6;
+  --text-dim: #a3b3c9;
+  --text-faint: #6f8199;
+
+  --accent: #5fa0ea;
+  --accent-hover: #74afef;
+  --accent-press: #4f8fd8;
+  --accent-grad: linear-gradient(150deg, #5fa0ea, #7cb6f2);
+  --accent-soft: #1b2c44;
+  --accent-contrast: #06121f;
+
+  --status-pending: #6ea6e8;
+  --status-pending-soft: #17273e;
+  --status-accepted: #4fc98a;
+  --status-accepted-soft: #14301f;
+  --status-held: #e2b24e;
+  --status-held-soft: #322a12;
+  --status-rejected: #ef7b74;
+  --status-rejected-soft: #331a1a;
+
+  --star: #f2b53a;
+  --star-empty: #2c3a4f;
+
+  --danger: #ef7b74;
+  --danger-hover: #f58c85;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 22px -14px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 30px 70px -18px rgba(0, 0, 0, 0.65);
+
+  --board-ring: rgba(120, 150, 190, 0.18);
 }

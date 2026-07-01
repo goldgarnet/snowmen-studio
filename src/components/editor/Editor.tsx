@@ -6,6 +6,7 @@ import Grid from './Grid';
 import './Editor.css';
 
 type EditorTool =
+  | 'none'
   | 'select'
   | 'warm'
   | 'cool'
@@ -31,7 +32,12 @@ type EditorTool =
   | 'eraser';
 
 const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'flake', 'soulSwap', 'keyTile', 'wall', 'eraser'];
-const EDGE_TOOLS: EditorTool[] = ['edgeArch1', 'edgeArch2', 'eraser'];
+// NOTE: 'eraser' is intentionally NOT an edge tool. If it were, selecting the
+// eraser would put the grid in edge-mode, whose edge-hit strips intercept clicks
+// near cell borders — making it hard to erase tile flags (flake/goal/tunnel/
+// footplate). Edge arches are cleared by right-clicking a cell (or by right-
+// clicking the edge while an edge-arch tool is active).
+const EDGE_TOOLS: EditorTool[] = ['edgeArch1', 'edgeArch2'];
 
 const TRI_LABEL: Record<TriangleCorner, string> = { tl: '◤', tr: '◥', bl: '◣', br: '◢' };
 
@@ -296,6 +302,7 @@ export default function Editor({ level, setLevel }: EditorProps) {
       handleSelectStart(row, col);
       return;
     }
+    if (selectedTool === 'none') return; // no active tool — clicks do nothing
     pushUndo();
     const newLevel = cloneLevel(level);
     applyTool(newLevel, row, col, selectedTool);
@@ -609,25 +616,26 @@ export default function Editor({ level, setLevel }: EditorProps) {
             title="켜면 시뮬레이터에서 M키로 눈사람 큐를 순회하며 영혼을 옮길 수 있습니다.">
             영혼 이동(M): {level.soulSwapEnabled ? 'ON' : 'OFF'}
           </button>
-          <div className="sun-section">
-            <span className="sun-label">해 방향</span>
-            <div className="sun-controls">
-              {(['left', 'right', 'up', 'down'] as SunDirection[]).map((dir) => (
-                <button key={dir}
-                  disabled={!level.hasShadow}
-                  className={level.sunDirection === dir ? 'active' : ''}
-                  onClick={() => setSun(dir)}>
-                  {dir === 'left' ? '←' : dir === 'right' ? '→' : dir === 'up' ? '↑' : '↓'}
-                </button>
-              ))}
+          {level.hasShadow && (
+            <div className="sun-section">
+              <span className="sun-label">해 방향</span>
+              <div className="sun-controls">
+                {(['left', 'right', 'up', 'down'] as SunDirection[]).map((dir) => (
+                  <button key={dir}
+                    className={level.sunDirection === dir ? 'active' : ''}
+                    onClick={() => setSun(dir)}>
+                    {dir === 'left' ? '←' : dir === 'right' ? '→' : dir === 'up' ? '↑' : '↓'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         <section className="editor-section">
           <button className={`tool-btn select-btn-full ${selectedTool === 'select' ? 'active' : ''}`}
-            onClick={() => setSelectedTool('select')}
-            title="드래그로 영역 선택 후, 다시 드래그하면 이동. Delete로 삭제, Esc로 해제.">
+            onClick={() => setSelectedTool(selectedTool === 'select' ? 'none' : 'select')}
+            title="드래그로 영역 선택 후, 다시 드래그하면 이동. 다시 누르면 해제. Delete로 삭제, Esc로 해제.">
             <span className="tool-emoji">🔲</span>선택 / 이동
           </button>
           {selectedTool === 'select' && (

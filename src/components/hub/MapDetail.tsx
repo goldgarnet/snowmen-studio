@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import type { MapRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
-import { setReview, updateMap, deleteMap } from '../../api/maps';
+import { setReview, updateMap, deleteMap, registeredToISO, isoToDateStr } from '../../api/maps';
 import StarRating from './StarRating';
 import StatusControl from './StatusControl';
 import CommentList from './CommentList';
 import UploadForm, { UploadPayload } from './UploadForm';
+import MapThumbnail from './MapThumbnail';
 
 interface MapDetailProps {
   map: MapRow;
@@ -53,6 +54,7 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
   const saveEdit = async (p: UploadPayload) => {
     const updated = await updateMap(map.id, {
       title: p.title, author_name: p.author_name, comment: p.comment, code: p.code,
+      difficulty: p.difficulty, created_at: registeredToISO(p.registered_on),
     });
     setMap(updated); onChanged(updated); setEditing(false);
     showFlash('수정되었습니다');
@@ -87,6 +89,8 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
               <h1 className="detail-title">{map.title || '제목 없음'}</h1>
               <span className={`badge badge-${map.status}`}>{STATUS_LABEL[map.status]}</span>
             </div>
+
+            <div className="detail-thumb"><MapThumbnail code={map.code} /></div>
 
             <button className="btn btn-primary detail-play" onClick={() => onPlay(map)}>▶ 바로 플레이</button>
 
@@ -154,6 +158,7 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
             title: map.title ?? '',
             comment: map.comment ?? '',
             difficulty: map.difficulty,
+            registered_on: isoToDateStr(map.created_at),
           }}
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}

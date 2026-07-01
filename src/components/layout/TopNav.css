@@ -4,7 +4,7 @@
   gap: 16px;
   padding: 0 22px;
   height: 60px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--panel-strong);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
@@ -23,6 +23,8 @@
   font-size: 16px;
   box-shadow: 0 4px 10px -3px var(--accent);
 }
+/* The ❄ glyph sits low on its line-box; nudge it up to optically center it. */
+.topnav-logo span { display: block; line-height: 1; transform: translateY(-1.5px); }
 .topnav-name {
   font-weight: 800;
   font-size: 15px;
@@ -48,13 +50,29 @@
   font-weight: 600;
   transition: all 0.15s ease;
 }
-.topnav-tabs button:hover:not(.active) { color: var(--text); background: rgba(40, 70, 110, 0.05); }
+.topnav-tabs button:hover:not(.active) { color: var(--text); background: rgba(120, 150, 190, 0.12); }
 .topnav-tabs button.active { background: var(--accent); color: #fff; font-weight: 700; box-shadow: var(--shadow-accent); }
 
-.topnav-user { display: flex; align-items: center; gap: 12px; }
+.topnav-user { display: flex; align-items: center; gap: 10px; }
+.topnav-theme {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.topnav-theme:hover { background: var(--surface-2); border-color: var(--border-strong); }
 .topnav-username { font-size: 13px; color: var(--text-dim); font-weight: 600; }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
+  .topnav { padding: 0 14px; gap: 10px; }
   .topnav-name { display: none; }
   .topnav-username { display: none; }
   .topnav-tabs { margin: 0 auto; }

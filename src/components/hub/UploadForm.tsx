@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { decodeLevelCode } from '../../utils/levelCode';
 import StarRating from './StarRating';
+import MapThumbnail from './MapThumbnail';
 
 export interface UploadPayload {
   author_name: string;
@@ -8,6 +9,7 @@ export interface UploadPayload {
   title: string | null;
   comment: string | null;
   difficulty: number | null;
+  registered_on: string; // YYYY-MM-DD (등록일)
 }
 
 interface UploadFormProps {
@@ -19,7 +21,12 @@ interface UploadFormProps {
   onCancel: () => void;
 }
 
-// Shared form for "맵 업로드"(허브) and "허브에 올리기"(제작 탭).
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Shared form for "맵 올리기"(허브) and "허브에 올리기"(제작 탭) and "맵 수정".
 export default function UploadForm({
   title, initial, lockCode, submitLabel = '업로드', onSubmit, onCancel,
 }: UploadFormProps) {
@@ -28,14 +35,18 @@ export default function UploadForm({
   const [mapTitle, setMapTitle] = useState(initial?.title ?? '');
   const [comment, setComment] = useState(initial?.comment ?? '');
   const [difficulty, setDifficulty] = useState<number | null>(initial?.difficulty ?? null);
+  const [registeredOn, setRegisteredOn] = useState(initial?.registered_on || todayStr());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const codeValid = code.trim() ? !!decodeLevelCode(code.trim()) : false;
 
   const submit = async () => {
     setError(null);
     if (!author.trim()) { setError('제작자를 입력하세요.'); return; }
     if (!code.trim()) { setError('맵 코드를 입력하세요.'); return; }
-    if (!decodeLevelCode(code.trim())) { setError('맵 코드를 해석할 수 없습니다. 코드를 확인하세요.'); return; }
+    if (!codeValid) { setError('맵 코드를 해석할 수 없습니다. 코드를 확인하세요.'); return; }
+    if (!registeredOn) { setError('등록일을 입력하세요.'); return; }
     setBusy(true);
     try {
       await onSubmit({
@@ -44,6 +55,7 @@ export default function UploadForm({
         title: mapTitle.trim() || null,
         comment: comment.trim() || null,
         difficulty,
+        registered_on: registeredOn,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : '업로드에 실패했습니다.');
@@ -55,6 +67,10 @@ export default function UploadForm({
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal upload-modal" onClick={(e) => e.stopPropagation()}>
         <h3 className="modal-title">{title}</h3>
+
+        {codeValid && (
+          <div className="upload-preview"><MapThumbnail code={code.trim()} /></div>
+        )}
 
         <div className="upload-grid">
           <div>
@@ -84,15 +100,24 @@ export default function UploadForm({
         <textarea className="field-textarea" value={comment} onChange={(e) => setComment(e.target.value)}
           placeholder="(선택) 맵 설명이나 의도" rows={2} disabled={busy} />
 
-        <div className="upload-difficulty">
-          <label className="field-label" style={{ margin: 0 }}>난이도 (선택)</label>
-          <StarRating value={difficulty} onChange={setDifficulty} size={24} />
-          {difficulty != null && (
-            <>
-              <span className="difficulty-num">{difficulty.toFixed(1)}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => setDifficulty(null)} disabled={busy}>지우기</button>
-            </>
-          )}
+        <div className="upload-grid" style={{ marginTop: 12, alignItems: 'start' }}>
+          <div>
+            <label className="field-label">난이도 (선택)</label>
+            <div className="upload-difficulty">
+              <StarRating value={difficulty} onChange={setDifficulty} size={24} />
+              {difficulty != null && (
+                <>
+                  <span className="difficulty-num">{difficulty.toFixed(1)}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setDifficulty(null)} disabled={busy}>지우기</button>
+                </>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="field-label">등록일</label>
+            <input className="field-input" type="date" value={registeredOn}
+              onChange={(e) => setRegisteredOn(e.target.value)} disabled={busy} />
+          </div>
         </div>
 
         {error && <div className="login-error" style={{ marginTop: 12 }}>{error}</div>}
