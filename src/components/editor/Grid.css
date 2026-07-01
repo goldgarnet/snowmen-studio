@@ -1,0 +1,167 @@
+.grid-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+.grid {
+  display: grid;
+  border: 2px solid #5a6a7a;
+  border-radius: 6px;
+  user-select: none;
+  overflow: visible;
+  position: relative;
+}
+
+.grid-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-right: 1px solid rgba(100, 120, 140, 0.35);
+  border-bottom: 1px solid rgba(100, 120, 140, 0.35);
+  box-sizing: border-box;
+}
+
+.grid-cell.warm {
+  background: #f5e6c8;
+}
+
+.grid-cell.cool {
+  background: #d0e8f8;
+}
+
+.grid-cell.shaded {
+  background: #8a9ab0 !important;
+}
+
+.grid-cell.warm.shaded {
+  background: #b0a08a !important;
+}
+
+.grid-cell.flake {
+  background: #d8eeff;
+}
+
+.grid-cell.goal {
+  background: linear-gradient(135deg, rgba(60, 200, 100, 0.18), rgba(40, 180, 80, 0.08));
+}
+
+/* Goal disabled by uncovered key footplates: muted grey instead of green. */
+.grid-cell.goal.goal-locked {
+  background: linear-gradient(135deg, rgba(120, 134, 148, 0.22), rgba(90, 100, 112, 0.1));
+}
+
+.grid-cell.row-arch,
+.grid-cell.col-arch {
+  background: #95a0b0;
+}
+
+/* Footplate accents — inset borders so the underlying warm/cool color still shows. */
+.grid-cell.soul {
+  box-shadow: inset 0 0 0 2px rgba(168, 108, 255, 0.55);
+}
+.grid-cell.key {
+  box-shadow: inset 0 0 0 2px rgba(224, 184, 74, 0.6);
+}
+.grid-cell.soul.key {
+  box-shadow: inset 0 0 0 2px rgba(168, 108, 255, 0.55), inset 0 0 0 4px rgba(224, 184, 74, 0.5);
+}
+
+.grid:not(.edge-mode) .grid-cell:hover {
+  outline: 2px solid #5a9fd4;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.tile-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.goal-overlay {
+  animation: goal-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes goal-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.flake-overlay {
+  animation: flake-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes flake-shimmer {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.object {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-highlight {
+  filter: drop-shadow(0 0 5px rgba(80, 160, 255, 0.7));
+}
+
+.melting {
+  opacity: 0.8;
+}
+
+.melting-sweat {
+  animation: sweat-drip 1.5s ease-in-out infinite;
+}
+
+@keyframes sweat-drip {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Edge click strips: shown in edge-mode only.
+   Positioned absolutely in pixel coords from Grid.tsx so they sit precisely
+   across boundary lines (with corner trim to avoid the "selecting corners" feel). */
+.edge-hit {
+  z-index: 6;
+  cursor: pointer;
+  background: rgba(255, 200, 80, 0.0);
+  border-radius: 3px;
+  transition: background 0.1s ease;
+}
+
+.edge-hit:hover {
+  background: rgba(255, 200, 80, 0.45);
+}
+
+/* Selection overlay on each selected cell */
+.cell-selection-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(80, 160, 255, 0.22);
+  border: 1.5px solid rgba(120, 190, 255, 0.85);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Move-drag ghost: dashed outline at the destination bbox */
+.move-ghost {
+  border: 2px dashed rgba(255, 220, 100, 0.95);
+  border-radius: 4px;
+  background: rgba(255, 220, 100, 0.10);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
+  box-sizing: border-box;
+}
+

@@ -1,0 +1,100 @@
+.login-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 28px;
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 22px;
+}
+.login-logo {
+  font-size: 44px;
+  display: block;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.login-brand h1 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  background: linear-gradient(90deg, #eaf1fb, var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.login-brand p {
+  font-size: 13px;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+.login-warn {
+  background: var(--status-held-soft);
+  color: var(--status-held);
+  border: 1px solid var(--status-held);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.login-warn code { background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 4px; }
+
+.login-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 18px;
+}
+.login-tabs button {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.login-tabs button.active {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.login-form { display: flex; flex-direction: column; gap: 14px; }
+.login-form .field-label { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.login-form .field-input { margin-top: 2px; }
+
+.login-error {
+  color: var(--danger);
+  background: var(--status-rejected-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.login-submit { width: 100%; padding: 11px; font-size: 14px; margin-top: 2px; }
+
+.login-hint {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.5;
+  text-align: center;
+}

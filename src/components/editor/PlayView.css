@@ -1,0 +1,27 @@
+.play-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.play-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.play-view-title {
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text);
+}
+.play-view-error {
+  margin: auto;
+  padding: 24px;
+  color: var(--danger);
+  text-align: center;
+}

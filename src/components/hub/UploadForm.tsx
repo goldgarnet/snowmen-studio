@@ -1,0 +1,109 @@
+import { useState } from 'react';
+import { decodeLevelCode } from '../../utils/levelCode';
+import StarRating from './StarRating';
+
+export interface UploadPayload {
+  author_name: string;
+  code: string;
+  title: string | null;
+  comment: string | null;
+  difficulty: number | null;
+}
+
+interface UploadFormProps {
+  title: string;                       // modal heading
+  initial?: Partial<UploadPayload>;
+  lockCode?: boolean;                  // when the code comes from the editor
+  submitLabel?: string;
+  onSubmit: (payload: UploadPayload) => Promise<void>;
+  onCancel: () => void;
+}
+
+// Shared form for "맵 업로드"(허브) and "허브에 올리기"(제작 탭).
+export default function UploadForm({
+  title, initial, lockCode, submitLabel = '업로드', onSubmit, onCancel,
+}: UploadFormProps) {
+  const [author, setAuthor] = useState(initial?.author_name ?? '');
+  const [code, setCode] = useState(initial?.code ?? '');
+  const [mapTitle, setMapTitle] = useState(initial?.title ?? '');
+  const [comment, setComment] = useState(initial?.comment ?? '');
+  const [difficulty, setDifficulty] = useState<number | null>(initial?.difficulty ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setError(null);
+    if (!author.trim()) { setError('제작자를 입력하세요.'); return; }
+    if (!code.trim()) { setError('맵 코드를 입력하세요.'); return; }
+    if (!decodeLevelCode(code.trim())) { setError('맵 코드를 해석할 수 없습니다. 코드를 확인하세요.'); return; }
+    setBusy(true);
+    try {
+      await onSubmit({
+        author_name: author.trim(),
+        code: code.trim(),
+        title: mapTitle.trim() || null,
+        comment: comment.trim() || null,
+        difficulty,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '업로드에 실패했습니다.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal upload-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">{title}</h3>
+
+        <div className="upload-grid">
+          <div>
+            <label className="field-label">제작자 *</label>
+            <input className="field-input" value={author} onChange={(e) => setAuthor(e.target.value)}
+              placeholder="맵을 만든 사람" disabled={busy} />
+          </div>
+          <div>
+            <label className="field-label">제목</label>
+            <input className="field-input" value={mapTitle} onChange={(e) => setMapTitle(e.target.value)}
+              placeholder="(선택) 맵 제목" disabled={busy} />
+          </div>
+        </div>
+
+        <label className="field-label" style={{ marginTop: 12 }}>맵 코드 *</label>
+        <textarea
+          className="field-textarea code-input"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="에디터에서 복사한 맵 코드를 붙여넣으세요"
+          rows={3}
+          disabled={busy || lockCode}
+          readOnly={lockCode}
+        />
+
+        <label className="field-label" style={{ marginTop: 12 }}>코멘트</label>
+        <textarea className="field-textarea" value={comment} onChange={(e) => setComment(e.target.value)}
+          placeholder="(선택) 맵 설명이나 의도" rows={2} disabled={busy} />
+
+        <div className="upload-difficulty">
+          <label className="field-label" style={{ margin: 0 }}>난이도 (선택)</label>
+          <StarRating value={difficulty} onChange={setDifficulty} size={24} />
+          {difficulty != null && (
+            <>
+              <span className="difficulty-num">{difficulty.toFixed(1)}</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDifficulty(null)} disabled={busy}>지우기</button>
+            </>
+          )}
+        </div>
+
+        {error && <div className="login-error" style={{ marginTop: 12 }}>{error}</div>}
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onCancel} disabled={busy}>취소</button>
+          <button className="btn btn-primary" onClick={submit} disabled={busy}>
+            {busy ? '올리는 중…' : submitLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
