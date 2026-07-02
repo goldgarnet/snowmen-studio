@@ -572,35 +572,76 @@ export default function Editor({ level, setLevel }: EditorProps) {
     });
   };
 
-  const tileTools: { id: EditorTool; label: string; emoji: string }[] = [
-    { id: 'warm', label: '따뜻함', emoji: '🟧' },
-    { id: 'cool', label: '차가움', emoji: '🟦' },
-    { id: 'flake', label: '눈꽃', emoji: '❄️' },
-    { id: 'goal', label: '골', emoji: '⭐' },
-    { id: 'columnTunnel', label: '가로 터널', emoji: '🚇' },
-    { id: 'rowTunnel', label: '세로 터널', emoji: '🚇' },
-    { id: 'soulSwap', label: '영혼 발판', emoji: '🌀' },
-    { id: 'keyTile', label: '초록 버튼', emoji: '🟢' },
-    { id: 'yellowButton', label: '노랑 버튼', emoji: '🟡' },
-    { id: 'yellowWall', label: '노랑 벽', emoji: '🟨' },
+  // Tool metadata (label + emoji). The tile/object *grouping* below is purely a
+  // visual arrangement in the editor — the underlying tools/logic are unchanged
+  // (e.g. tunnels/buttons/soul-plate/triangle still set tile flags internally).
+  const TOOL_META: Record<string, { label: string; emoji: string }> = {
+    warm: { label: '따뜻함', emoji: '🟧' },
+    cool: { label: '차가움', emoji: '🟦' },
+    goal: { label: '골', emoji: '⭐' },
+    player: { label: '플레이어', emoji: '⛄' },
+    wall: { label: '벽', emoji: '🧱' },
+    tree: { label: '나무', emoji: '🌲' },
+    snowballLarge: { label: '큰 눈덩이', emoji: '⚪' },
+    snowballSmall: { label: '작은 눈덩이', emoji: '🔵' },
+    block: { label: '블록', emoji: '📦' },
+    flake: { label: '눈꽃', emoji: '❄️' },
+    columnTunnel: { label: '가로 터널', emoji: '🚇' },
+    rowTunnel: { label: '세로 터널', emoji: '🚇' },
+    snowman1: { label: '눈사람 1', emoji: '⛄' },
+    snowman2: { label: '눈사람 2', emoji: '⛄' },
+    snowman3: { label: '눈사람 3', emoji: '⛄' },
+    triangle: { label: '삼각 벽', emoji: '📐' },
+    yellowWall: { label: '노랑 벽', emoji: '🟨' },
+    keyTile: { label: '초록 버튼', emoji: '🟢' },
+    yellowButton: { label: '노랑 버튼', emoji: '🟡' },
+    laser: { label: '레이저', emoji: '🔴' },
+    soulSwap: { label: '영혼 발판', emoji: '🌀' },
+  };
+
+  // "타일" section: only terrain. Arch tools live here too (they're placed by
+  // clicking cell edges). Laid out in 3 rows.
+  const tileRows: EditorTool[][] = [
+    ['warm', 'cool'],
+    ['edgeArch1', 'edgeArch2'],
+    ['goal'],
   ];
 
-  const objectTools: { id: EditorTool; label: string; emoji: string }[] = [
-    { id: 'player', label: '플레이어', emoji: '⛄' },
-    { id: 'wall', label: '벽', emoji: '🧱' },
-    { id: 'laser', label: '레이저', emoji: '🔴' },
-    { id: 'triangle', label: '삼각 벽', emoji: '📐' },
-    { id: 'block', label: '블록', emoji: '📦' },
-    { id: 'tree', label: '나무', emoji: '🌲' },
-    { id: 'snowballLarge', label: '큰 눈덩이', emoji: '⚪' },
-    { id: 'snowballSmall', label: '작은 눈덩이', emoji: '🔵' },
+  // "오브젝트" section: everything else, arranged exactly as requested.
+  const objectRows: EditorTool[][] = [
+    ['player', 'wall', 'tree'],
+    ['snowballLarge', 'snowballSmall'],
+    ['block', 'flake'],
+    ['columnTunnel', 'rowTunnel'],
+    ['snowman1', 'snowman2', 'snowman3'],
+    ['triangle', 'yellowWall'],
+    ['keyTile', 'yellowButton'],
+    ['laser', 'soulSwap'],
   ];
 
-  const snowmanTools: { id: EditorTool; label: string; emoji: string }[] = [
-    { id: 'snowman1', label: '눈사람 1', emoji: '⛄' },
-    { id: 'snowman2', label: '눈사람 2', emoji: '⛄' },
-    { id: 'snowman3', label: '눈사람 3', emoji: '⛄' },
-  ];
+  const renderToolRow = (ids: EditorTool[]) => (
+    <div className="tool-row" style={{ display: 'grid', gridTemplateColumns: `repeat(${ids.length}, 1fr)`, gap: 6 }}>
+      {ids.map((id) => {
+        if (id === 'edgeArch1' || id === 'edgeArch2') {
+          return (
+            <button key={id}
+              className={`tool-btn arch-btn ${selectedTool === id ? 'active' : ''}`}
+              onClick={() => setSelectedTool(id)}>
+              <span className="tool-emoji">🏛️</span>{id === 'edgeArch1' ? '높이 1 아치' : '높이 2 아치'}
+            </button>
+          );
+        }
+        const m = TOOL_META[id];
+        return (
+          <button key={id}
+            className={`tool-btn ${selectedTool === id ? 'active' : ''}`}
+            onClick={() => setSelectedTool(id)}>
+            <span className="tool-emoji">{m.emoji}</span>{m.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="editor">
@@ -659,46 +700,15 @@ export default function Editor({ level, setLevel }: EditorProps) {
 
         <section className="editor-section">
           <h3>타일</h3>
-          <div className="tool-group-2col">
-            {tileTools.map((tool) => (
-              <button key={tool.id}
-                className={`tool-btn ${selectedTool === tool.id ? 'active' : ''}`}
-                onClick={() => setSelectedTool(tool.id)}>
-                <span className="tool-emoji">{tool.emoji}</span>{tool.label}
-              </button>
-            ))}
-          </div>
-          <div className="tool-group-2col" style={{ marginTop: 6 }}>
-            <button className={`tool-btn arch-btn ${selectedTool === 'edgeArch1' ? 'active' : ''}`}
-              onClick={() => setSelectedTool('edgeArch1')}>
-              <span className="tool-emoji">🏛️</span>높이 1 아치
-            </button>
-            <button className={`tool-btn arch-btn ${selectedTool === 'edgeArch2' ? 'active' : ''}`}
-              onClick={() => setSelectedTool('edgeArch2')}>
-              <span className="tool-emoji">🏛️</span>높이 2 아치
-            </button>
+          <div className="tool-rows">
+            {tileRows.map((row, i) => <div key={i}>{renderToolRow(row)}</div>)}
           </div>
         </section>
 
         <section className="editor-section">
           <h3>오브젝트</h3>
-          <div className="tool-group-2col">
-            {objectTools.map((tool) => (
-              <button key={tool.id}
-                className={`tool-btn ${selectedTool === tool.id ? 'active' : ''}`}
-                onClick={() => setSelectedTool(tool.id)}>
-                <span className="tool-emoji">{tool.emoji}</span>{tool.label}
-              </button>
-            ))}
-          </div>
-          <div className="tool-group-3col" style={{ marginTop: 4 }}>
-            {snowmanTools.map((tool) => (
-              <button key={tool.id}
-                className={`tool-btn ${selectedTool === tool.id ? 'active' : ''}`}
-                onClick={() => setSelectedTool(tool.id)}>
-                <span className="tool-emoji">{tool.emoji}</span>{tool.label}
-              </button>
-            ))}
+          <div className="tool-rows">
+            {objectRows.map((row, i) => <div key={i}>{renderToolRow(row)}</div>)}
           </div>
           {selectedTool === 'tree' && (
             <div className="tree-height-input">

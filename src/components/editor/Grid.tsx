@@ -12,6 +12,9 @@ interface GridProps {
   onEdgeErase?: (row: number, col: number, side: 'top' | 'left') => void;
   edgeMode?: boolean;
   highlightPlayer?: boolean;
+  // Read-only, cropped miniature render (used for map thumbnails). Disables all
+  // interaction, fills the frame (no reserved margin), and allows tiny cells.
+  thumbnail?: boolean;
   selectedCells?: Set<string>;
   previewSelectionCells?: Set<string> | null;
   moveGhost?: {
@@ -22,7 +25,7 @@ interface GridProps {
 
 export default function Grid({
   level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgeErase, edgeMode, highlightPlayer,
-  selectedCells, previewSelectionCells, moveGhost,
+  thumbnail, selectedCells, previewSelectionCells, moveGhost,
 }: GridProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isRightDragging, setIsRightDragging] = useState(false);
@@ -49,12 +52,14 @@ export default function Grid({
 
   // Cap max cell size to 72 so small maps don't dominate the screen.
   // Also reserve a comfortable outer margin (~8% of the smaller box dimension).
+  // Thumbnail mode fills the frame (no margin) and allows very small cells so any
+  // map fits its card faithfully.
   const cellSize = (level.width > 0 && level.height > 0 && box.w > 0 && box.h > 0)
-    ? Math.max(16, Math.min(72, Math.floor(Math.min(
-        (box.w * 0.92) / level.width,
-        (box.h * 0.92) / level.height
+    ? Math.max(thumbnail ? 3 : 16, Math.min(thumbnail ? 300 : 72, Math.floor(Math.min(
+        (box.w * (thumbnail ? 1 : 0.92)) / level.width,
+        (box.h * (thumbnail ? 1 : 0.92)) / level.height
       ))))
-    : 40;
+    : (thumbnail ? 10 : 40);
 
   const handleMouseDown = useCallback((row: number, col: number) => {
     setIsDragging(true);
@@ -117,7 +122,7 @@ export default function Grid({
         style={{ position: 'relative', width: gridW, height: gridH }}
         onContextMenu={(e) => e.preventDefault()}>
         <div
-          className={`grid ${edgeMode ? 'edge-mode' : ''}`}
+          className={`grid ${edgeMode ? 'edge-mode' : ''} ${thumbnail ? 'thumb' : ''}`}
           style={{
             gridTemplateColumns: `repeat(${level.width}, ${cellSize}px)`,
             gridTemplateRows: `repeat(${level.height}, ${cellSize}px)`,
@@ -151,7 +156,7 @@ export default function Grid({
                 <div
                   key={`${row}-${col}`}
                   className={tileClasses}
-                  onMouseDown={(e) => {
+                  onMouseDown={thumbnail ? undefined : (e) => {
                     if (e.button === 2) {
                       e.preventDefault();
                       setIsRightDragging(true);
@@ -160,7 +165,7 @@ export default function Grid({
                       handleMouseDown(row, col);
                     }
                   }}
-                  onMouseEnter={() => {
+                  onMouseEnter={thumbnail ? undefined : () => {
                     if (isRightDragging) onCellErase?.(row, col);
                     else handleMouseEnter(row, col);
                   }}

@@ -6,17 +6,35 @@
   overflow: hidden;
 }
 
-.sim-controls {
+.sim-topbar {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 16px;
   padding: 10px 22px;
   background: var(--panel-soft);
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
+.sim-back { flex-shrink: 0; }
+.sim-title {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 15px;
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.sim-info { font-size: 14px; color: var(--text-dim); margin-right: auto; font-weight: 700; }
+.sim-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.sim-info { font-size: 14px; color: var(--text-dim); font-weight: 700; }
 
 .sim-controls button {
   padding: 8px 15px;

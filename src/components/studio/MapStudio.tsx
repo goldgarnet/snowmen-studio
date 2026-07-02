@@ -12,9 +12,11 @@ import PlayView from '../editor/PlayView';
 import UploadForm, { UploadPayload } from '../hub/UploadForm';
 import MapThumbnail from '../hub/MapThumbnail';
 import ConfirmModal from '../common/ConfirmModal';
+import Pagination from '../common/Pagination';
 import './MapStudio.css';
 
 type View = 'list' | 'editor' | 'play';
+const PAGE_SIZE = 8; // 4 columns × 2 rows
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -40,6 +42,11 @@ export default function MapStudio() {
   const [playCode, setPlayCode] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<MapRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const pageCount = Math.max(1, Math.ceil(maps.length / PAGE_SIZE));
+  useEffect(() => { setPage((p) => Math.min(p, pageCount)); }, [pageCount]);
+  const pagedMaps = maps.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1800); };
 
@@ -148,7 +155,7 @@ export default function MapStudio() {
 
   // ---------- play submode ----------
   if (view === 'play') {
-    return <PlayView code={playCode} title={editTitle} onClose={() => setView('editor')} />;
+    return <PlayView code={playCode} title={editTitle} backLabel="에디터로" onClose={() => setView('editor')} />;
   }
 
   // ---------- editor submode ----------
@@ -213,8 +220,9 @@ export default function MapStudio() {
           아직 저장한 맵이 없습니다. <b>새 맵 만들기</b>로 시작하세요.
         </div>
       ) : (
+        <>
         <div className="studio-grid">
-          {maps.map((m) => (
+          {pagedMaps.map((m) => (
             <div className="studio-card" key={m.id} onClick={() => openExisting(m)}>
               <div className="studio-card-thumb">
                 <MapThumbnail code={m.code} />
@@ -235,6 +243,8 @@ export default function MapStudio() {
             </div>
           ))}
         </div>
+        <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+        </>
       )}
 
       {deleteTarget && (

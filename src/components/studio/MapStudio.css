@@ -11,8 +11,9 @@
   gap: 16px;
   margin-bottom: 22px;
 }
-.studio-list-head h2 { font-size: 22px; font-weight: 800; }
-.studio-sub { color: var(--text-faint); font-size: 13px; margin-top: 4px; }
+/* Match the hub tab's header sizing (.hub-title / .hub-sub) for consistency. */
+.studio-list-head h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+.studio-sub { color: var(--text-dim); font-size: 14px; margin-top: 6px; }
 
 .studio-empty {
   text-align: center;
@@ -25,9 +26,11 @@
 
 .studio-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
+@media (max-width: 900px) { .studio-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .studio-grid { grid-template-columns: 1fr; } }
 .studio-card {
   background: var(--surface);
   border: 1px solid var(--border);

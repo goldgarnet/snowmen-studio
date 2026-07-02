@@ -8,9 +8,12 @@ import './Simulator.css';
 interface SimulatorProps {
   gameState: GameState;
   setGameState: (gs: GameState) => void;
+  onBack?: () => void;
+  backLabel?: string;
+  title?: string;
 }
 
-export default function Simulator({ gameState, setGameState }: SimulatorProps) {
+export default function Simulator({ gameState, setGameState, onBack, backLabel = '나가기', title }: SimulatorProps) {
   const handleMove = useCallback((dir: Direction) => {
     if (gameState.status !== 'playing') return;
 
@@ -92,17 +95,23 @@ export default function Simulator({ gameState, setGameState }: SimulatorProps) {
 
   return (
     <div className="simulator">
-      <div className="sim-controls">
-        <span className="sim-info">턴: {gameState.turnCount}</span>
-        <button onClick={handleSkip} disabled={disabled}>
-          대기 (Space)
-        </button>
-        <button onClick={handleUndo} disabled={gameState.history.length === 0}>
-          되돌리기 (Z)
-        </button>
-        <button onClick={handleReset} disabled={gameState.history.length === 0}>
-          초기화 (R)
-        </button>
+      <div className="sim-topbar">
+        {onBack && (
+          <button className="btn btn-ghost sim-back" onClick={onBack}>← {backLabel}</button>
+        )}
+        {title != null && <span className="sim-title">{title}</span>}
+        <div className="sim-controls">
+          <span className="sim-info">턴 {gameState.turnCount}</span>
+          <button onClick={handleSkip} disabled={disabled}>
+            대기 (Space)
+          </button>
+          <button onClick={handleUndo} disabled={gameState.history.length === 0}>
+            되돌리기 (Z)
+          </button>
+          <button onClick={handleReset} disabled={gameState.history.length === 0}>
+            초기화 (R)
+          </button>
+        </div>
       </div>
 
       <div className="sim-body">

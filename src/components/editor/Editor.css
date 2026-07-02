@@ -71,6 +71,7 @@
 
 .tool-group-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .tool-group-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+.tool-rows { display: flex; flex-direction: column; gap: 6px; }
 
 .tool-btn {
   padding: 9px 7px;

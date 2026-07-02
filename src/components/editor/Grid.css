@@ -34,6 +34,17 @@
   box-sizing: border-box;
 }
 
+/* Thumbnail mode: a calm, non-interactive miniature of the real board. */
+.grid.thumb {
+  box-shadow: none;
+  border-radius: 8px;
+  border-color: #d3e1ef;
+}
+.grid.thumb .grid-cell { cursor: default; }
+.grid.thumb .grid-cell:hover { outline: none; }
+.grid.thumb .goal-overlay,
+.grid.thumb .flake-overlay { animation: none; }
+
 .grid-cell.warm {
   background: #f5e6c8;
 }

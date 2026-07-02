@@ -7,7 +7,10 @@ import MapCard from './MapCard';
 import MapDetail from './MapDetail';
 import UploadForm, { UploadPayload } from './UploadForm';
 import PlayView from '../editor/PlayView';
+import Pagination from '../common/Pagination';
 import './hub.css';
+
+const PAGE_SIZE = 8; // 4 columns × 2 rows
 
 type Filter = 'all' | MapStatus;
 const FILTERS: { key: Filter; label: string }[] = [
@@ -51,6 +54,7 @@ export default function MapHub() {
   const [showUpload, setShowUpload] = useState(false);
   const [selected, setSelected] = useState<MapRow | null>(null);
   const [playMap, setPlayMap] = useState<MapRow | null>(null);
+  const [page, setPage] = useState(1);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -78,6 +82,13 @@ export default function MapHub() {
     adopted: maps.filter((m) => m.status === 'accepted').length,
     review: maps.filter((m) => m.status === 'pending').length,
   }), [maps]);
+
+  // Pagination over the filtered list. Reset to page 1 whenever the filter/search
+  // changes; clamp if the visible count shrinks below the current page.
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  useEffect(() => { setPage(1); }, [filter, query]);
+  useEffect(() => { setPage((p) => Math.min(p, pageCount)); }, [pageCount]);
+  const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const doUpload = async (p: UploadPayload) => {
     if (!profile) return;
@@ -194,9 +205,12 @@ export default function MapHub() {
           {maps.length === 0 ? '아직 업로드된 맵이 없습니다. 첫 맵을 올려보세요!' : '조건에 맞는 맵이 없습니다.'}
         </div>
       ) : (
-        <div className="hub-grid">
-          {visible.map((m) => <MapCard key={m.id} map={m} onOpen={setSelected} />)}
-        </div>
+        <>
+          <div className="hub-grid">
+            {paged.map((m) => <MapCard key={m.id} map={m} onOpen={setSelected} />)}
+          </div>
+          <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+        </>
       )}
 
       {showUpload && (
