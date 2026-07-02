@@ -25,7 +25,8 @@ create table if not exists public.maps (
   author_name text,                       -- 제작자(허브 업로드 시 필수)
   code        text not null default '',    -- 맵 코드(base62) — 맵의 정본
   comment     text,
-  difficulty  numeric(2,1),                -- 0.5 ~ 5.0 (별점, 0.5 단위)
+  author_difficulty numeric(2,1),          -- 출제자가 등록 시 매긴 난이도 (0.5~5.0)
+  difficulty  numeric(2,1),                -- 회의 결정 난이도 (0.5~5.0, null=미결정)
   status      text not null default 'pending'
               check (status in ('pending','accepted','held','rejected')),
   published   boolean not null default false,
@@ -40,6 +41,7 @@ create table if not exists public.comments (
   author_id   uuid not null references public.profiles(id) on delete cascade,
   author_name text not null,
   body        text not null,
+  suggested_difficulty numeric(2,1),       -- 피드백에 첨부한 난이도 제안 (선택)
   created_at  timestamptz not null default now()
 );
 
@@ -121,3 +123,18 @@ $$;
 
 revoke all on function public.set_map_review(uuid, text, numeric) from public;
 grant execute on function public.set_map_review(uuid, text, numeric) to authenticated;
+
+-- ---------- 마이그레이션 (이미 운영 중인 DB에 새 컬럼 추가) ----------
+-- 이 파일 전체를 다시 실행하면 아래 ALTER 들이 idempotent 하게 적용됩니다.
+alter table public.maps     add column if not exists author_difficulty numeric(2,1);
+alter table public.comments add column if not exists suggested_difficulty numeric(2,1);
+
+-- 기존 맵의 난이도를 "출제자 난이도"로 옮기고 "회의 결정 난이도"는 미결정(null)으로 (1회만).
+-- author_difficulty 가 전부 비어 있을 때만 실행되므로 재실행해도 안전합니다.
+do $$
+begin
+  if not exists (select 1 from public.maps where author_difficulty is not null) then
+    update public.maps set author_difficulty = difficulty where difficulty is not null;
+    update public.maps set difficulty = null where difficulty is not null;
+  end if;
+end $$;

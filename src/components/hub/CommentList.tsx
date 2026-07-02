@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { listComments, addComment, deleteComment } from '../../api/comments';
 import type { CommentRow } from '../../api/types';
 import SpoilerText from './SpoilerText';
+import StarRating from './StarRating';
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -14,23 +15,18 @@ export default function CommentList({ mapId }: { mapId: string }) {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestedDiff, setSuggestedDiff] = useState<number | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // Wrap the selected text (or a placeholder) in ||spoiler|| markers.
   const wrapSpoiler = () => {
     const ta = taRef.current;
     if (!ta) return;
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
-    const selected = body.slice(start, end);
-    const inner = selected || '스포일러';
-    const next = `${body.slice(0, start)}||${inner}||${body.slice(end)}`;
-    setBody(next);
-    requestAnimationFrame(() => {
-      ta.focus();
-      const pos = start + 2;
-      ta.setSelectionRange(pos, pos + inner.length);
-    });
+    const inner = body.slice(start, end) || '스포일러';
+    setBody(`${body.slice(0, start)}||${inner}||${body.slice(end)}`);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + 2, start + 2 + inner.length); });
   };
 
   const load = useCallback(async () => {
@@ -40,12 +36,22 @@ export default function CommentList({ mapId }: { mapId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const canSubmit = body.trim().length > 0 || (suggesting && suggestedDiff != null);
+
   const submit = async () => {
-    if (!profile || !body.trim()) return;
+    if (!profile || !canSubmit) return;
     setBusy(true);
     try {
-      await addComment({ map_id: mapId, author_id: profile.id, author_name: profile.name, body: body.trim() });
+      await addComment({
+        map_id: mapId,
+        author_id: profile.id,
+        author_name: profile.name,
+        body: body.trim(),
+        suggested_difficulty: suggesting ? suggestedDiff : null,
+      });
       setBody('');
+      setSuggesting(false);
+      setSuggestedDiff(null);
       load();
     } catch (e) { alert('댓글 작성 실패: ' + (e as Error).message); }
     finally { setBusy(false); }
@@ -72,17 +78,26 @@ export default function CommentList({ mapId }: { mapId: string }) {
             placeholder="피드백을 남겨주세요…  (선택한 글자를 스포일러로 가릴 수 있어요)"
             disabled={busy}
           />
-          <button
-            type="button"
-            className="btn btn-sm comment-spoiler-btn"
-            onClick={wrapSpoiler}
-            disabled={busy}
-            title="선택한 글자를 ||스포일러||로 감쌉니다"
-          >
-            ⬛ 스포일러
-          </button>
+          <div className="comment-compose-tools">
+            <button type="button" className="btn btn-sm comment-spoiler-btn" onClick={wrapSpoiler}
+              disabled={busy} title="선택한 글자를 ||스포일러||로 감쌉니다">⬛ 스포일러</button>
+            <label className="comment-suggest-toggle">
+              <input type="checkbox" checked={suggesting}
+                onChange={(e) => setSuggesting(e.target.checked)} disabled={busy} />
+              난이도 제안
+            </label>
+          </div>
+          {suggesting && (
+            <div className="comment-suggest-row">
+              <StarRating value={suggestedDiff} onChange={setSuggestedDiff} size={22} />
+              <span className="difficulty-num">{suggestedDiff != null ? suggestedDiff.toFixed(1) : '—'}</span>
+              {suggestedDiff != null && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setSuggestedDiff(null)} disabled={busy}>지우기</button>
+              )}
+            </div>
+          )}
         </div>
-        <button className="btn btn-primary" onClick={submit} disabled={busy || !body.trim()}>등록</button>
+        <button className="btn btn-primary" onClick={submit} disabled={busy || !canSubmit}>등록</button>
       </div>
 
       {comments.length === 0 ? (
@@ -98,7 +113,13 @@ export default function CommentList({ mapId }: { mapId: string }) {
                   <button className="comment-del" onClick={() => remove(c.id)} aria-label="삭제">✕</button>
                 )}
               </div>
-              <div className="comment-body"><SpoilerText text={c.body} /></div>
+              {c.suggested_difficulty != null && (
+                <div className="comment-suggest-badge">
+                  난이도 제안 <StarRating value={c.suggested_difficulty} size={13} />
+                  <span className="difficulty-num" style={{ fontSize: 12 }}>{c.suggested_difficulty.toFixed(1)}</span>
+                </div>
+              )}
+              {c.body && <div className="comment-body"><SpoilerText text={c.body} /></div>}
             </li>
           ))}
         </ul>

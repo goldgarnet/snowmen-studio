@@ -2,6 +2,7 @@ import { Level, Direction, GameStatus, Position } from '../types';
 import { cloneLevel, findPlayer } from '../utils/level';
 import { recalcShadows } from './shadow';
 import { executePush } from './push';
+import { yellowWallsSolid } from './helpers';
 
 export interface TurnResult {
   level: Level;
@@ -29,6 +30,7 @@ export function isGoalActive(level: Level): boolean {
 }
 
 function applyLaserCheck(level: Level): void {
+  const ySolid = yellowWallsSolid(level);
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const obj = level.objects[r][c];
@@ -43,6 +45,7 @@ function applyLaserCheck(level: Level): void {
           hit.size = 0;
         }
         if (level.tiles[cr][cc].triangle) break; // triangle stops the beam at this cell
+        if (ySolid && level.tiles[cr][cc].isYellowWall) break; // solid yellow wall blocks
         cr += dr;
         cc += dc;
       }
@@ -51,12 +54,34 @@ function applyLaserCheck(level: Level): void {
   processDeadObjects(level);
 }
 
+// Resolve the soul-swap footplate with a one-turn delay: stepping onto it arms it;
+// the transfer only fires on a later turn when the player is still on the SAME plate
+// that was armed. Returns the (possibly changed) player position.
+function resolveSoulFootplate(level: Level, pos: Position, ts: number): Position | null {
+  const tile = level.tiles[pos.row][pos.col];
+  if (!tile.isSoulSwap) {
+    level.soulSwapArmedAt = null;
+    return pos;
+  }
+  const armed = level.soulSwapArmedAt;
+  if (armed && armed.row === pos.row && armed.col === pos.col) {
+    soulSwapNearest(level, pos, ts);
+    level.soulSwapArmedAt = null;
+    return findPlayer(level);
+  }
+  // just stepped on (or moved to a different plate) → arm and wait a turn
+  level.soulSwapArmedAt = { row: pos.row, col: pos.col };
+  return pos;
+}
+
 export function executeSkipTurn(level: Level): TurnResult {
   const newLevel = cloneLevel(level);
   const playerPos = findPlayer(newLevel);
   if (!playerPos) return { level: newLevel, status: 'gameover' };
 
   const turnCount = Date.now();
+  // Waiting on an armed soul footplate fires the delayed transfer.
+  resolveSoulFootplate(newLevel, playerPos, turnCount);
   applyLaserCheck(newLevel);
   endOfTurn(newLevel, turnCount);
 
@@ -86,14 +111,9 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
 
   let newPlayerPos = findPlayer(newLevel);
 
-  // Soul-swap footplate: stepping onto it moves the soul to another snowman
-  // (nearest rule); the old body is left behind as a snowman.
+  // Soul-swap footplate (delayed one turn — see resolveSoulFootplate).
   if (newPlayerPos) {
-    const landTile = newLevel.tiles[newPlayerPos.row][newPlayerPos.col];
-    if (landTile.isSoulSwap) {
-      soulSwapNearest(newLevel, newPlayerPos, turnCount);
-      newPlayerPos = findPlayer(newLevel);
-    }
+    newPlayerPos = resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
   }
 
   if (newPlayerPos) {

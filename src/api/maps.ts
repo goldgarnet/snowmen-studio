@@ -19,7 +19,8 @@ export interface NewMap {
   author_name?: string | null;
   code: string;
   comment?: string | null;
-  difficulty?: number | null;
+  author_difficulty?: number | null;  // 출제자 난이도
+  difficulty?: number | null;         // 회의 결정 난이도 (보통 등록 시 null)
   status?: MapStatus;
   published?: boolean;
   created_at?: string;   // 등록일 (편집 가능)

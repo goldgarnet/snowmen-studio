@@ -11,6 +11,7 @@ import Editor from '../editor/Editor';
 import PlayView from '../editor/PlayView';
 import UploadForm, { UploadPayload } from '../hub/UploadForm';
 import MapThumbnail from '../hub/MapThumbnail';
+import ConfirmModal from '../common/ConfirmModal';
 import './MapStudio.css';
 
 type View = 'list' | 'editor' | 'play';
@@ -37,6 +38,8 @@ export default function MapStudio() {
   const [flash, setFlash] = useState<string | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [playCode, setPlayCode] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<MapRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1800); };
 
@@ -96,14 +99,14 @@ export default function MapStudio() {
     if (editId) {
       await updateMap(editId, {
         title: p.title, author_name: p.author_name, comment: p.comment,
-        difficulty: p.difficulty, code: p.code, created_at, published: true,
+        author_difficulty: p.difficulty, code: p.code, created_at, published: true,
       });
       setPublished(true);
     } else {
       const row = await insertMap({
         owner_id: profile.id,
         author_name: p.author_name, code: p.code, title: p.title,
-        comment: p.comment, difficulty: p.difficulty, created_at, published: true,
+        comment: p.comment, author_difficulty: p.difficulty, created_at, published: true,
       });
       setEditId(row.id); setPublished(true);
     }
@@ -113,10 +116,12 @@ export default function MapStudio() {
     refresh();
   };
 
-  const removeMap = async (m: MapRow) => {
-    if (!confirm(`'${m.title ?? '제목 없음'}' 맵을 삭제할까요? 되돌릴 수 없습니다.`)) return;
-    try { await deleteMap(m.id); refresh(); }
+  const doDeleteMap = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try { await deleteMap(deleteTarget.id); setDeleteTarget(null); refresh(); }
     catch (e) { alert('삭제 실패: ' + (e as Error).message); }
+    finally { setDeleting(false); }
   };
 
   // --- unsaved-changes guard: expose isDirty/save to the app via a stable api
@@ -224,12 +229,24 @@ export default function MapStudio() {
                 </div>
                 <div className="studio-card-actions" onClick={(e) => e.stopPropagation()}>
                   <button className="btn btn-sm" onClick={() => openExisting(m)}>이어서 만들기</button>
-                  <button className="btn btn-sm btn-danger" onClick={() => removeMap(m)}>삭제</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(m)}>삭제</button>
                 </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="맵 삭제"
+          message={<>'{deleteTarget.title ?? '제목 없음'}' 맵을 삭제할까요? 되돌릴 수 없습니다.</>}
+          confirmLabel="삭제"
+          danger
+          busy={deleting}
+          onConfirm={doDeleteMap}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );

@@ -29,7 +29,8 @@ function buildBackupText(maps: MapRow[]): string {
     lines.push(`제목: ${m.title ?? '(없음)'}`);
     lines.push(`제작자: ${m.author_name ?? '(없음)'}`);
     lines.push(`상태: ${STATUS_LABEL[m.status]}`);
-    lines.push(`난이도: ${m.difficulty != null ? m.difficulty.toFixed(1) : '(미지정)'}`);
+    lines.push(`출제자 난이도: ${m.author_difficulty != null ? m.author_difficulty.toFixed(1) : '(미지정)'}`);
+    lines.push(`회의 난이도: ${m.difficulty != null ? m.difficulty.toFixed(1) : '(미결정)'}`);
     lines.push(`공개: ${m.published ? '허브' : '초안'}`);
     lines.push(`생성: ${m.created_at}`);
     if (m.comment) lines.push(`코멘트: ${m.comment}`);
@@ -86,7 +87,7 @@ export default function MapHub() {
       code: p.code,
       title: p.title,
       comment: p.comment,
-      difficulty: p.difficulty,
+      author_difficulty: p.difficulty,
       created_at: registeredToISO(p.registered_on),
       published: true,
     });

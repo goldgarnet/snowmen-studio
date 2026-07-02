@@ -16,6 +16,24 @@ export function getNextPos(pos: Position, dir: Direction): Position {
 }
 
 /**
+ * Yellow walls are solid unless there is at least one yellow button AND every
+ * yellow button is currently covered by an object. (With no yellow buttons, the
+ * walls never disappear — they behave like plain walls.)
+ */
+export function yellowWallsSolid(level: Level): boolean {
+  let hasButton = false;
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isYellowButton) {
+        hasButton = true;
+        if (!level.objects[r][c]) return true; // an uncovered button → walls solid
+      }
+    }
+  }
+  return !hasButton; // no buttons → solid; all buttons covered → not solid
+}
+
+/**
  * Returns the edge-arch level (max passable size) on the boundary between `from`
  * and the next cell in direction `dir`. Returns 0 if no arch is present.
  */
@@ -71,6 +89,11 @@ export function canEnterTile(level: Level, pos: Position, dir: Direction, obj: G
   // Triangle wall: entering `pos` moving `dir` crosses pos's opposite-dir edge.
   // Blocked if that edge is a solid leg.
   if (tile.triangle && TRI_SOLID[tile.triangle].includes(getOppositeDirection(dir))) {
+    return false;
+  }
+
+  // Solid yellow wall: impassable (only scan buttons when this is a yellow-wall tile).
+  if (tile.isYellowWall && yellowWallsSolid(level)) {
     return false;
   }
 
@@ -145,6 +168,9 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
   // Triangle solid leg edge backs the push like a wall.
   if (tile.triangle && TRI_SOLID[tile.triangle].includes(dir)) return true;
   if (nextTile.triangle && TRI_SOLID[nextTile.triangle].includes(getOppositeDirection(dir))) return true;
+
+  // A solid yellow wall at the next cell backs the push like a wall.
+  if (nextTile.isYellowWall && yellowWallsSolid(level)) return true;
 
   // Check perpendicular tunnel blockage (existing arch-tile semantics): rowArch
   // blocks left/right movement; columnArch blocks up/down movement.

@@ -28,9 +28,14 @@ export interface Tile {
   // Soul-swap footplate: when the player steps onto it, the soul moves to another
   // snowman (nearest rule); the old body is left behind as a snowman.
   isSoulSwap?: boolean;
-  // Key footplate: while any key tile exists on the map, the goal is only active
-  // when every key tile is covered by an object.
+  // Green button (formerly "key footplate"): while any green button exists on the
+  // map, the goal is only active when every green button is covered by an object.
   isKeyTile?: boolean;
+  // Yellow button: while ALL yellow buttons are covered, every yellow wall
+  // disappears (toggles back when any yellow button becomes uncovered).
+  isYellowButton?: boolean;
+  // Yellow wall: acts like a solid wall unless all yellow buttons are pressed.
+  isYellowWall?: boolean;
   // Triangle wall (half-cell corner mirror). Undefined = none.
   triangle?: TriangleCorner;
 }
@@ -56,6 +61,9 @@ export interface Level {
   hasShadow: boolean;
   // When true, the player may press M to cycle the soul through the snowman queue.
   soulSwapEnabled: boolean;
+  // Transient (not saved in the map code): the soul-swap footplate the player is
+  // "armed" on. The swap fires one turn after stepping on, if still on that plate.
+  soulSwapArmedAt?: Position | null;
   tiles: Tile[][];
   objects: (GameObject | null)[][];
 }

@@ -1,6 +1,6 @@
 import { Level, GameObject, Position, Direction, TriangleCorner } from '../types';
 import { isInBounds } from '../utils/level';
-import { getNextPos, canMoveTo } from './helpers';
+import { getNextPos, canMoveTo, yellowWallsSolid } from './helpers';
 
 // Triangle-mirror reflection — a snowball that has ENTERED a triangle cell turns 90°
 // based on the direction it came in (like a light ray hitting the diagonal mirror).
@@ -179,6 +179,7 @@ const BEAM_BLOCKERS_ROLL = new Set(['wall', 'block', 'tree', 'laser']);
 // stop the beam at their own cell (one cell further than a solid blocker).
 function killIfOnBeam(level: Level, group: { pos: Position; obj: GameObject }[]): boolean {
   let killed = false;
+  const ySolid = yellowWallsSolid(level);
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const laser = level.objects[r][c];
@@ -198,6 +199,7 @@ function killIfOnBeam(level: Level, group: { pos: Position; obj: GameObject }[])
           break; // beam is blocked by this object (killed or not)
         }
         if (level.tiles[cr][cc].triangle) break; // triangle stops the beam at this cell
+        if (ySolid && level.tiles[cr][cc].isYellowWall) break; // solid yellow wall blocks
         cr += dr;
         cc += dc;
       }

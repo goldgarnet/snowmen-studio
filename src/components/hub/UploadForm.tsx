@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { decodeLevelCode } from '../../utils/levelCode';
 import StarRating from './StarRating';
 import MapThumbnail from './MapThumbnail';
@@ -38,6 +38,17 @@ export default function UploadForm({
   const [registeredOn, setRegisteredOn] = useState(initial?.registered_on || todayStr());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
+
+  const wrapCommentSpoiler = () => {
+    const ta = commentRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const inner = comment.slice(start, end) || '스포일러';
+    setComment(`${comment.slice(0, start)}||${inner}||${comment.slice(end)}`);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + 2, start + 2 + inner.length); });
+  };
 
   const codeValid = code.trim() ? !!decodeLevelCode(code.trim()) : false;
 
@@ -96,13 +107,17 @@ export default function UploadForm({
           readOnly={lockCode}
         />
 
-        <label className="field-label" style={{ marginTop: 12 }}>코멘트</label>
-        <textarea className="field-textarea" value={comment} onChange={(e) => setComment(e.target.value)}
-          placeholder="(선택) 맵 설명이나 의도" rows={2} disabled={busy} />
+        <div className="upload-comment-head" style={{ marginTop: 12 }}>
+          <label className="field-label" style={{ margin: 0 }}>코멘트</label>
+          <button type="button" className="btn btn-sm" onClick={wrapCommentSpoiler} disabled={busy}
+            title="선택한 글자를 ||스포일러||로 감쌉니다">⬛ 스포일러</button>
+        </div>
+        <textarea ref={commentRef} className="field-textarea" value={comment} onChange={(e) => setComment(e.target.value)}
+          placeholder="(선택) 맵 설명이나 의도 · 선택한 글자를 스포일러로 가릴 수 있어요" rows={2} disabled={busy} />
 
         <div className="upload-grid" style={{ marginTop: 12, alignItems: 'start' }}>
           <div>
-            <label className="field-label">난이도 (선택)</label>
+            <label className="field-label">출제자 난이도 (선택)</label>
             <div className="upload-difficulty">
               <StarRating value={difficulty} onChange={setDifficulty} size={24} />
               {difficulty != null && (

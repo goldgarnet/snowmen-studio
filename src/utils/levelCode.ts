@@ -121,11 +121,18 @@ export function encodeLevelCode(level: Level): string {
     for (let c = 0; c < level.width; c++) {
       const tile = level.tiles[r][c];
       encodeTileV4(bits, tile);
-      // A triangle wall is stored in the object slot as code 14 + 2-bit corner.
-      // (A saved/editor tile won't hold both a triangle and a resting object.)
+      // Object-slot codes 14/15 are repurposed as tile markers (backward compatible
+      // — pre-existing codes never emit them):
+      //   14 = triangle wall (+ 2-bit corner); never co-exists with a resting object.
+      //   15 = yellow button/wall (+ 2 flag bits + the nested real resting object).
       if (tile.triangle) {
         pushBits(bits, 14, 4);
         pushBits(bits, Math.max(0, TRI_CORNERS.indexOf(tile.triangle)), 2);
+      } else if (tile.isYellowButton || tile.isYellowWall) {
+        pushBits(bits, 15, 4);
+        pushBits(bits, tile.isYellowButton ? 1 : 0, 1);
+        pushBits(bits, tile.isYellowWall ? 1 : 0, 1);
+        encodeObject(bits, level.objects[r][c]);
       } else {
         encodeObject(bits, level.objects[r][c]);
       }
@@ -133,6 +140,35 @@ export function encodeLevelCode(level: Level): string {
   }
 
   return bitsToBase62(bits);
+}
+
+// Decode a real resting object from its 4-bit code (0–13) plus any payload,
+// advancing `pos`. Used both at the top level and nested under the yellow marker.
+function decodeRealObject(objType: number, bits: number[], pos: number): { obj: GameObject | null; pos: number } {
+  let obj: GameObject | null = null;
+  switch (objType) {
+    case 0: break;
+    case 1: obj = { type: 'player', size: 2, isMelting: false, createdAt: 0 }; break;
+    case 2: obj = { type: 'snowball', size: 1, isMelting: false, createdAt: 0 }; break;
+    case 3: obj = { type: 'snowball', size: 2, isMelting: false, createdAt: 0 }; break;
+    case 4: obj = { type: 'wall', size: 100, isMelting: false, createdAt: 0 }; break;
+    case 5: obj = { type: 'block', size: 1, isMelting: false, createdAt: 0 }; break;
+    case 6: {
+      const hVal = readBits(bits, pos, 6); pos += 6;
+      const treeHeight = Math.max(hVal, 1) / 2;
+      obj = { type: 'tree', size: 100, isMelting: false, treeHeight, createdAt: 0 };
+      break;
+    }
+    case 7: obj = { type: 'snowman', size: 1, isMelting: false, createdAt: 0 }; break;
+    case 8: obj = { type: 'snowman', size: 2, isMelting: false, createdAt: 0 }; break;
+    case 9: obj = { type: 'snowman', size: 3, isMelting: false, createdAt: 0 }; break;
+    case 10: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'right', createdAt: 0 }; break;
+    case 11: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'left',  createdAt: 0 }; break;
+    case 12: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'up',    createdAt: 0 }; break;
+    case 13: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'down',  createdAt: 0 }; break;
+    default: break;
+  }
+  return { obj, pos };
 }
 
 export function decodeLevelCode(code: string): Level | null {
@@ -214,36 +250,23 @@ export function decodeLevelCode(code: string): Level | null {
         };
         tiles[r].push(tile);
 
-        const objType = readBits(bits, pos, 4); pos += 4;
+        const marker = readBits(bits, pos, 4); pos += 4;
         let obj: GameObject | null = null;
 
-        switch (objType) {
-          case 0: break;
-          case 1: obj = { type: 'player', size: 2, isMelting: false, createdAt: 0 }; break;
-          case 2: obj = { type: 'snowball', size: 1, isMelting: false, createdAt: 0 }; break;
-          case 3: obj = { type: 'snowball', size: 2, isMelting: false, createdAt: 0 }; break;
-          case 4: obj = { type: 'wall', size: 100, isMelting: false, createdAt: 0 }; break;
-          case 5: obj = { type: 'block', size: 1, isMelting: false, createdAt: 0 }; break;
-          case 6: {
-            const hVal = readBits(bits, pos, 6); pos += 6;
-            const treeHeight = Math.max(hVal, 1) / 2;
-            obj = { type: 'tree', size: 100, isMelting: false, treeHeight, createdAt: 0 };
-            break;
-          }
-          case 7: obj = { type: 'snowman', size: 1, isMelting: false, createdAt: 0 }; break;
-          case 8: obj = { type: 'snowman', size: 2, isMelting: false, createdAt: 0 }; break;
-          case 9: obj = { type: 'snowman', size: 3, isMelting: false, createdAt: 0 }; break;
-          case 10: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'right', createdAt: 0 }; break;
-          case 11: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'left',  createdAt: 0 }; break;
-          case 12: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'up',    createdAt: 0 }; break;
-          case 13: obj = { type: 'laser', size: 1, isMelting: false, laserDirection: 'down',  createdAt: 0 }; break;
-          case 14: {
-            // Triangle wall — stored in the object slot, applied to the tile.
-            const cornerIdx = readBits(bits, pos, 2); pos += 2;
-            tile.triangle = TRI_CORNERS[cornerIdx] ?? 'tl';
-            break;
-          }
-          default: break;
+        if (marker === 14) {
+          // Triangle wall — object-slot marker applied to the tile.
+          const cornerIdx = readBits(bits, pos, 2); pos += 2;
+          tile.triangle = TRI_CORNERS[cornerIdx] ?? 'tl';
+        } else if (marker === 15) {
+          // Yellow button/wall marker (+ flags + the nested real object).
+          tile.isYellowButton = readBits(bits, pos, 1) === 1; pos += 1;
+          tile.isYellowWall = readBits(bits, pos, 1) === 1; pos += 1;
+          const nType = readBits(bits, pos, 4); pos += 4;
+          const res = decodeRealObject(nType, bits, pos);
+          obj = res.obj; pos = res.pos;
+        } else {
+          const res = decodeRealObject(marker, bits, pos);
+          obj = res.obj; pos = res.pos;
         }
 
         objects[r].push(obj);

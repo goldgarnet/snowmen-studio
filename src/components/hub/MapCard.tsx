@@ -23,7 +23,9 @@ export default function MapCard({ map, onOpen }: MapCardProps) {
       <div className="map-card-body">
         <div className="map-card-titlerow">
           <span className="map-card-title">{map.title || '제목 없음'}</span>
-          {map.difficulty != null && <StarRating value={map.difficulty} size={13} />}
+          {(map.difficulty ?? map.author_difficulty) != null && (
+            <StarRating value={map.difficulty ?? map.author_difficulty} size={13} />
+          )}
         </div>
         <div className="map-card-metarow">
           <span>@{map.author_name || '익명'}</span>

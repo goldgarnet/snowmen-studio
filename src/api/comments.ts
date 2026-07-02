@@ -16,6 +16,7 @@ export async function addComment(payload: {
   author_id: string;
   author_name: string;
   body: string;
+  suggested_difficulty?: number | null;
 }): Promise<CommentRow> {
   const { data, error } = await supabase.from('comments').insert(payload).select().single();
   if (error) throw new Error(error.message);

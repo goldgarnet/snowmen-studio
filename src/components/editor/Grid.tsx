@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Level } from '../../types';
+import { yellowWallsSolid } from '../../engine/helpers';
 import './Grid.css';
 
 interface GridProps {
@@ -107,6 +108,9 @@ export default function Grid({
     }
   }
 
+  // Yellow walls are solid (visible/blocking) unless all yellow buttons are pressed.
+  const yellowSolid = yellowWallsSolid(level);
+
   return (
     <div ref={wrapperRef} className="grid-wrapper">
       <div className="grid-stack"
@@ -139,6 +143,8 @@ export default function Grid({
                 tile.isColumnArch ? 'col-arch' : '',
                 tile.isSoulSwap ? 'soul' : '',
                 tile.isKeyTile ? 'key' : '',
+                tile.isYellowButton ? 'ybutton' : '',
+                tile.isYellowWall ? (yellowSolid ? 'ywall ywall-solid' : 'ywall ywall-open') : '',
               ].filter(Boolean).join(' ');
 
               return (
@@ -167,7 +173,9 @@ export default function Grid({
                     <TunnelOverlay size={cellSize} isRow={tile.isRowArch} />
                   )}
                   {tile.isSoulSwap && <SoulSwapOverlay size={cellSize} />}
-                  {tile.isKeyTile && <KeyTileOverlay size={cellSize} />}
+                  {tile.isKeyTile && <GreenButtonOverlay size={cellSize} />}
+                  {tile.isYellowButton && <YellowButtonOverlay size={cellSize} />}
+                  {tile.isYellowWall && <YellowWallOverlay size={cellSize} solid={yellowSolid} />}
                   {tile.triangle && <TriangleOverlay corner={tile.triangle} size={cellSize} />}
                   {obj && (
                     <div className={`object obj-${obj.type} size-${obj.size} ${highlightPlayer && obj.type === 'player' ? 'player-highlight' : ''} ${obj.isMelting ? 'melting' : ''}`}>
@@ -412,17 +420,46 @@ function SoulSwapOverlay({ size }: { size: number }) {
   );
 }
 
-function KeyTileOverlay({ size }: { size: number }) {
+// Green button (formerly the key footplate): gates the goal.
+function GreenButtonOverlay({ size }: { size: number }) {
   return (
-    <svg className="tile-overlay key-overlay" width={size} height={size} viewBox="0 0 40 40">
-      <rect x="6" y="6" width="28" height="28" rx="3" fill="none"
-        stroke="#e0b84a" strokeWidth="1.6" strokeDasharray="3 2.5" opacity="0.8" />
-      <g stroke="#e6c25a" strokeWidth="2.2" fill="none" strokeLinecap="round" opacity="0.9">
-        <circle cx="16" cy="17" r="4" />
-        <line x1="19" y1="20" x2="27" y2="28" />
-        <line x1="24" y1="25" x2="27" y2="22" />
-        <line x1="27" y1="28" x2="30" y2="25" />
-      </g>
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="12" fill="none" stroke="#2f9e57" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
+      <circle cx="20" cy="20" r="9" fill="#3fbf6a" stroke="#268a48" strokeWidth="1.8" opacity="0.92" />
+      <circle cx="20" cy="20" r="4.5" fill="#8fe6ab" opacity="0.9" />
+    </svg>
+  );
+}
+
+// Yellow button: pressing all of them removes every yellow wall.
+function YellowButtonOverlay({ size }: { size: number }) {
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="12" fill="none" stroke="#c99a1e" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
+      <circle cx="20" cy="20" r="9" fill="#f2c53a" stroke="#bd9018" strokeWidth="1.8" opacity="0.95" />
+      <circle cx="20" cy="20" r="4.5" fill="#ffe89a" opacity="0.95" />
+    </svg>
+  );
+}
+
+// Yellow wall: solid unless all yellow buttons are pressed; when "open" it shows a
+// faint dashed outline of where it will reappear.
+function YellowWallOverlay({ size, solid }: { size: number; solid: boolean }) {
+  if (solid) {
+    return (
+      <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
+        <rect x="1" y="1" width="38" height="38" rx="3" fill="#e6b422" stroke="#b5860f" strokeWidth="2" />
+        <line x1="0" y1="20" x2="40" y2="20" stroke="#c99320" strokeWidth="1.5" />
+        <line x1="20" y1="0" x2="20" y2="20" stroke="#c99320" strokeWidth="1.5" />
+        <line x1="10" y1="20" x2="10" y2="40" stroke="#c99320" strokeWidth="1.5" />
+        <line x1="30" y1="20" x2="30" y2="40" stroke="#c99320" strokeWidth="1.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
+      <rect x="3" y="3" width="34" height="34" rx="3" fill="rgba(230,180,34,0.10)"
+        stroke="#e6b422" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
     </svg>
   );
 }

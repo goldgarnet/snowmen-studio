@@ -8,6 +8,8 @@ import StatusControl from './StatusControl';
 import CommentList from './CommentList';
 import UploadForm, { UploadPayload } from './UploadForm';
 import MapThumbnail from './MapThumbnail';
+import SpoilerText from './SpoilerText';
+import ConfirmModal from '../common/ConfirmModal';
 
 interface MapDetailProps {
   map: MapRow;
@@ -27,6 +29,8 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [pendingDiff, setPendingDiff] = useState<number | null>(null); // meeting-difficulty change awaiting confirm
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isOwner = profile?.id === map.owner_id;
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1500); };
@@ -41,29 +45,33 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
     finally { setBusy(false); }
   };
 
-  const changeDifficulty = async (difficulty: number) => {
+  // Meeting difficulty change is confirmed via a modal first.
+  const confirmDifficulty = async () => {
+    if (pendingDiff == null) return;
     setBusy(true);
     try {
-      await setReview(map.id, { difficulty });
-      const updated = { ...map, difficulty };
+      await setReview(map.id, { difficulty: pendingDiff });
+      const updated = { ...map, difficulty: pendingDiff };
       setMap(updated); onChanged(updated);
+      setPendingDiff(null);
+      showFlash('회의 난이도가 반영되었습니다');
     } catch (e) { alert('난이도 변경 실패: ' + (e as Error).message); }
     finally { setBusy(false); }
   };
 
   const saveEdit = async (p: UploadPayload) => {
     const updated = await updateMap(map.id, {
-      title: p.title, author_name: p.author_name, comment: p.comment, code: p.code,
-      difficulty: p.difficulty, created_at: registeredToISO(p.registered_on),
+      title: p.title, author_name: p.author_name, comment: p.comment,
+      author_difficulty: p.difficulty, created_at: registeredToISO(p.registered_on),
     });
     setMap(updated); onChanged(updated); setEditing(false);
     showFlash('수정되었습니다');
   };
 
-  const remove = async () => {
-    if (!confirm('이 맵을 삭제할까요? 되돌릴 수 없습니다.')) return;
+  const doDelete = async () => {
+    setBusy(true);
     try { await deleteMap(map.id); onChanged(); onBack(); }
-    catch (e) { alert('삭제 실패: ' + (e as Error).message); }
+    catch (e) { alert('삭제 실패: ' + (e as Error).message); setBusy(false); }
   };
 
   const copyCode = () => { navigator.clipboard.writeText(map.code); showFlash('맵 코드 복사됨'); };
@@ -76,7 +84,7 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
         {isOwner && (
           <div className="detail-owner-actions">
             <button className="btn" onClick={() => setEditing(true)}>수정</button>
-            <button className="btn btn-danger" onClick={remove}>삭제</button>
+            <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>삭제</button>
           </div>
         )}
       </div>
@@ -97,7 +105,7 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
             {map.comment && (
               <div className="detail-comment-card">
                 <div className="detail-mini-label">코멘트</div>
-                <p>{map.comment}</p>
+                <p><SpoilerText text={map.comment} /></p>
               </div>
             )}
 
@@ -111,9 +119,11 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
                 <div className="detail-info-val">{fullDate(map.created_at)}</div>
               </div>
               <div className="detail-info">
-                <div className="detail-mini-label">난이도</div>
+                <div className="detail-mini-label">출제자 난이도</div>
                 <div className="detail-info-val">
-                  {map.difficulty != null ? <StarRating value={map.difficulty} size={16} /> : <span className="detail-muted">미지정</span>}
+                  {map.author_difficulty != null
+                    ? <StarRating value={map.author_difficulty} size={16} />
+                    : <span className="detail-muted">미지정</span>}
                 </div>
               </div>
               <div className="detail-info detail-info-clickable" onClick={copyCode}>
@@ -129,10 +139,12 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
             <div className="review-sub">결정 사항과 피드백을 기록해요.</div>
 
             <div className="review-block">
-              <div className="review-label">난이도 <span className="review-hint">누구나 조정</span></div>
+              <div className="review-label">회의 결정 난이도 <span className="review-hint">누구나 조정</span></div>
               <div className="review-diff-row">
-                <StarRating value={map.difficulty} onChange={changeDifficulty} size={26} />
-                <span className="difficulty-num">{map.difficulty != null ? map.difficulty.toFixed(1) : '—'}</span>
+                <StarRating value={map.difficulty} onChange={(v) => setPendingDiff(v)} size={26} />
+                <span className="difficulty-num">
+                  {map.difficulty != null ? map.difficulty.toFixed(1) : '미결정'}
+                </span>
               </div>
             </div>
 
@@ -157,11 +169,34 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
             code: map.code,
             title: map.title ?? '',
             comment: map.comment ?? '',
-            difficulty: map.difficulty,
+            difficulty: map.author_difficulty,
             registered_on: isoToDateStr(map.created_at),
           }}
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}
+        />
+      )}
+
+      {pendingDiff != null && (
+        <ConfirmModal
+          title="회의 난이도 변경"
+          message={<>회의 결정 난이도를 <b>{pendingDiff.toFixed(1)}</b> (으)로 변경할까요?</>}
+          confirmLabel="변경"
+          busy={busy}
+          onConfirm={confirmDifficulty}
+          onCancel={() => setPendingDiff(null)}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="맵 삭제"
+          message="이 맵을 삭제할까요? 되돌릴 수 없습니다."
+          confirmLabel="삭제"
+          danger
+          busy={busy}
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDelete(false)}
         />
       )}
     </div>

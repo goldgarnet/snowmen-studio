@@ -16,6 +16,8 @@ type EditorTool =
   | 'columnTunnel'
   | 'soulSwap'
   | 'keyTile'
+  | 'yellowButton'
+  | 'yellowWall'
   | 'edgeArch1'
   | 'edgeArch2'
   | 'player'
@@ -31,7 +33,7 @@ type EditorTool =
   | 'triangle'
   | 'eraser';
 
-const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'flake', 'soulSwap', 'keyTile', 'wall', 'eraser'];
+const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'wall', 'eraser'];
 // NOTE: 'eraser' is intentionally NOT an edge tool. If it were, selecting the
 // eraser would put the grid in edge-mode, whose edge-hit strips intercept clicks
 // near cell borders — making it hard to erase tile flags (flake/goal/tunnel/
@@ -412,6 +414,12 @@ export default function Editor({ level, setLevel }: EditorProps) {
       case 'keyTile':
         tile.isKeyTile = true;
         break;
+      case 'yellowButton':
+        tile.isYellowButton = true;
+        break;
+      case 'yellowWall':
+        tile.isYellowWall = true;
+        break;
       case 'edgeArch1':
       case 'edgeArch2':
         // Edge arches are placed via handleEdgeClick, not cell click. No-op here.
@@ -461,6 +469,8 @@ export default function Editor({ level, setLevel }: EditorProps) {
         tile.isShade = false;
         tile.isSoulSwap = false;
         tile.isKeyTile = false;
+        tile.isYellowButton = false;
+        tile.isYellowWall = false;
         tile.triangle = undefined;
         // Note: edge arches are erased via handleEdgeClick when clicking edges.
         break;
@@ -570,7 +580,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
     { id: 'columnTunnel', label: '가로 터널', emoji: '🚇' },
     { id: 'rowTunnel', label: '세로 터널', emoji: '🚇' },
     { id: 'soulSwap', label: '영혼 발판', emoji: '🌀' },
-    { id: 'keyTile', label: '열쇠 발판', emoji: '🗝️' },
+    { id: 'keyTile', label: '초록 버튼', emoji: '🟢' },
+    { id: 'yellowButton', label: '노랑 버튼', emoji: '🟡' },
+    { id: 'yellowWall', label: '노랑 벽', emoji: '🟨' },
   ];
 
   const objectTools: { id: EditorTool; label: string; emoji: string }[] = [

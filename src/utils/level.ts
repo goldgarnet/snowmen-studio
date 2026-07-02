@@ -82,6 +82,7 @@ export function cloneLevel(level: Level): Level {
     sunDirection: level.sunDirection,
     hasShadow: level.hasShadow,
     soulSwapEnabled: level.soulSwapEnabled,
+    soulSwapArmedAt: level.soulSwapArmedAt ? { ...level.soulSwapArmedAt } : null,
     tiles: level.tiles.map(row => row.map(tile => ({ ...tile }))),
     objects: level.objects.map(row =>
       row.map(obj => (obj ? { ...obj } : null))
