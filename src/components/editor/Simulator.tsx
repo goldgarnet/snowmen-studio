@@ -117,6 +117,10 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
         </div>
       </div>
 
+      {gameState.level.soulSwapEnabled && (
+        <div className="sim-notice">🌀 영혼 이동(M) 키를 사용할 수 있는 맵입니다.</div>
+      )}
+
       <div className="sim-body">
         <div className="sim-grid-area">
           <Grid level={gameState.level} highlightPlayer />

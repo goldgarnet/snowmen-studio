@@ -44,6 +44,22 @@
 .sim-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
 .sim-controls button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
 
+.sim-notice {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 8px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7b5cc4;
+  background: rgba(168, 108, 255, 0.10);
+  border-bottom: 1px solid rgba(168, 108, 255, 0.22);
+}
+[data-theme="dark"] .sim-notice {
+  color: #c3a6ff;
+  background: rgba(168, 108, 255, 0.14);
+  border-bottom-color: rgba(168, 108, 255, 0.28);
+}
+
 .sim-body {
   flex: 1;
   display: flex;
