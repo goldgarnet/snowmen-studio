@@ -29,6 +29,19 @@ export function isGoalActive(level: Level): boolean {
   return true;
 }
 
+/**
+ * True when the level is already in a winning state: the possessed player is
+ * standing on an active goal tile. Turn-based moves detect this themselves, but
+ * the free M-key soul cycle does not advance a turn — so the caller uses this to
+ * clear immediately the moment the soul lands on the goal.
+ */
+export function isLevelCleared(level: Level): boolean {
+  const p = findPlayer(level);
+  if (!p) return false;
+  const tile = level.tiles[p.row][p.col];
+  return !!tile.isGoal && isGoalActive(level);
+}
+
 function applyLaserCheck(level: Level): void {
   const ySolid = yellowWallsSolid(level);
   for (let r = 0; r < level.height; r++) {

@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { GameState, Direction } from '../../types';
 import { cloneLevel } from '../../utils/level';
-import { executeTurn, executeSkipTurn, cycleSoul } from '../../engine/turn';
+import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared } from '../../engine/turn';
 import Grid from './Grid';
 import './Simulator.css';
 
@@ -71,7 +71,10 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
     if (!gameState.level.soulSwapEnabled) return;
     const newLevel = cycleSoul(gameState.level);
     if (!newLevel) return;
-    setGameState({ ...gameState, level: newLevel });
+    // Soul cycle is a free action (no turn), but if the soul lands on the goal
+    // the level should clear immediately.
+    const status = isLevelCleared(newLevel) ? 'cleared' : gameState.status;
+    setGameState({ ...gameState, level: newLevel, status });
   }, [gameState, setGameState]);
 
   useEffect(() => {
@@ -135,14 +138,6 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
             <button onClick={handleReset} disabled={gameState.history.length === 0}>⟳ 초기화</button>
           </div>
         </div>
-      </div>
-
-      <div className="sim-help">
-        <span>방향키 / WASD: 이동</span>
-        <span>Space: 대기 (턴 넘기기)</span>
-        <span>Z: 되돌리기</span>
-        <span>R: 초기화</span>
-        {gameState.level.soulSwapEnabled && <span>M: 영혼 이동</span>}
       </div>
 
       {gameState.status === 'cleared' && (
