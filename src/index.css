@@ -127,3 +127,8 @@ a { color: var(--accent); }
 .badge-held { color: var(--status-held); background: var(--status-held-soft); }
 .badge-rejected { color: var(--status-rejected); background: var(--status-rejected-soft); }
 .badge-pending { color: var(--status-pending); background: var(--status-pending-soft); }
+/* studio-only states (distinct from review statuses above) */
+.badge-draft { color: #64748b; background: #eef2f7; }
+.badge-private { color: #7b5cc4; background: #efe9fb; }
+[data-theme="dark"] .badge-draft { color: #9aabbe; background: #1d2938; }
+[data-theme="dark"] .badge-private { color: #b79bea; background: #241d38; }

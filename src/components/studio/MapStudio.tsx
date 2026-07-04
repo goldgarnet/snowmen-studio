@@ -46,6 +46,7 @@ export default function MapStudio() {
   const [playCode, setPlayCode] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<MapRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null); // per-card action in flight
   const [page, setPage] = useState(1);
 
   const pageCount = Math.max(1, Math.ceil(maps.length / PAGE_SIZE));
@@ -129,6 +130,16 @@ export default function MapStudio() {
     setShowPublish(false);
     showFlash('허브에 올렸습니다');
     refresh();
+  };
+
+  // Re-publish a previously-published (now private) map with a single click.
+  // Just flips `published` back on — every other field (comment, 난이도, status,
+  // 공개 시각) is left untouched, so nothing is lost.
+  const republish = async (m: MapRow) => {
+    setBusyId(m.id);
+    try { await updateMap(m.id, { published: true }); showFlash('다시 공개했습니다'); refresh(); }
+    catch (e) { alert('공개 실패: ' + (e as Error).message); }
+    finally { setBusyId(null); }
   };
 
   const doDeleteMap = async () => {
@@ -241,15 +252,20 @@ export default function MapStudio() {
                 <MapThumbnail code={m.code} />
                 {m.published
                   ? <span className={`badge badge-${m.status} studio-card-badge`}>{STATUS_LABEL[m.status]}</span>
-                  : <span className="badge badge-pending studio-card-badge">초안</span>}
+                  : m.published_at
+                    ? <span className="badge badge-private studio-card-badge">비공개</span>
+                    : <span className="badge badge-draft studio-card-badge">제작중</span>}
               </div>
               <div className="studio-card-body">
                 <div className="studio-card-title">{m.title || '제목 없음'}</div>
                 <div className="studio-card-meta">
-                  {m.published ? '허브 공개' : '개인 초안'} · {formatDate(m.updated_at)}
+                  {m.published ? '허브 공개' : m.published_at ? '비공개' : '제작중'} · {formatDate(m.updated_at)}
                 </div>
                 <div className="studio-card-actions" onClick={(e) => e.stopPropagation()}>
                   <button className="btn btn-sm" onClick={() => openExisting(m)}>이어서 만들기</button>
+                  {!m.published && m.published_at && (
+                    <button className="btn btn-sm btn-primary" onClick={() => republish(m)} disabled={busyId === m.id}>다시 공개</button>
+                  )}
                   <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(m)}>삭제</button>
                 </div>
               </div>
