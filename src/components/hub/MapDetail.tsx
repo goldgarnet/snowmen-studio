@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import type { MapRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
-import { setReview, updateMap, deleteMap, registeredToISO, isoToDateStr } from '../../api/maps';
+import { setReview, updateMap, deleteMap, unpublishMap, registeredToISO, isoToDateStr } from '../../api/maps';
 import StarRating from './StarRating';
 import StatusControl from './StatusControl';
 import CommentList from './CommentList';
@@ -31,6 +31,7 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
   const [flash, setFlash] = useState<string | null>(null);
   const [pendingDiff, setPendingDiff] = useState<number | null>(null); // meeting-difficulty change awaiting confirm
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
 
   const isOwner = profile?.id === map.owner_id;
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1500); };
@@ -74,6 +75,14 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
     catch (e) { alert('삭제 실패: ' + (e as Error).message); setBusy(false); }
   };
 
+  // Owner takes their map off the hub. It becomes a private draft again (kept in
+  // 맵 제작), so it drops out of the hub list — return there afterward.
+  const doUnpublish = async () => {
+    setBusy(true);
+    try { await unpublishMap(map.id); onChanged(); onBack(); }
+    catch (e) { alert('비공개 전환 실패: ' + (e as Error).message); setBusy(false); }
+  };
+
   const copyCode = () => { navigator.clipboard.writeText(map.code); showFlash('맵 코드 복사됨'); };
 
   return (
@@ -84,6 +93,7 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
         {isOwner && (
           <div className="detail-owner-actions">
             <button className="btn" onClick={() => setEditing(true)}>수정</button>
+            <button className="btn" onClick={() => setConfirmUnpublish(true)}>비공개로 전환</button>
             <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>삭제</button>
           </div>
         )}
@@ -185,6 +195,17 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
           busy={busy}
           onConfirm={confirmDifficulty}
           onCancel={() => setPendingDiff(null)}
+        />
+      )}
+
+      {confirmUnpublish && (
+        <ConfirmModal
+          title="비공개로 전환"
+          message={<>이 맵을 허브에서 내리고 <b>비공개</b>로 전환할까요? 내 <b>맵 제작</b> 목록에는 그대로 남아, 언제든 다시 공개할 수 있습니다.</>}
+          confirmLabel="비공개로 전환"
+          busy={busy}
+          onConfirm={doUnpublish}
+          onCancel={() => setConfirmUnpublish(false)}
         />
       )}
 

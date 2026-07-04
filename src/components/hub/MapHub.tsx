@@ -101,6 +101,7 @@ export default function MapHub() {
       author_difficulty: p.difficulty,
       created_at: registeredToISO(p.registered_on),
       published: true,
+      published_at: new Date().toISOString(),
     });
     setShowUpload(false);
     refresh();

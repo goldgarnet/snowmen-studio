@@ -103,17 +103,18 @@ export default function MapStudio() {
   const doPublish = async (p: UploadPayload) => {
     if (!profile) return;
     const created_at = registeredToISO(p.registered_on);
+    const published_at = new Date().toISOString();
     if (editId) {
       await updateMap(editId, {
         title: p.title, author_name: p.author_name, comment: p.comment,
-        author_difficulty: p.difficulty, code: p.code, created_at, published: true,
+        author_difficulty: p.difficulty, code: p.code, created_at, published: true, published_at,
       });
       setPublished(true);
     } else {
       const row = await insertMap({
         owner_id: profile.id,
         author_name: p.author_name, code: p.code, title: p.title,
-        comment: p.comment, author_difficulty: p.difficulty, created_at, published: true,
+        comment: p.comment, author_difficulty: p.difficulty, created_at, published: true, published_at,
       });
       setEditId(row.id); setPublished(true);
     }

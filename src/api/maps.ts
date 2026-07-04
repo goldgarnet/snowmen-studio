@@ -23,6 +23,7 @@ export interface NewMap {
   difficulty?: number | null;         // 회의 결정 난이도 (보통 등록 시 null)
   status?: MapStatus;
   published?: boolean;
+  published_at?: string | null;   // 허브 공개 시각 (허브 정렬 기준)
   created_at?: string;   // 등록일 (편집 가능)
 }
 
@@ -40,15 +41,24 @@ export async function listMyMaps(ownerId: string): Promise<MapRow[]> {
   return (data ?? []) as MapRow[];
 }
 
-// All hub (published) maps, newest first.
+// All hub (published) maps, ordered by *when they were most recently published*
+// (not created). published_at is backfilled from created_at for old rows, so the
+// fallback .order keeps ordering sane if any row lacks it.
 export async function listPublishedMaps(): Promise<MapRow[]> {
   const { data, error } = await supabase
     .from('maps')
     .select('*')
     .eq('published', true)
+    .order('published_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as MapRow[];
+}
+
+// Take a published map back to a private draft (owner-only). Keeps its metadata so
+// it can be re-published later (which re-stamps published_at).
+export async function unpublishMap(id: string): Promise<MapRow> {
+  return updateMap(id, { published: false });
 }
 
 export async function getMap(id: string): Promise<MapRow | null> {

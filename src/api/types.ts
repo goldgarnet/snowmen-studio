@@ -20,6 +20,7 @@ export interface MapRow {
   difficulty: number | null;         // 회의 결정 난이도 (null = 미결정)
   status: MapStatus;
   published: boolean;
+  published_at: string | null;       // 허브에 가장 최근 공개된 시각 (정렬 기준)
   created_at: string;
   updated_at: string;
 }

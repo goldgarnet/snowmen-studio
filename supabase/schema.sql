@@ -30,6 +30,7 @@ create table if not exists public.maps (
   status      text not null default 'pending'
               check (status in ('pending','accepted','held','rejected')),
   published   boolean not null default false,
+  published_at timestamptz,             -- 허브에 가장 최근 공개된 시각 (허브 정렬 기준)
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -128,6 +129,11 @@ grant execute on function public.set_map_review(uuid, text, numeric) to authenti
 -- 이 파일 전체를 다시 실행하면 아래 ALTER 들이 idempotent 하게 적용됩니다.
 alter table public.maps     add column if not exists author_difficulty numeric(2,1);
 alter table public.comments add column if not exists suggested_difficulty numeric(2,1);
+
+-- 허브 정렬을 "공개 시각" 기준으로 하기 위한 컬럼. 기존 공개 맵은 created_at 으로
+-- 1회 백필(비어 있는 것만 채우므로 재실행 안전).
+alter table public.maps     add column if not exists published_at timestamptz;
+update public.maps set published_at = created_at where published = true and published_at is null;
 
 -- 기존 맵의 난이도를 "출제자 난이도"로 옮기고 "회의 결정 난이도"는 미결정(null)으로 (1회만).
 -- author_difficulty 가 전부 비어 있을 때만 실행되므로 재실행해도 안전합니다.
