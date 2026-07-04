@@ -41,16 +41,15 @@ export async function listMyMaps(ownerId: string): Promise<MapRow[]> {
   return (data ?? []) as MapRow[];
 }
 
-// All hub (published) maps, ordered by *when they were most recently published*
-// (not created). published_at is backfilled from created_at for old rows, so the
-// fallback .order keeps ordering sane if any row lacks it.
+// All hub (published) maps. Sorted by 생성 날짜(created_at, 등록일) first, and for
+// ties by 공개 날짜(published_at, most recent first).
 export async function listPublishedMaps(): Promise<MapRow[]> {
   const { data, error } = await supabase
     .from('maps')
     .select('*')
     .eq('published', true)
-    .order('published_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('published_at', { ascending: false, nullsFirst: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as MapRow[];
 }

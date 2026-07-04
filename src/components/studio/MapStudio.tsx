@@ -4,7 +4,7 @@ import { createLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
 import { useAuth } from '../../context/AuthContext';
 import { useGuard, StudioApi } from '../../context/GuardContext';
-import { listMyMaps, insertMap, updateMap, deleteMap, registeredToISO } from '../../api/maps';
+import { listMyMaps, insertMap, updateMap, deleteMap, registeredToISO, isoToDateStr } from '../../api/maps';
 import type { MapRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import Editor from '../editor/Editor';
@@ -35,6 +35,10 @@ export default function MapStudio() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [published, setPublished] = useState(false);
+  // The full DB row of the map open in the editor (null for a brand-new map).
+  // Carries saved metadata (author/comment/difficulty/dates) so re-publishing a
+  // previously-published map preserves everything instead of resetting it.
+  const [editRow, setEditRow] = useState<MapRow | null>(null);
   // The map code as of the last save/open — used to detect unsaved changes.
   const [savedCode, setSavedCode] = useState('');
   const [flash, setFlash] = useState<string | null>(null);
@@ -64,7 +68,7 @@ export default function MapStudio() {
     const fresh = createLevel(8, 8);
     setLevel(fresh);
     setSavedCode(encodeLevelCode(fresh));
-    setEditId(null); setEditTitle('새 맵'); setPublished(false);
+    setEditId(null); setEditTitle('새 맵'); setPublished(false); setEditRow(null);
     setView('editor');
   };
 
@@ -73,7 +77,7 @@ export default function MapStudio() {
     if (!lv) { alert('맵 코드를 해석할 수 없어 열 수 없습니다.'); return; }
     setLevel(lv);
     setSavedCode(encodeLevelCode(lv));
-    setEditId(m.id); setEditTitle(m.title ?? '제목 없음'); setPublished(m.published);
+    setEditId(m.id); setEditTitle(m.title ?? '제목 없음'); setPublished(m.published); setEditRow(m);
     setView('editor');
   };
 
@@ -103,20 +107,23 @@ export default function MapStudio() {
   const doPublish = async (p: UploadPayload) => {
     if (!profile) return;
     const created_at = registeredToISO(p.registered_on);
-    const published_at = new Date().toISOString();
+    // Preserve the original publish time when re-publishing a map that was already
+    // published before (e.g. after being taken private); only stamp fresh on the
+    // first publish.
+    const published_at = editRow?.published_at ?? new Date().toISOString();
     if (editId) {
-      await updateMap(editId, {
+      const updated = await updateMap(editId, {
         title: p.title, author_name: p.author_name, comment: p.comment,
         author_difficulty: p.difficulty, code: p.code, created_at, published: true, published_at,
       });
-      setPublished(true);
+      setPublished(true); setEditRow(updated);
     } else {
       const row = await insertMap({
         owner_id: profile.id,
         author_name: p.author_name, code: p.code, title: p.title,
         comment: p.comment, author_difficulty: p.difficulty, created_at, published: true, published_at,
       });
-      setEditId(row.id); setPublished(true);
+      setEditId(row.id); setPublished(true); setEditRow(row);
     }
     setSavedCode(p.code);
     setShowPublish(false);
@@ -191,9 +198,14 @@ export default function MapStudio() {
             submitLabel="허브에 올리기"
             lockCode
             initial={{
-              author_name: profile?.name ?? '',
+              // Prefill saved metadata so re-publishing keeps the author, comment,
+              // 출제자 난이도 and 등록일 that were set before (empty for a new map).
+              author_name: editRow?.author_name ?? profile?.name ?? '',
               code: encodeLevelCode(level),
               title: editTitle,
+              comment: editRow?.comment ?? '',
+              difficulty: editRow?.author_difficulty ?? null,
+              registered_on: editRow ? isoToDateStr(editRow.created_at) : undefined,
             }}
             onSubmit={doPublish}
             onCancel={() => setShowPublish(false)}
