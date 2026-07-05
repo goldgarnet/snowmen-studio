@@ -214,8 +214,13 @@
 .comment-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
 .comment-author { font-weight: 700; font-size: 13px; }
 .comment-when { font-size: 11px; color: var(--text-faint); }
-.comment-del { margin-left: auto; background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 12px; }
+.comment-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
+.comment-edit { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 12px; padding: 0; }
+.comment-edit:hover { color: var(--accent); }
+.comment-del { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 12px; padding: 0; }
 .comment-del:hover { color: var(--danger); }
+.comment-edit-wrap { margin-top: 6px; }
+.comment-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .comment-body { font-size: 13px; line-height: 1.55; color: var(--text-dim); white-space: pre-wrap; }
 
 /* ===================== modal (upload / edit) ===================== */

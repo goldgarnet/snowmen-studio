@@ -23,6 +23,16 @@ export async function addComment(payload: {
   return data as CommentRow;
 }
 
+// Owner-only edit of one's own comment (RLS: comments_update = author only).
+export async function updateComment(
+  id: string,
+  patch: { body?: string; suggested_difficulty?: number | null },
+): Promise<CommentRow> {
+  const { data, error } = await supabase.from('comments').update(patch).eq('id', id).select().single();
+  if (error) throw new Error(error.message);
+  return data as CommentRow;
+}
+
 export async function deleteComment(id: string): Promise<void> {
   const { error } = await supabase.from('comments').delete().eq('id', id);
   if (error) throw new Error(error.message);
