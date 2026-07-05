@@ -129,14 +129,21 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     newPlayerPos = resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
   }
 
-  if (newPlayerPos) {
-    const tile = newLevel.tiles[newPlayerPos.row][newPlayerPos.col];
-    if (tile.isGoal && isGoalActive(newLevel)) {
-      return { level: newLevel, status: 'cleared' };
-    }
+  // Lasers fire before the goal is evaluated: stepping onto a goal that sits on a
+  // laser beam kills the player (death takes priority over clearing).
+  applyLaserCheck(newLevel);
+
+  const afterLaserPos = findPlayer(newLevel);
+  if (!afterLaserPos) {
+    return { level: newLevel, status: 'gameover' };
   }
 
-  applyLaserCheck(newLevel);
+  // Survived the laser and standing on an active goal → cleared.
+  const goalTile = newLevel.tiles[afterLaserPos.row][afterLaserPos.col];
+  if (goalTile.isGoal && isGoalActive(newLevel)) {
+    return { level: newLevel, status: 'cleared' };
+  }
+
   endOfTurn(newLevel, turnCount);
 
   const finalPlayerPos = findPlayer(newLevel);

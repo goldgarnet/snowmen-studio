@@ -4,8 +4,15 @@
   padding: 0;
 }
 
-html, body, #root {
+html {
   height: 100%;
+}
+/* body/#root are NOT forced to 100%: because body is zoomed 1.05, a 100%-tall
+   (= viewport) body would render ~5% taller than the screen and add a phantom
+   scrollbar even when nothing overflows. Instead the full-screen roots (.app /
+   .login-screen) set their own height via 100vh/1.05, and body/#root wrap them. */
+body, #root {
+  min-height: 0;
 }
 
 body {
