@@ -36,6 +36,20 @@
 
 .sim-info { font-size: 14px; color: var(--text-dim); font-weight: 700; }
 
+/* 풀이 재생 속도 슬라이더 (SolutionPlayer) */
+.sol-speed {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  user-select: none;
+}
+.sol-speed input[type="range"] {
+  width: 96px; cursor: pointer; accent-color: var(--accent);
+}
+.sol-speed-val {
+  min-width: 46px; font-size: 12px; font-weight: 700; color: var(--text); text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .sim-controls button {
   padding: 8px 15px;
   border: 1px solid var(--line); background: var(--surface); color: var(--text-dim);

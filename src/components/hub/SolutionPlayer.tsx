@@ -12,7 +12,10 @@ interface SolutionPlayerProps {
   onClose: () => void;
 }
 
-const AUTOPLAY_MS = 1000 / 6; // 초당 6칸 재생
+// Auto-play speed, in steps(칸) per second — adjustable by slider/wheel.
+const MIN_SPEED = 1;
+const MAX_SPEED = 20;
+const DEFAULT_SPEED = 6;
 
 // Replays a stored 풀이 step by step. State at any step is derived from
 // playMoves(startLevel, moves.slice(0, step)) — the same derivation the recorder
@@ -24,6 +27,7 @@ export default function SolutionPlayer({ code, solution, title, onClose }: Solut
 
   const [step, setStep] = useState(0); // number of moves applied so far
   const [auto, setAuto] = useState(false);
+  const [speed, setSpeed] = useState(DEFAULT_SPEED); // 칸/초
 
   const state = useMemo(
     () => (startLevel && moves ? playMoves(startLevel, moves.slice(0, step)) : null),
@@ -46,9 +50,9 @@ export default function SolutionPlayer({ code, solution, title, onClose }: Solut
     const id = setTimeout(() => {
       setStep((s) => Math.min(total, s + 1));
       if (step + 1 >= total) setAuto(false);
-    }, AUTOPLAY_MS);
+    }, 1000 / speed);
     return () => clearTimeout(id);
-  }, [auto, step, total]);
+  }, [auto, step, total, speed]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -90,6 +94,22 @@ export default function SolutionPlayer({ code, solution, title, onClose }: Solut
             <button className="btn btn-primary" onClick={() => setAuto((a) => !a)} disabled={atEnd}>
               {auto ? '⏸ 정지' : '▶ 자동재생'}
             </button>
+            <label
+              className="sol-speed"
+              title="자동재생 속도 — 드래그하거나 마우스 휠로 조절"
+              onWheel={(e) => setSpeed((v) => Math.min(MAX_SPEED, Math.max(MIN_SPEED, v + (e.deltaY < 0 ? 1 : -1))))}
+            >
+              속도
+              <input
+                type="range"
+                min={MIN_SPEED}
+                max={MAX_SPEED}
+                step={1}
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+              />
+              <span className="sol-speed-val">{speed}칸/초</span>
+            </label>
             <button onClick={() => { setAuto(false); goNext(); }} disabled={atEnd}>다음 ▶</button>
             <button onClick={goLast} disabled={atEnd}>끝 ⏭</button>
           </div>
