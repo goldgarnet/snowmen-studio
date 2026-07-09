@@ -11,11 +11,13 @@ import Editor from '../editor/Editor';
 import PlayView from '../editor/PlayView';
 import UploadForm, { UploadPayload } from '../hub/UploadForm';
 import MapThumbnail from '../hub/MapThumbnail';
+import SolutionRecorder from '../hub/SolutionRecorder';
+import { insertSolution, deleteSolutionsForMap } from '../../api/solutions';
 import ConfirmModal from '../common/ConfirmModal';
 import Pagination from '../common/Pagination';
 import './MapStudio.css';
 
-type View = 'list' | 'editor' | 'play';
+type View = 'list' | 'editor' | 'play' | 'record';
 const PAGE_SIZE = 8; // 4 columns × 2 rows
 
 function formatDate(iso: string): string {
@@ -85,15 +87,18 @@ export default function MapStudio() {
   const save = async () => {
     if (!profile) return;
     const code = encodeLevelCode(level);
+    const codeChanged = !!editId && code !== savedCode;
     try {
       if (editId) {
         await updateMap(editId, { title: editTitle || null, code });
+        // Layout changed → every recorded 풀이 no longer solves it. Wipe them.
+        if (codeChanged) await deleteSolutionsForMap(editId);
       } else {
         const row = await insertMap({ owner_id: profile.id, title: editTitle || null, code, published: false });
         setEditId(row.id);
       }
       setSavedCode(code);
-      showFlash('저장됨');
+      showFlash(codeChanged ? '저장됨 (맵이 바뀌어 기존 풀이는 삭제)' : '저장됨');
       refresh();
     } catch (e) { alert('저장 실패: ' + (e as Error).message); }
   };
@@ -113,10 +118,12 @@ export default function MapStudio() {
     // first publish.
     const published_at = editRow?.published_at ?? new Date().toISOString();
     if (editId) {
+      const codeChanged = p.code !== savedCode;
       const updated = await updateMap(editId, {
         title: p.title, author_name: p.author_name, comment: p.comment,
         author_difficulty: p.difficulty, code: p.code, created_at, published: true, published_at,
       });
+      if (codeChanged) await deleteSolutionsForMap(editId);
       setPublished(true); setEditRow(updated);
     } else {
       const row = await insertMap({
@@ -140,6 +147,21 @@ export default function MapStudio() {
     try { await updateMap(m.id, { published: true }); showFlash('다시 공개했습니다'); refresh(); }
     catch (e) { alert('공개 실패: ' + (e as Error).message); }
     finally { setBusyId(null); }
+  };
+
+  // Save a 풀이 recorded in the studio as the owner's solution. The record button is
+  // disabled while dirty, so the current level already matches the saved map code.
+  const saveStudioSolution = async (moves: string, turnCount: number) => {
+    if (!editId || !profile) return;
+    await insertSolution({
+      map_id: editId,
+      author_id: profile.id,
+      author_name: editRow?.author_name || profile.name,
+      moves,
+      turn_count: turnCount,
+    });
+    setView('editor');
+    showFlash('풀이가 등록되었습니다');
   };
 
   const doDeleteMap = async () => {
@@ -177,6 +199,18 @@ export default function MapStudio() {
     return <PlayView code={playCode} title={editTitle} backLabel="에디터로" onClose={() => setView('editor')} />;
   }
 
+  // ---------- solution recording submode ----------
+  if (view === 'record') {
+    return (
+      <SolutionRecorder
+        code={encodeLevelCode(level)}
+        title={`풀이 등록 · ${editTitle || '맵'}`}
+        onSave={saveStudioSolution}
+        onCancel={() => setView('editor')}
+      />
+    );
+  }
+
   // ---------- editor submode ----------
   if (view === 'editor') {
     return (
@@ -195,6 +229,16 @@ export default function MapStudio() {
           {flash && <span className="studio-flash">{flash}</span>}
           <button className="btn" onClick={copyCode}>맵 코드 복사</button>
           <button className="btn" onClick={testPlay}>▶ 시뮬레이터</button>
+          {published && editId && (
+            <button
+              className="btn"
+              onClick={() => setView('record')}
+              disabled={isDirty}
+              title={isDirty ? '먼저 저장한 뒤 풀이를 녹화할 수 있어요' : '맵을 플레이해 풀이를 등록합니다'}
+            >
+              ● 풀이 등록
+            </button>
+          )}
           <button className="btn btn-primary" onClick={save}>저장</button>
           <button className="btn btn-primary" onClick={() => setShowPublish(true)}>허브에 올리기</button>
         </div>

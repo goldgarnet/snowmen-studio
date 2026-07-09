@@ -36,6 +36,17 @@ export interface CommentRow {
   created_at: string;
 }
 
+export interface SolutionRow {
+  id: string;
+  map_id: string;
+  author_id: string;
+  author_name: string;
+  moves: string;                 // 이동 순서 기록 (예: "RRULW")
+  turn_count: number | null;     // 턴 수 (정렬/표시용)
+  note: string | null;           // 한 줄 코멘트 (선택)
+  created_at: string;
+}
+
 export const STATUS_LABEL: Record<MapStatus, string> = {
   pending: '검토중',
   accepted: '채택',

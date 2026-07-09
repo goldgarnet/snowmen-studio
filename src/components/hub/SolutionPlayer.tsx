@@ -12,7 +12,7 @@ interface SolutionPlayerProps {
   onClose: () => void;
 }
 
-const AUTOPLAY_MS = 650;
+const AUTOPLAY_MS = 1000 / 6; // 초당 6칸 재생
 
 // Replays a stored 풀이 step by step. State at any step is derived from
 // playMoves(startLevel, moves.slice(0, step)) — the same derivation the recorder

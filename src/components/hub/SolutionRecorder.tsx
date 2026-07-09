@@ -8,15 +8,23 @@ import '../editor/PlayView.css';
 interface SolutionRecorderProps {
   code: string;
   initial?: string | null;          // existing solution to start from (수정 시)
-  onSave: (solution: string) => Promise<void>;
+  onSave: (moves: string, turnCount: number) => Promise<void>;
   onCancel: () => void;
+  // 'record' (기본): 대놓고 풀이를 만드는 화면. 상단에 저장 버튼 상시 노출.
+  // 'play': "바로 플레이"에서 진입 — 그냥 플레이하다가 클리어하면 아래 배너로 등록 유도.
+  variant?: 'record' | 'play';
+  title?: string;
 }
 
 // Records a 풀이 by letting the owner play the map. Every action is captured into a
 // move list; state is always re-derived from that list via playMoves so undo (pop)
 // and reset (clear) stay perfectly in sync. Saving is only allowed once the played
 // sequence actually clears the map, guaranteeing viewers see a real solution.
-export default function SolutionRecorder({ code, initial, onSave, onCancel }: SolutionRecorderProps) {
+export default function SolutionRecorder({
+  code, initial, onSave, onCancel, variant = 'record', title,
+}: SolutionRecorderProps) {
+  const isPlay = variant === 'play';
+  const heading = title ?? (isPlay ? '바로 플레이' : '풀이 녹화');
   const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
   const [moves, setMoves] = useState<SolutionMove[]>(() =>
     (initial ? decodeSolution(initial) : null) ?? [],
@@ -68,7 +76,7 @@ export default function SolutionRecorder({ code, initial, onSave, onCancel }: So
     setSaving(true);
     setError(null);
     try {
-      await onSave(encodeSolution(moves));
+      await onSave(encodeSolution(moves), state?.turnCount ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장에 실패했습니다.');
       setSaving(false);
@@ -94,25 +102,39 @@ export default function SolutionRecorder({ code, initial, onSave, onCancel }: So
       <div className="simulator">
         <div className="sim-topbar">
           <button className="btn btn-ghost sim-back" onClick={onCancel} disabled={saving}>← 상세로</button>
-          <span className="sim-title">풀이 녹화</span>
+          <span className="sim-title">{heading}</span>
           <div className="sim-controls">
             <span className="sim-info">턴 {state.turnCount} · 입력 {moves.length}</span>
             <button onClick={undo} disabled={moves.length === 0 || saving}>되돌리기 (Z)</button>
             <button onClick={reset} disabled={moves.length === 0 || saving}>초기화 (R)</button>
-            <button className="btn btn-primary" onClick={save} disabled={!cleared || saving}>
-              {saving ? '저장 중…' : '이 풀이 저장'}
-            </button>
+            {!isPlay && (
+              <button className="btn btn-primary" onClick={save} disabled={!cleared || saving}>
+                {saving ? '저장 중…' : '이 풀이 저장'}
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="sim-notice">
-          {cleared
-            ? '✅ 맵을 클리어했습니다. “이 풀이 저장”을 누르면 등록됩니다.'
-            : state.status === 'gameover'
-              ? '💀 게임 오버 — 되돌리기(Z)나 초기화(R)로 다시 시도하세요.'
-              : '맵을 직접 플레이해 풀이를 녹화하세요. 클리어하면 저장할 수 있습니다.'}
-          {soulEnabled && ' · 🌀 영혼 이동(M) 사용 가능'}
-        </div>
+        {/* Play 모드에서 클리어하면 등록 유도 배너를, 그 외엔 상황 안내를 보여준다. */}
+        {isPlay && cleared ? (
+          <div className="sim-notice" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span>🎉 클리어! 원하면 이 플레이를 <b>내 풀이</b>로 등록할 수 있어요. (턴 {state.turnCount})</span>
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              {saving ? '등록 중…' : '이 풀이로 등록'}
+            </button>
+          </div>
+        ) : (
+          <div className="sim-notice">
+            {cleared
+              ? '✅ 맵을 클리어했습니다. “이 풀이 저장”을 누르면 등록됩니다.'
+              : state.status === 'gameover'
+                ? '💀 게임 오버 — 되돌리기(Z)나 초기화(R)로 다시 시도하세요.'
+                : isPlay
+                  ? '맵을 플레이하세요. 클리어하면 이 풀이를 등록할 수 있어요.'
+                  : '맵을 직접 플레이해 풀이를 녹화하세요. 클리어하면 저장할 수 있습니다.'}
+            {soulEnabled && ' · 🌀 영혼 이동(M) 사용 가능'}
+          </div>
+        )}
 
         {error && <div className="play-view-error" style={{ padding: '8px 22px' }}>{error}</div>}
 
