@@ -14,6 +14,15 @@ const DIR_DELTA: Record<string, [number, number]> = {
 };
 const LASER_BLOCKERS = new Set(['wall', 'block', 'tree', 'laser']);
 
+// Monotonic "age" used to timestamp objects created during a turn (createdAt) and to
+// order soul transfers (nearest, tie-broken by oldest). We use a strictly-increasing
+// counter instead of Date.now() so turn resolution is DETERMINISTIC: replaying a
+// recorded 풀이 reproduces the exact same states. (Date.now() returns equal values
+// when many turns run within the same millisecond — as during fast replay — which
+// scrambled soul/roll ordering and made playback diverge from the recording.)
+let ageClock = 0;
+function nextAge(): number { return ++ageClock; }
+
 /**
  * The goal is "active" (clearable) unless the level uses key footplates and one or
  * more of them is not currently covered by an object (the player counts too). When
@@ -92,7 +101,7 @@ export function executeSkipTurn(level: Level): TurnResult {
   const playerPos = findPlayer(newLevel);
   if (!playerPos) return { level: newLevel, status: 'gameover' };
 
-  const turnCount = Date.now();
+  const turnCount = nextAge();
   // Waiting on an armed soul footplate fires the delayed transfer.
   resolveSoulFootplate(newLevel, playerPos, turnCount);
   applyLaserCheck(newLevel);
@@ -115,7 +124,7 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     return { level: newLevel, status: 'gameover' };
   }
 
-  const turnCount = Date.now();
+  const turnCount = nextAge();
   const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount);
 
   if (!playerMoved) {
@@ -346,6 +355,6 @@ export function cycleSoul(level: Level): Level | null {
   const next = snowmen.find(p => p.row * level.width + p.col > playerKey) ?? snowmen[0];
 
   const newLevel = cloneLevel(level);
-  doSoulSwap(newLevel, playerPos, next, Date.now());
+  doSoulSwap(newLevel, playerPos, next, nextAge());
   return newLevel;
 }

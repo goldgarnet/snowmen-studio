@@ -98,7 +98,7 @@ export default function SolutionPlayer({ code, solution, title, onClose }: Solut
         <div className="sim-notice">
           {atEnd
             ? (state.status === 'cleared' ? '✅ 풀이 끝 — 맵을 클리어했습니다.' : '풀이 끝 지점입니다.')
-            : '출제자가 등록한 풀이입니다. 스텝을 넘기며 확인하세요. (←/→, Space=재생)'}
+            : '등록된 풀이입니다. 스텝을 넘기며 확인하세요. (←/→, Space=재생)'}
         </div>
 
         <div className="sim-body">
