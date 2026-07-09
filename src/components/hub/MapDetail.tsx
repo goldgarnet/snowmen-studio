@@ -10,6 +10,9 @@ import UploadForm, { UploadPayload } from './UploadForm';
 import MapThumbnail from './MapThumbnail';
 import SpoilerText from './SpoilerText';
 import ConfirmModal from '../common/ConfirmModal';
+import SolutionRecorder from './SolutionRecorder';
+import SolutionPlayer from './SolutionPlayer';
+import { decodeSolution } from '../../utils/solution';
 
 interface MapDetailProps {
   map: MapRow;
@@ -32,8 +35,12 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
   const [pendingDiff, setPendingDiff] = useState<number | null>(null); // meeting-difficulty change awaiting confirm
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+  const [confirmDeleteSolution, setConfirmDeleteSolution] = useState(false);
+  const [solutionMode, setSolutionMode] = useState<'record' | 'replay' | null>(null);
 
   const isOwner = profile?.id === map.owner_id;
+  // A registered 풀이 is only usable if it decodes cleanly against the current code.
+  const hasSolution = !!(map.solution && decodeSolution(map.solution));
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1500); };
 
   const changeStatus = async (status: MapRow['status']) => {
@@ -85,6 +92,47 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
 
   const copyCode = () => { navigator.clipboard.writeText(map.code); showFlash('맵 코드 복사됨'); };
 
+  // Owner registers/updates the recorded 풀이. Returns to the detail view on success.
+  const saveSolution = async (solution: string) => {
+    const updated = await updateMap(map.id, { solution });
+    setMap(updated); onChanged(updated);
+    setSolutionMode(null);
+    showFlash('풀이가 등록되었습니다');
+  };
+
+  const doDeleteSolution = async () => {
+    setBusy(true);
+    try {
+      const updated = await updateMap(map.id, { solution: null });
+      setMap(updated); onChanged(updated);
+      setConfirmDeleteSolution(false);
+      showFlash('풀이를 삭제했습니다');
+    } catch (e) { alert('풀이 삭제 실패: ' + (e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  // Full-screen sub-views: recording (owner) and replay (anyone).
+  if (solutionMode === 'record') {
+    return (
+      <SolutionRecorder
+        code={map.code}
+        initial={map.solution}
+        onSave={saveSolution}
+        onCancel={() => setSolutionMode(null)}
+      />
+    );
+  }
+  if (solutionMode === 'replay' && hasSolution) {
+    return (
+      <SolutionPlayer
+        code={map.code}
+        solution={map.solution!}
+        title={map.title || '플레이'}
+        onClose={() => setSolutionMode(null)}
+      />
+    );
+  }
+
   return (
     <div className="map-detail">
       <div className="detail-topbar">
@@ -111,6 +159,37 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
             <div className="detail-thumb"><MapThumbnail code={map.code} /></div>
 
             <button className="btn btn-primary detail-play" onClick={() => onPlay(map)}>▶ 바로 플레이</button>
+
+            <div className="detail-solution">
+              <div className="detail-solution-head">
+                <span className="detail-mini-label" style={{ margin: 0 }}>출제자 풀이</span>
+                {hasSolution
+                  ? <span className="detail-solution-tag on">등록됨</span>
+                  : <span className="detail-solution-tag">미등록</span>}
+              </div>
+
+              {hasSolution ? (
+                <p className="detail-solution-desc">출제자가 등록한 풀이를 스텝별로 볼 수 있어요. <b>스포일러</b>가 포함되어 있습니다.</p>
+              ) : (
+                <p className="detail-solution-desc">
+                  {isOwner ? '아직 풀이를 등록하지 않았어요. 직접 플레이해 풀이를 녹화할 수 있습니다.' : '아직 출제자가 풀이를 등록하지 않았어요.'}
+                </p>
+              )}
+
+              <div className="detail-solution-actions">
+                {hasSolution && (
+                  <button className="btn" onClick={() => setSolutionMode('replay')}>👀 풀이 보기 (스포일러)</button>
+                )}
+                {isOwner && (
+                  <button className="btn" onClick={() => setSolutionMode('record')}>
+                    {hasSolution ? '✎ 풀이 다시 녹화' : '● 풀이 녹화'}
+                  </button>
+                )}
+                {isOwner && hasSolution && (
+                  <button className="btn btn-danger" onClick={() => setConfirmDeleteSolution(true)}>풀이 삭제</button>
+                )}
+              </div>
+            </div>
 
             {map.comment && (
               <div className="detail-comment-card">
@@ -206,6 +285,18 @@ export default function MapDetail({ map: initial, onBack, onPlay, onChanged }: M
           busy={busy}
           onConfirm={doUnpublish}
           onCancel={() => setConfirmUnpublish(false)}
+        />
+      )}
+
+      {confirmDeleteSolution && (
+        <ConfirmModal
+          title="풀이 삭제"
+          message="등록된 풀이를 삭제할까요? 다른 사람은 더 이상 풀이를 볼 수 없습니다."
+          confirmLabel="삭제"
+          danger
+          busy={busy}
+          onConfirm={doDeleteSolution}
+          onCancel={() => setConfirmDeleteSolution(false)}
         />
       )}
 

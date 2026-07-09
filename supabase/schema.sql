@@ -25,6 +25,7 @@ create table if not exists public.maps (
   author_name text,                       -- 제작자(허브 업로드 시 필수)
   code        text not null default '',    -- 맵 코드(base62) — 맵의 정본
   comment     text,
+  solution    text,                        -- 출제자가 등록한 풀이(이동 순서 기록, 예: "RRULW"). null=미등록
   author_difficulty numeric(2,1),          -- 출제자가 등록 시 매긴 난이도 (0.5~5.0)
   difficulty  numeric(2,1),                -- 회의 결정 난이도 (0.5~5.0, null=미결정)
   status      text not null default 'pending'
@@ -128,6 +129,7 @@ grant execute on function public.set_map_review(uuid, text, numeric) to authenti
 -- ---------- 마이그레이션 (이미 운영 중인 DB에 새 컬럼 추가) ----------
 -- 이 파일 전체를 다시 실행하면 아래 ALTER 들이 idempotent 하게 적용됩니다.
 alter table public.maps     add column if not exists author_difficulty numeric(2,1);
+alter table public.maps     add column if not exists solution text;
 alter table public.comments add column if not exists suggested_difficulty numeric(2,1);
 
 -- 허브 정렬을 "공개 시각" 기준으로 하기 위한 컬럼. 기존 공개 맵은 created_at 으로

@@ -16,6 +16,7 @@ export interface MapRow {
   author_name: string | null;
   code: string;
   comment: string | null;
+  solution: string | null;            // 출제자 풀이(이동 순서 기록). null = 미등록
   author_difficulty: number | null;  // 출제자 난이도
   difficulty: number | null;         // 회의 결정 난이도 (null = 미결정)
   status: MapStatus;
