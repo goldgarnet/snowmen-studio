@@ -12,7 +12,7 @@
 
 ---
 
-## 1단계. Supabase (데이터베이스 + 로그인)
+## 1단계. Supabase (데이터베이스 + 로그인 )
 
 1. https://supabase.com 접속 → **Start your project** → GitHub 계정으로 가입/로그인.
 2. **New project** 클릭.
