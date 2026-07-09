@@ -78,9 +78,8 @@ export default function SolutionList({ mapId, mapOwnerId, reloadToken, onView, o
                 <div className="sol-item-main">
                   <span className="sol-author">{s.author_name}</span>
                   {isAuthor && <span className="sol-tag on">출제자</span>}
-                  <span className="sol-meta">
-                    {s.turn_count != null ? `${s.turn_count}턴` : '턴 —'} · {formatWhen(s.created_at)}
-                  </span>
+                  {/* 턴 수는 스포일러라 목록에선 숨기고, 재생 화면에서만 보여준다. */}
+                  <span className="sol-meta">{formatWhen(s.created_at)}</span>
                 </div>
                 {s.note && <div className="sol-note">{s.note}</div>}
                 <div className="sol-item-actions">
