@@ -203,7 +203,11 @@ function resolvePush(
     }
 
     // A+B+C all exist
-    if (a.isSnowball && a.size === 1 && b.isWall) {
+    // A size-1 snowball backed by a wall OR block can't be pushed by a size-2
+    // player (the block can't move because C backs it), so it crushes into a
+    // flake — consistent with a size-2 snowball splitting against a backed block
+    // (below) and with size-1/size-3 players.
+    if (a.isSnowball && a.size === 1 && (b.isWall || b.isBlock)) {
       return doForceA(level, posA, dir, turnCount);
     }
     if (a.isSnowball && a.size === 2 && (b.isWall || b.isBlock)) {
