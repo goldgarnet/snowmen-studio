@@ -48,7 +48,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
 
     if (!obstacle) {
       moveRollingGroup(level, rollingGroup, dir);
-      handleRollFlake(level, rollingGroup[rollingGroup.length - 1].pos, leadObj);
+      handleRollFlakeAll(level, rollingGroup);
       if (killIfOnBeam(level, rollingGroup)) break;
       continue;
     }
@@ -69,10 +69,10 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
 
       // Move obstacle forward first, then rolling group
       moveRollingGroup(level, obstacleGroup, dir);
-      const newObsLead = obstacleGroup[obstacleGroup.length - 1];
-      handleRollFlake(level, newObsLead.pos, newObsLead.obj);
+      handleRollFlakeAll(level, obstacleGroup);
 
       moveRollingGroup(level, rollingGroup, dir);
+      handleRollFlakeAll(level, rollingGroup);
 
       // Merge obstacle group into rolling group
       for (const g of obstacleGroup) {
@@ -131,7 +131,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
 
     if (!obstacle) {
       moveRollingGroup(level, group, dir);
-      handleRollFlake(level, group[group.length - 1].pos, leadObj);
+      handleRollFlakeAll(level, group);
       if (killIfOnBeam(level, group)) break;
       continue;
     }
@@ -150,10 +150,10 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
       if (!isInBounds(level, obsNextPos) || level.objects[obsNextPos.row][obsNextPos.col]) break;
 
       moveRollingGroup(level, obstacleGroup, dir);
-      const newObsLead = obstacleGroup[obstacleGroup.length - 1];
-      handleRollFlake(level, newObsLead.pos, newObsLead.obj);
+      handleRollFlakeAll(level, obstacleGroup);
 
       moveRollingGroup(level, group, dir);
+      handleRollFlakeAll(level, group);
 
       for (const g of obstacleGroup) {
         group.push({ pos: { ...g.pos }, obj: g.obj });
@@ -240,4 +240,11 @@ function handleRollFlake(level: Level, pos: Position, obj: GameObject): void {
     tile.isFlake = false;
     tile.isWarm = false;
   }
+}
+
+// Every ball in a rolling group picks up a flake on the cell it just landed on —
+// not only the lead ball. Without this, trailing balls roll over flakes without
+// growing (and a flake the size-2 lead can't absorb is left for the ball behind).
+function handleRollFlakeAll(level: Level, group: { pos: Position; obj: GameObject }[]): void {
+  for (const g of group) handleRollFlake(level, g.pos, g.obj);
 }
