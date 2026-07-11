@@ -21,6 +21,11 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
   let guard = 0;
   const MAX_ITERS = level.width * level.height * 4 + 16;
 
+  // The ball has just been placed at fromPos by the push helper (which may have
+  // moved it one cell forward onto a beam). If that starting cell is already on a
+  // laser beam, it dies right there — before rolling any further.
+  if (killIfOnBeam(level, rollingGroup)) return;
+
   while (true) {
     if (++guard > MAX_ITERS) break;
     const leadPos = rollingGroup[rollingGroup.length - 1].pos;
@@ -101,6 +106,10 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
   let rollingSize = group.reduce((sum, g) => sum + g.obj.size, 0);
   let guard = 0;
   const MAX_ITERS = level.width * level.height * 4 + 16;
+
+  // Same as rollSnowball: if the group's starting cell is already on a beam
+  // (e.g. it was just placed there by the push helper), it dies before rolling.
+  if (killIfOnBeam(level, group)) return;
 
   while (true) {
     if (++guard > MAX_ITERS) break;
