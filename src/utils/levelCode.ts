@@ -27,6 +27,11 @@ const EXT_MAGIC = 0b10100101; // 0xA5, 8 bits
 const EXT_INDEX_BITS = 11;    // tile index r*width+c (max 33*33-1 = 1088 < 2048)
 const EXT_COUNT_BITS = 11;
 const EXT_FLAG_BITS = 5;      // orangeButton, orangeWall, isHole, isCrack, isPortal
+// Optional sub-section (after the tile-flag list) carrying triangle-block corners:
+// [TRIBLOCK_MAGIC(4)] [count(11)] [index(11) + corner(2)]*count. Gated by its own magic
+// so v5 codes written before triangle blocks existed (which have no such section) still
+// decode: after the tile-flag list `pos === bits.length`, so the magic check is skipped.
+const TRIBLOCK_MAGIC = 0b1011; // 4 bits
 
 const TRI_CORNERS: TriangleCorner[] = ['tl', 'tr', 'bl', 'br'];
 
@@ -167,12 +172,32 @@ export function encodeLevelCode(level: Level): string {
       if (flags !== 0) special.push({ idx: r * level.width + c, flags });
     }
   }
-  if (special.length > 0) {
+  // Triangle blocks: blocks that carry a mirror corner (stored separately since the
+  // base object pass encodes them as ordinary blocks).
+  const triBlocks: { idx: number; corner: number }[] = [];
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      const obj = level.objects[r][c];
+      if (obj && obj.type === 'block' && obj.triangleCorner) {
+        triBlocks.push({ idx: r * level.width + c, corner: Math.max(0, TRI_CORNERS.indexOf(obj.triangleCorner)) });
+      }
+    }
+  }
+
+  if (special.length > 0 || triBlocks.length > 0) {
     pushBits(bits, EXT_MAGIC, 8);
     pushBits(bits, special.length, EXT_COUNT_BITS);
     for (const s of special) {
       pushBits(bits, s.idx, EXT_INDEX_BITS);
       pushBits(bits, s.flags, EXT_FLAG_BITS);
+    }
+    if (triBlocks.length > 0) {
+      pushBits(bits, TRIBLOCK_MAGIC, 4);
+      pushBits(bits, triBlocks.length, EXT_COUNT_BITS);
+      for (const t of triBlocks) {
+        pushBits(bits, t.idx, EXT_INDEX_BITS);
+        pushBits(bits, t.corner, 2);
+      }
     }
   }
 
@@ -327,6 +352,21 @@ export function decodeLevelCode(code: string): Level | null {
         t.isHole = (flags & (1 << 2)) !== 0;
         t.isCrack = (flags & (1 << 1)) !== 0;
         t.isPortal = (flags & 1) !== 0;
+      }
+
+      // Optional triangle-block sub-section (gated by its own magic).
+      if (pos + 4 <= bits.length && readBits(bits, pos, 4) === TRIBLOCK_MAGIC) {
+        pos += 4;
+        const tbCount = readBits(bits, pos, EXT_COUNT_BITS); pos += EXT_COUNT_BITS;
+        for (let i = 0; i < tbCount; i++) {
+          const idx = readBits(bits, pos, EXT_INDEX_BITS); pos += EXT_INDEX_BITS;
+          const cornerIdx = readBits(bits, pos, 2); pos += 2;
+          const r = Math.floor(idx / width);
+          const c = idx % width;
+          if (r < 0 || r >= height || c < 0 || c >= width) continue;
+          const obj = objects[r][c];
+          if (obj && obj.type === 'block') obj.triangleCorner = TRI_CORNERS[cornerIdx] ?? 'tl';
+        }
       }
     }
 

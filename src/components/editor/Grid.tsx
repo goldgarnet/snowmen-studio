@@ -645,7 +645,7 @@ function LaserBeamOverlay({ level, cellSize }: { level: Level; cellSize: number 
   );
 }
 
-function renderObject(obj: { type: string; size: number; isMelting: boolean; treeHeight?: number }, cellSize: number) {
+function renderObject(obj: { type: string; size: number; isMelting: boolean; treeHeight?: number; triangleCorner?: string }, cellSize: number) {
   const s = cellSize * 0.85;
   switch (obj.type) {
     case 'player': {
@@ -702,12 +702,31 @@ function renderObject(obj: { type: string; size: number; isMelting: boolean; tre
         </svg>
       );
     }
-    case 'block':
+    case 'block': {
+      if (obj.triangleCorner) {
+        // Triangle block: a full block with a mirror face. The shaded half marks the
+        // two solid legs; the bright diagonal is the reflecting hypotenuse.
+        const solidHalf: Record<string, string> = {
+          tl: '8,8 32,8 8,32', tr: '32,8 8,8 32,32', bl: '8,32 8,8 32,32', br: '32,32 32,8 8,32',
+        };
+        const mirror: Record<string, [number, number, number, number]> = {
+          tl: [32, 8, 8, 32], br: [32, 8, 8, 32], tr: [8, 8, 32, 32], bl: [8, 8, 32, 32],
+        };
+        const ml = mirror[obj.triangleCorner] ?? mirror.tl;
+        return (
+          <svg width={s} height={s} viewBox="0 0 40 40">
+            <rect x="6" y="6" width="28" height="28" fill="#8b6914" stroke="#5a4510" strokeWidth="1.5" rx="2" />
+            <polygon points={solidHalf[obj.triangleCorner] ?? solidHalf.tl} fill="#5a4510" opacity="0.85" />
+            <line x1={ml[0]} y1={ml[1]} x2={ml[2]} y2={ml[3]} stroke="#e8dcc0" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        );
+      }
       return (
         <svg width={s} height={s} viewBox="0 0 40 40">
           <rect x="6" y="6" width="28" height="28" fill="#8b6914" stroke="#5a4510" strokeWidth="1.5" rx="2" />
         </svg>
       );
+    }
     case 'wall':
       return (
         <svg width={cellSize} height={cellSize} viewBox="0 0 40 40">

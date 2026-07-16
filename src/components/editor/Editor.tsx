@@ -37,13 +37,14 @@ type EditorTool =
   | 'tree'
   | 'laser'
   | 'triangle'
+  | 'triangleBlock'
   | 'eraser';
 
 const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'orangeButton', 'orangeWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
 
 // Object tools place an object in the cell; they clear any hole there first (an object
 // can't sit on a hole), matching the "no objects on holes" rule.
-const OBJECT_TOOLS: EditorTool[] = ['player', 'snowballLarge', 'snowballSmall', 'snowman1', 'snowman2', 'snowman3', 'wall', 'block', 'tree', 'laser'];
+const OBJECT_TOOLS: EditorTool[] = ['player', 'snowballLarge', 'snowballSmall', 'snowman1', 'snowman2', 'snowman3', 'wall', 'block', 'triangleBlock', 'tree', 'laser'];
 // NOTE: 'eraser' is intentionally NOT an edge tool. If it were, selecting the
 // eraser would put the grid in edge-mode, whose edge-hit strips intercept clicks
 // near cell borders — making it hard to erase tile flags (flake/goal/tunnel/
@@ -502,6 +503,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
       case 'triangle':
         tile.triangle = triCorner;
         break;
+      case 'triangleBlock':
+        lv.objects[row][col] = { type: 'block', size: 1, isMelting: false, triangleCorner: triCorner, createdAt: 0 };
+        break;
       case 'eraser':
         lv.objects[row][col] = null;
         tile.isFlake = false;
@@ -641,6 +645,7 @@ export default function Editor({ level, setLevel }: EditorProps) {
     snowman2: { label: '눈사람 2', emoji: '⛄' },
     snowman3: { label: '눈사람 3', emoji: '⛄' },
     triangle: { label: '삼각 벽', emoji: '📐' },
+    triangleBlock: { label: '삼각 블록', emoji: '🔺' },
     yellowWall: { label: '노랑 벽', emoji: '🟨' },
     keyTile: { label: '초록 버튼', emoji: '🟢' },
     yellowButton: { label: '노랑 버튼', emoji: '🟡' },
@@ -667,7 +672,7 @@ export default function Editor({ level, setLevel }: EditorProps) {
   const objectRows: EditorTool[][] = [
     ['player', 'wall', 'tree'],
     ['snowballLarge', 'snowballSmall'],
-    ['block', 'flake'],
+    ['block', 'triangleBlock', 'flake'],
     ['columnTunnel', 'rowTunnel'],
     ['snowman1', 'snowman2', 'snowman3'],
     ['triangle', 'keyTile'],
@@ -803,9 +808,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
               </div>
             </div>
           )}
-          {selectedTool === 'triangle' && (
+          {(selectedTool === 'triangle' || selectedTool === 'triangleBlock') && (
             <div className="tree-height-input">
-              <span style={{fontSize:12,color:'#aaa',marginBottom:4,display:'block'}}>삼각 벽 방향 (직각 = 솔리드 모서리)</span>
+              <span style={{fontSize:12,color:'#aaa',marginBottom:4,display:'block'}}>삼각 방향 (직각 = 솔리드 모서리)</span>
               <div style={{display:'flex',gap:4}}>
                 {(['tl','tr','bl','br'] as TriangleCorner[]).map(corner => (
                   <button key={corner}

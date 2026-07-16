@@ -98,6 +98,15 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
       continue;
     }
 
+    // Triangle block: a single rolling ball deflects off it like a triangle wall of the
+    // same corner (it can't enter the block's cell). Hitting a solid-leg side (no
+    // deflection mapping) just stops, like a normal block.
+    if (obstacle.type === 'block' && obstacle.triangleCorner && rollingGroup.length === 1) {
+      const nd = TRI_DEFLECT[obstacle.triangleCorner][dir];
+      if (nd) { dir = nd; continue; }
+      break;
+    }
+
     // Collision with obstacle
     const obstacleGroup = getConsecutiveObjects(level, nextPos, dir);
     const obstacleSize = obstacleGroup.reduce((sum, g) => sum + g.obj.size, 0);
@@ -181,6 +190,13 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
       if (killIfOnBeam(level, group)) break;
       if (resolveRollLeadSpecial(level, group)) break;
       continue;
+    }
+
+    // Triangle block deflection (single ball only) — see rollSnowball.
+    if (obstacle.type === 'block' && obstacle.triangleCorner && group.length === 1) {
+      const nd = TRI_DEFLECT[obstacle.triangleCorner][dir];
+      if (nd) { dir = nd; continue; }
+      break;
     }
 
     const obstacleGroup = getConsecutiveObjects(level, nextPos, dir);

@@ -71,6 +71,10 @@ export interface GameObject {
   treeHeight?: number;
   laserDirection?: SunDirection;
   createdAt: number;
+  // Triangle block: a normal block (same size / shadow / push / backing / laser rules)
+  // that additionally deflects a rolling snowball like a triangle wall of this corner.
+  // Undefined = an ordinary block.
+  triangleCorner?: TriangleCorner;
   // Runtime-only: set when this object was relocated by a portal during the current
   // turn, so the post-push portal pass does not teleport it a second time. Cleared at
   // end of turn; not saved in the map code.
