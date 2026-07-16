@@ -659,8 +659,8 @@ export default function Editor({ level, setLevel }: EditorProps) {
   const tileRows: EditorTool[][] = [
     ['warm', 'cool'],
     ['edgeArch1', 'edgeArch2'],
-    ['goal', 'hole'],
-    ['crackWarm', 'crackCool'],
+    ['crackWarm', 'crackCool', 'hole'],
+    ['goal'],
   ];
 
   // "오브젝트" section: everything else, arranged exactly as requested.
@@ -670,8 +670,8 @@ export default function Editor({ level, setLevel }: EditorProps) {
     ['block', 'flake'],
     ['columnTunnel', 'rowTunnel'],
     ['snowman1', 'snowman2', 'snowman3'],
-    ['triangle', 'yellowWall'],
-    ['keyTile', 'yellowButton'],
+    ['triangle', 'keyTile'],
+    ['yellowWall', 'yellowButton'],
     ['orangeWall', 'orangeButton'],
     ['laser', 'soulSwap'],
     ['portal'],
@@ -690,7 +690,7 @@ export default function Editor({ level, setLevel }: EditorProps) {
         if (id === 'edgeArch1' || id === 'edgeArch2') {
           return (
             <button key={id}
-              className={`tool-btn arch-btn ${selectedTool === id ? 'active' : ''}`}
+              className={`tool-btn ${selectedTool === id ? 'active' : ''}`}
               onClick={() => setSelectedTool(id)}>
               <span className="tool-emoji">🏛️</span>{id === 'edgeArch1' ? '높이 1 아치' : '높이 2 아치'}
             </button>
