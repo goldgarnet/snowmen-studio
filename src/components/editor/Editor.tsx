@@ -18,6 +18,12 @@ type EditorTool =
   | 'keyTile'
   | 'yellowButton'
   | 'yellowWall'
+  | 'orangeButton'
+  | 'orangeWall'
+  | 'hole'
+  | 'crackWarm'
+  | 'crackCool'
+  | 'portal'
   | 'edgeArch1'
   | 'edgeArch2'
   | 'player'
@@ -33,7 +39,11 @@ type EditorTool =
   | 'triangle'
   | 'eraser';
 
-const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'wall', 'eraser'];
+const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'orangeButton', 'orangeWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
+
+// Object tools place an object in the cell; they clear any hole there first (an object
+// can't sit on a hole), matching the "no objects on holes" rule.
+const OBJECT_TOOLS: EditorTool[] = ['player', 'snowballLarge', 'snowballSmall', 'snowman1', 'snowman2', 'snowman3', 'wall', 'block', 'tree', 'laser'];
 // NOTE: 'eraser' is intentionally NOT an edge tool. If it were, selecting the
 // eraser would put the grid in edge-mode, whose edge-hit strips intercept clicks
 // near cell borders — making it hard to erase tile flags (flake/goal/tunnel/
@@ -378,6 +388,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
   const applyTool = (lv: Level, row: number, col: number, tool: EditorTool) => {
     const tile = lv.tiles[row][col];
 
+    // Placing an object clears a hole in that cell (no objects on holes).
+    if (OBJECT_TOOLS.includes(tool)) tile.isHole = false;
+
     switch (tool) {
       case 'warm':
         tile.isWarm = true;
@@ -419,6 +432,35 @@ export default function Editor({ level, setLevel }: EditorProps) {
         break;
       case 'yellowWall':
         tile.isYellowWall = true;
+        break;
+      case 'orangeButton':
+        tile.isOrangeButton = true;
+        break;
+      case 'orangeWall':
+        tile.isOrangeWall = true;
+        break;
+      case 'hole':
+        // A hole can't hold an object, a portal, or a crack.
+        tile.isHole = true;
+        tile.isCrack = false;
+        tile.crackArmed = false;
+        tile.isPortal = false;
+        lv.objects[row][col] = null;
+        break;
+      case 'crackWarm':
+        tile.isCrack = true;
+        tile.isWarm = true;
+        tile.isFlake = false;
+        tile.isHole = false;
+        break;
+      case 'crackCool':
+        tile.isCrack = true;
+        tile.isWarm = false;
+        tile.isHole = false;
+        break;
+      case 'portal':
+        tile.isPortal = true;
+        tile.isHole = false;
         break;
       case 'edgeArch1':
       case 'edgeArch2':
@@ -471,6 +513,13 @@ export default function Editor({ level, setLevel }: EditorProps) {
         tile.isKeyTile = false;
         tile.isYellowButton = false;
         tile.isYellowWall = false;
+        tile.isOrangeButton = false;
+        tile.isOrangeWall = false;
+        tile.orangePressed = false;
+        tile.isHole = false;
+        tile.isCrack = false;
+        tile.crackArmed = false;
+        tile.isPortal = false;
         tile.triangle = undefined;
         // Note: edge arches are erased via handleEdgeClick when clicking edges.
         break;
@@ -597,6 +646,12 @@ export default function Editor({ level, setLevel }: EditorProps) {
     yellowButton: { label: '노랑 버튼', emoji: '🟡' },
     laser: { label: '레이저', emoji: '🔴' },
     soulSwap: { label: '영혼 발판', emoji: '🌀' },
+    orangeButton: { label: '주황 버튼', emoji: '🟠' },
+    orangeWall: { label: '주황 벽', emoji: '🔶' },
+    hole: { label: '구멍', emoji: '🕳️' },
+    crackWarm: { label: '쪼개진(따뜻)', emoji: '♨️' },
+    crackCool: { label: '쪼개진(차가움)', emoji: '🧊' },
+    portal: { label: '포탈', emoji: '🟣' },
   };
 
   // "타일" section: only terrain. Arch tools live here too (they're placed by
@@ -617,7 +672,17 @@ export default function Editor({ level, setLevel }: EditorProps) {
     ['triangle', 'yellowWall'],
     ['keyTile', 'yellowButton'],
     ['laser', 'soulSwap'],
+    ['orangeWall', 'orangeButton'],
+    ['portal', 'hole'],
+    ['crackWarm', 'crackCool'],
   ];
+
+  // Portals must come in pairs (exactly 0 or 2). Count them for an inline warning.
+  let portalCount = 0;
+  for (let r = 0; r < level.height; r++)
+    for (let c = 0; c < level.width; c++)
+      if (level.tiles[r][c].isPortal) portalCount++;
+  const portalWarning = portalCount !== 0 && portalCount !== 2;
 
   const renderToolRow = (ids: EditorTool[]) => (
     <div className="tool-row" style={{ display: 'grid', gridTemplateColumns: `repeat(${ids.length}, 1fr)`, gap: 6 }}>
@@ -710,6 +775,11 @@ export default function Editor({ level, setLevel }: EditorProps) {
           <div className="tool-rows">
             {objectRows.map((row, i) => <div key={i}>{renderToolRow(row)}</div>)}
           </div>
+          {portalWarning && (
+            <div className="select-hint" style={{ color: '#e6a23c' }}>
+              ⚠️ 포탈은 정확히 2개여야 합니다 (현재 {portalCount}개). 개수가 맞지 않으면 순간이동이 작동하지 않습니다.
+            </div>
+          )}
           {selectedTool === 'tree' && (
             <div className="tree-height-input">
               <label>

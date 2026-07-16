@@ -12,6 +12,48 @@ const TRI_DEFLECT: Record<TriangleCorner, Partial<Record<Direction, Direction>>>
   tr: { up: 'left', right: 'down' },    // ◥ mirror "\"
 };
 
+// Portals for the roll module (kept local to avoid a turn.ts import cycle).
+function findPortalsRoll(level: Level): Position[] {
+  const ps: Position[] = [];
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isPortal) ps.push({ row: r, col: c });
+    }
+  }
+  return ps;
+}
+
+// After the rolling group's lead lands on a cell, resolve holes and portals:
+//   - Hole: the lead falls in and disappears → the roll stops (returns true).
+//   - Portal: if the map has exactly two portals and the OTHER portal is empty, the
+//     lead is relocated there and the roll stops (returns true). If the destination
+//     portal is occupied (or portals aren't paired), nothing happens and the ball
+//     keeps rolling (returns false).
+function resolveRollLeadSpecial(level: Level, group: { pos: Position; obj: GameObject }[]): boolean {
+  if (group.length === 0) return true;
+  const lead = group[group.length - 1];
+  const tile = level.tiles[lead.pos.row][lead.pos.col];
+  if (tile.isHole) {
+    level.objects[lead.pos.row][lead.pos.col] = null;
+    return true;
+  }
+  if (tile.isPortal) {
+    const portals = findPortalsRoll(level);
+    if (portals.length === 2) {
+      const other = portals.find(p => !(p.row === lead.pos.row && p.col === lead.pos.col));
+      if (other && !level.objects[other.row][other.col]) {
+        const moving = level.objects[lead.pos.row][lead.pos.col];
+        level.objects[lead.pos.row][lead.pos.col] = null;
+        level.objects[other.row][other.col] = moving;
+        if (moving) moving.justTeleported = true;
+        return true;
+      }
+    }
+    return false; // destination occupied / unpaired → keep rolling
+  }
+  return false;
+}
+
 export function rollSnowball(level: Level, fromPos: Position, dir: Direction, turnCount: number): void {
   const obj = level.objects[fromPos.row][fromPos.col];
   if (!obj || obj.type !== 'snowball') return;
@@ -25,6 +67,8 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
   // moved it one cell forward onto a beam). If that starting cell is already on a
   // laser beam, it dies right there — before rolling any further.
   if (killIfOnBeam(level, rollingGroup)) return;
+  // Likewise, if it was placed onto a hole or portal, resolve that immediately.
+  if (resolveRollLeadSpecial(level, rollingGroup)) return;
 
   while (true) {
     if (++guard > MAX_ITERS) break;
@@ -50,6 +94,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
       moveRollingGroup(level, rollingGroup, dir);
       handleRollFlakeAll(level, rollingGroup);
       if (killIfOnBeam(level, rollingGroup)) break;
+      if (resolveRollLeadSpecial(level, rollingGroup)) break;
       continue;
     }
 
@@ -110,6 +155,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
   // Same as rollSnowball: if the group's starting cell is already on a beam
   // (e.g. it was just placed there by the push helper), it dies before rolling.
   if (killIfOnBeam(level, group)) return;
+  if (resolveRollLeadSpecial(level, group)) return;
 
   while (true) {
     if (++guard > MAX_ITERS) break;
@@ -133,6 +179,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
       moveRollingGroup(level, group, dir);
       handleRollFlakeAll(level, group);
       if (killIfOnBeam(level, group)) break;
+      if (resolveRollLeadSpecial(level, group)) break;
       continue;
     }
 

@@ -34,6 +34,25 @@ export function yellowWallsSolid(level: Level): boolean {
 }
 
 /**
+ * Orange walls behave like yellow walls but LATCH: an orange button, once covered,
+ * stays "pressed" forever (tile.orangePressed, set by the turn resolver). The walls
+ * are solid until every orange button has latched at least once — after which they
+ * stay open permanently. (With no orange buttons the walls behave like plain walls.)
+ */
+export function orangeWallsSolid(level: Level): boolean {
+  let hasButton = false;
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isOrangeButton) {
+        hasButton = true;
+        if (!level.tiles[r][c].orangePressed) return true; // a not-yet-latched button
+      }
+    }
+  }
+  return !hasButton;
+}
+
+/**
  * Returns the edge-arch level (max passable size) on the boundary between `from`
  * and the next cell in direction `dir`. Returns 0 if no arch is present.
  */
@@ -94,6 +113,16 @@ export function canEnterTile(level: Level, pos: Position, dir: Direction, obj: G
 
   // Solid yellow wall: impassable (only scan buttons when this is a yellow-wall tile).
   if (tile.isYellowWall && yellowWallsSolid(level)) {
+    return false;
+  }
+  // Solid orange wall: impassable until every orange button has latched.
+  if (tile.isOrangeWall && orangeWallsSolid(level)) {
+    return false;
+  }
+
+  // Hole: the player can never move onto a hole. Other objects may enter (and fall in
+  // — the turn/roll resolver removes them); only the player is blocked here.
+  if (tile.isHole && obj.type === 'player') {
     return false;
   }
 
@@ -169,8 +198,9 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
   if (tile.triangle && TRI_SOLID[tile.triangle].includes(dir)) return true;
   if (nextTile.triangle && TRI_SOLID[nextTile.triangle].includes(getOppositeDirection(dir))) return true;
 
-  // A solid yellow wall at the next cell backs the push like a wall.
+  // A solid yellow/orange wall at the next cell backs the push like a wall.
   if (nextTile.isYellowWall && yellowWallsSolid(level)) return true;
+  if (nextTile.isOrangeWall && orangeWallsSolid(level)) return true;
 
   // Check perpendicular tunnel blockage (existing arch-tile semantics): rowArch
   // blocks left/right movement; columnArch blocks up/down movement.

@@ -15,6 +15,19 @@ const V2_MARKER = 0b111;
 const V3_MARKER = 0b110;
 const V4_MARKER = 0b101;
 
+// v5 features (orange button/wall, hole, cracked tile, portal) are stored in an
+// OPTIONAL extension section appended AFTER the complete v4 body. The 3-bit version
+// marker space (0b101/0b110/0b111) is exhausted, so instead of a new marker we rely
+// on the fact that a plain v4 code decodes to exactly its pushed bits — after reading
+// the v4 body, `pos` equals the bit length. A v5 code appends `EXT_MAGIC` + a sparse
+// list of the tiles carrying any v5 flag, which old decoders simply never read (they
+// stop after the tile grid) and which we only emit when at least one such tile exists.
+// Result: maps that use none of the new features encode byte-for-byte like before.
+const EXT_MAGIC = 0b10100101; // 0xA5, 8 bits
+const EXT_INDEX_BITS = 11;    // tile index r*width+c (max 33*33-1 = 1088 < 2048)
+const EXT_COUNT_BITS = 11;
+const EXT_FLAG_BITS = 5;      // orangeButton, orangeWall, isHole, isCrack, isPortal
+
 const TRI_CORNERS: TriangleCorner[] = ['tl', 'tr', 'bl', 'br'];
 
 function pushBits(bits: number[], value: number, count: number): void {
@@ -136,6 +149,30 @@ export function encodeLevelCode(level: Level): string {
       } else {
         encodeObject(bits, level.objects[r][c]);
       }
+    }
+  }
+
+  // v5 extension: sparse list of tiles carrying any new flag. Only appended when at
+  // least one exists, so feature-free maps stay byte-identical to their v4 codes.
+  const special: { idx: number; flags: number }[] = [];
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      const t = level.tiles[r][c];
+      const flags =
+        (t.isOrangeButton ? 1 : 0) << 4 |
+        (t.isOrangeWall ? 1 : 0) << 3 |
+        (t.isHole ? 1 : 0) << 2 |
+        (t.isCrack ? 1 : 0) << 1 |
+        (t.isPortal ? 1 : 0);
+      if (flags !== 0) special.push({ idx: r * level.width + c, flags });
+    }
+  }
+  if (special.length > 0) {
+    pushBits(bits, EXT_MAGIC, 8);
+    pushBits(bits, special.length, EXT_COUNT_BITS);
+    for (const s of special) {
+      pushBits(bits, s.idx, EXT_INDEX_BITS);
+      pushBits(bits, s.flags, EXT_FLAG_BITS);
     }
   }
 
@@ -270,6 +307,26 @@ export function decodeLevelCode(code: string): Level | null {
         }
 
         objects[r].push(obj);
+      }
+    }
+
+    // v5 extension (see EXT_MAGIC): present only if there are leftover bits beginning
+    // with the magic. A plain v4 code has `pos === bits.length` here, so this is skipped.
+    if (pos + 8 <= bits.length && readBits(bits, pos, 8) === EXT_MAGIC) {
+      pos += 8;
+      const count = readBits(bits, pos, EXT_COUNT_BITS); pos += EXT_COUNT_BITS;
+      for (let i = 0; i < count; i++) {
+        const idx = readBits(bits, pos, EXT_INDEX_BITS); pos += EXT_INDEX_BITS;
+        const flags = readBits(bits, pos, EXT_FLAG_BITS); pos += EXT_FLAG_BITS;
+        const r = Math.floor(idx / width);
+        const c = idx % width;
+        if (r < 0 || r >= height || c < 0 || c >= width) continue;
+        const t = tiles[r][c];
+        t.isOrangeButton = (flags & (1 << 4)) !== 0;
+        t.isOrangeWall = (flags & (1 << 3)) !== 0;
+        t.isHole = (flags & (1 << 2)) !== 0;
+        t.isCrack = (flags & (1 << 1)) !== 0;
+        t.isPortal = (flags & 1) !== 0;
       }
     }
 

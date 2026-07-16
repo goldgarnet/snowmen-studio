@@ -1,6 +1,6 @@
 import { Level, GameObject, Position, Direction } from '../types';
 import { isInBounds } from '../utils/level';
-import { getNextPos, canMoveTo, canLeaveTile, canPassEdge, isBacked, yellowWallsSolid } from './helpers';
+import { getNextPos, canMoveTo, canLeaveTile, canPassEdge, isBacked, yellowWallsSolid, orangeWallsSolid } from './helpers';
 import { rollSnowball, rollSnowballGroup } from './roll';
 import { applyForce } from './force';
 
@@ -89,6 +89,9 @@ function getObjAt(level: Level, pos: Position): ObjInfo {
   // A solid yellow wall (a tile, not an object) blocks and crushes exactly like a
   // real wall — so a snowball pushed against it turns to a flake instead of no-op.
   if (level.tiles[pos.row][pos.col].isYellowWall && yellowWallsSolid(level)) {
+    return { exists: true, type: 'wall', size: 100, isSnowball: false, isWall: true, isBlock: false };
+  }
+  if (level.tiles[pos.row][pos.col].isOrangeWall && orangeWallsSolid(level)) {
     return { exists: true, type: 'wall', size: 100, isSnowball: false, isWall: true, isBlock: false };
   }
   const obj = level.objects[pos.row][pos.col];

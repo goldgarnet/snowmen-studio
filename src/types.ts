@@ -36,6 +36,30 @@ export interface Tile {
   isYellowButton?: boolean;
   // Yellow wall: acts like a solid wall unless all yellow buttons are pressed.
   isYellowWall?: boolean;
+  // Orange button: like a yellow button, but LATCHING — once pressed (covered by an
+  // object) it stays pressed forever, even after the object leaves. Orange walls
+  // vanish permanently once every orange button has been pressed at least once.
+  isOrangeButton?: boolean;
+  // Orange wall: acts like a solid wall until all orange buttons have latched.
+  isOrangeWall?: boolean;
+  // Runtime-only latch for an orange button: set true the first time it is covered
+  // and never reset. NOT saved in the map code (initial state = unpressed); cloneLevel
+  // propagates it during play.
+  orangePressed?: boolean;
+  // Hole: any object that moves onto this tile falls in and disappears. The player
+  // cannot move onto a hole. No object can be placed on a hole in the editor.
+  isHole?: boolean;
+  // Cracked tile: when an object or player steps onto it, the tile turns into a hole
+  // one turn later (whether or not the stepper is still there). Warm/cold variants use
+  // the existing isWarm flag. Runtime-only crackArmed marks it as "will become a hole
+  // next turn"; not saved in the map code.
+  isCrack?: boolean;
+  crackArmed?: boolean;
+  // Portal: a map must have exactly 0 or 2. An object/player that moves onto a portal
+  // (from a non-portal cell) is instantly relocated to the other portal, unless the
+  // destination portal already holds an object. Stored as a tile flag (objects rest
+  // on top of it), like the soul-swap footplate.
+  isPortal?: boolean;
   // Triangle wall (half-cell corner mirror). Undefined = none.
   triangle?: TriangleCorner;
 }
@@ -47,6 +71,10 @@ export interface GameObject {
   treeHeight?: number;
   laserDirection?: SunDirection;
   createdAt: number;
+  // Runtime-only: set when this object was relocated by a portal during the current
+  // turn, so the post-push portal pass does not teleport it a second time. Cleared at
+  // end of turn; not saved in the map code.
+  justTeleported?: boolean;
 }
 
 export interface Position {

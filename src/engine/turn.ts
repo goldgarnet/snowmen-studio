@@ -2,7 +2,7 @@ import { Level, Direction, GameStatus, Position } from '../types';
 import { cloneLevel, findPlayer } from '../utils/level';
 import { recalcShadows } from './shadow';
 import { executePush } from './push';
-import { yellowWallsSolid } from './helpers';
+import { yellowWallsSolid, orangeWallsSolid } from './helpers';
 
 export interface TurnResult {
   level: Level;
@@ -53,6 +53,7 @@ export function isLevelCleared(level: Level): boolean {
 
 function applyLaserCheck(level: Level): void {
   const ySolid = yellowWallsSolid(level);
+  const oSolid = orangeWallsSolid(level);
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const obj = level.objects[r][c];
@@ -68,12 +69,109 @@ function applyLaserCheck(level: Level): void {
         }
         if (level.tiles[cr][cc].triangle) break; // triangle stops the beam at this cell
         if (ySolid && level.tiles[cr][cc].isYellowWall) break; // solid yellow wall blocks
+        if (oSolid && level.tiles[cr][cc].isOrangeWall) break; // solid orange wall blocks
         cr += dr;
         cc += dc;
       }
     }
   }
   processDeadObjects(level);
+}
+
+// === v5 mechanics: orange latch, holes, portals, cracked tiles ===
+
+// Latch orange buttons: once an orange button is covered, mark it pressed forever.
+export function latchOrangeButtons(level: Level): void {
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isOrangeButton && level.objects[r][c]) {
+        level.tiles[r][c].orangePressed = true;
+      }
+    }
+  }
+}
+
+// Any object resting on a hole falls in and disappears. A player that ends up on a
+// hole (e.g. a cracked tile crumbling beneath it) dies — the soul jumps to the nearest
+// snowman, mirroring a full melt.
+export function applyHoles(level: Level): void {
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (!level.tiles[r][c].isHole) continue;
+      const obj = level.objects[r][c];
+      if (!obj) continue;
+      level.objects[r][c] = null;
+      if (obj.type === 'player') soulTransfer(level, { row: r, col: c });
+    }
+  }
+}
+
+function findPortals(level: Level): Position[] {
+  const ps: Position[] = [];
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isPortal) ps.push({ row: r, col: c });
+    }
+  }
+  return ps;
+}
+
+// Immediately relocate an object that just moved ONTO a portal (from a non-portal
+// cell this turn) to the other portal, unless that portal is occupied. Runs as a
+// post-movement pass over the two portal cells; `startOccupied` records which portal
+// cells already held an object at the start of the turn (those are "already on the
+// portal" and do not re-teleport). Balls that teleported mid-roll carry justTeleported
+// and are skipped here so they are not relocated twice.
+export function applyPortals(level: Level, portals: Position[], startOccupied: boolean[]): void {
+  if (portals.length !== 2) return;
+  const pairs: [number, number][] = [[0, 1], [1, 0]];
+  for (const [si, di] of pairs) {
+    const src = portals[si];
+    const dst = portals[di];
+    const obj = level.objects[src.row][src.col];
+    if (!obj) continue;
+    if (startOccupied[si]) continue;      // was resting on this portal at turn start
+    if (obj.justTeleported) continue;     // already relocated this turn
+    if (level.objects[dst.row][dst.col]) continue; // destination portal occupied → no-op
+    level.objects[dst.row][dst.col] = obj;
+    level.objects[src.row][src.col] = null;
+    obj.justTeleported = true;
+  }
+}
+
+// Cracked tiles that were armed on a previous turn crumble into holes now.
+function convertArmedCracks(level: Level): void {
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      const tile = level.tiles[r][c];
+      if (tile.isCrack && tile.crackArmed) {
+        tile.isCrack = false;
+        tile.crackArmed = false;
+        tile.isHole = true;
+      }
+    }
+  }
+}
+
+// Arm any cracked tile that is currently covered so it crumbles on the NEXT turn
+// (whether or not the object is still there then).
+function armCoveredCracks(level: Level): void {
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isCrack && level.objects[r][c]) {
+        level.tiles[r][c].crackArmed = true;
+      }
+    }
+  }
+}
+
+function clearTeleportFlags(level: Level): void {
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      const obj = level.objects[r][c];
+      if (obj?.justTeleported) obj.justTeleported = false;
+    }
+  }
 }
 
 // Resolve the soul-swap footplate with a one-turn delay: stepping onto it arms it;
@@ -124,6 +222,11 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     return { level: newLevel, status: 'gameover' };
   }
 
+  // Portals don't move; snapshot their occupancy before the push so applyPortals can
+  // tell which objects were already resting on a portal (they don't re-teleport).
+  const portals = findPortals(newLevel);
+  const portalStartOccupied = portals.map(p => !!newLevel.objects[p.row][p.col]);
+
   const turnCount = nextAge();
   const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount);
 
@@ -137,6 +240,11 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
   if (newPlayerPos) {
     newPlayerPos = resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
   }
+
+  // Portal relocation, then holes swallow anything that landed on one.
+  applyPortals(newLevel, portals, portalStartOccupied);
+  applyHoles(newLevel);
+  latchOrangeButtons(newLevel);
 
   // Lasers fire before the goal is evaluated: stepping onto a goal that sits on a
   // laser beam kills the player (death takes priority over clearing).
@@ -169,6 +277,11 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
 }
 
 function endOfTurn(level: Level, _turnCount: number): void {
+  // 0. Cracked tiles armed on a previous turn crumble into holes now; anything still
+  //    sitting on them falls in (a player there dies → soul transfer).
+  convertArmedCracks(level);
+  applyHoles(level);
+
   // 1. Recalculate shadows (if shadow mechanic is enabled)
   if (level.hasShadow) recalcShadows(level);
 
@@ -183,6 +296,12 @@ function endOfTurn(level: Level, _turnCount: number): void {
   if (level.hasShadow && sizesChanged(level, sizesBefore)) {
     recalcShadows(level);
   }
+
+  // 5. Arm cracks now covered (crumble next turn), latch orange buttons, and clear the
+  //    per-turn portal marks.
+  armCoveredCracks(level);
+  latchOrangeButtons(level);
+  clearTeleportFlags(level);
 }
 
 function snapshotSizes(level: Level): (number | null)[][] {

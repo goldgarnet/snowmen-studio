@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Level } from '../../types';
-import { yellowWallsSolid } from '../../engine/helpers';
+import { yellowWallsSolid, orangeWallsSolid } from '../../engine/helpers';
 import './Grid.css';
 
 interface GridProps {
@@ -115,6 +115,8 @@ export default function Grid({
 
   // Yellow walls are solid (visible/blocking) unless all yellow buttons are pressed.
   const yellowSolid = yellowWallsSolid(level);
+  // Orange walls are solid until every orange button has latched (persisted state).
+  const orangeSolid = orangeWallsSolid(level);
 
   return (
     <div ref={wrapperRef} className="grid-wrapper">
@@ -181,6 +183,11 @@ export default function Grid({
                   {tile.isKeyTile && <GreenButtonOverlay size={cellSize} />}
                   {tile.isYellowButton && <YellowButtonOverlay size={cellSize} />}
                   {tile.isYellowWall && <YellowWallOverlay size={cellSize} solid={yellowSolid} />}
+                  {tile.isOrangeButton && <OrangeButtonOverlay size={cellSize} pressed={!!tile.orangePressed} />}
+                  {tile.isOrangeWall && <OrangeWallOverlay size={cellSize} solid={orangeSolid} />}
+                  {tile.isHole && <HoleOverlay size={cellSize} />}
+                  {tile.isCrack && <CrackOverlay size={cellSize} warm={!!tile.isWarm} armed={!!tile.crackArmed} />}
+                  {tile.isPortal && <PortalOverlay size={cellSize} />}
                   {tile.triangle && <TriangleOverlay corner={tile.triangle} size={cellSize} />}
                   {obj && (
                     <div className={`object obj-${obj.type} size-${obj.size} ${highlightPlayer && obj.type === 'player' ? 'player-highlight' : ''} ${obj.isMelting ? 'melting' : ''}`}>
@@ -465,6 +472,81 @@ function YellowWallOverlay({ size, solid }: { size: number; solid: boolean }) {
     <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
       <rect x="3" y="3" width="34" height="34" rx="3" fill="rgba(230,180,34,0.10)"
         stroke="#e6b422" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
+    </svg>
+  );
+}
+
+// Orange button: like a yellow button but latching. `pressed` shows the latched state.
+function OrangeButtonOverlay({ size, pressed }: { size: number; pressed: boolean }) {
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="12" fill="none" stroke="#c96a1e" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
+      <circle cx="20" cy="20" r="9" fill={pressed ? '#a8500d' : '#f2913a'} stroke="#bd6018" strokeWidth="1.8" opacity="0.95" />
+      <circle cx="20" cy="20" r="4.5" fill={pressed ? '#d69a5e' : '#ffd19a'} opacity="0.95" />
+    </svg>
+  );
+}
+
+// Orange wall: solid until every orange button has latched; when open, a faint dashed
+// outline of where it will (permanently) stay gone.
+function OrangeWallOverlay({ size, solid }: { size: number; solid: boolean }) {
+  if (solid) {
+    return (
+      <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
+        <rect x="1" y="1" width="38" height="38" rx="3" fill="#e07b22" stroke="#a85410" strokeWidth="2" />
+        <line x1="0" y1="20" x2="40" y2="20" stroke="#c56320" strokeWidth="1.5" />
+        <line x1="20" y1="0" x2="20" y2="20" stroke="#c56320" strokeWidth="1.5" />
+        <line x1="10" y1="20" x2="10" y2="40" stroke="#c56320" strokeWidth="1.5" />
+        <line x1="30" y1="20" x2="30" y2="40" stroke="#c56320" strokeWidth="1.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
+      <rect x="3" y="3" width="34" height="34" rx="3" fill="rgba(224,123,34,0.08)"
+        stroke="#e07b22" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.55" />
+    </svg>
+  );
+}
+
+// Hole: a dark pit that swallows objects that move onto it.
+function HoleOverlay({ size }: { size: number }) {
+  // Solid fills (no <defs>/gradient) so many holes on one map don't share an SVG id.
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 1 }}>
+      <ellipse cx="20" cy="21" rx="15.5" ry="14.5" fill="#26262f" stroke="#050508" strokeWidth="1" />
+      <ellipse cx="20" cy="21.5" rx="12" ry="11" fill="#0b0b14" />
+      <ellipse cx="20" cy="15.5" rx="8.5" ry="3.3" fill="#000000" opacity="0.6" />
+    </svg>
+  );
+}
+
+// Cracked tile: turns into a hole one turn after something steps on it. Warm/cold tints
+// the cracks; `armed` (about to crumble) reddens and thickens them.
+function CrackOverlay({ size, warm, armed }: { size: number; warm: boolean; armed: boolean }) {
+  const stroke = armed ? '#d8382b' : warm ? '#96552c' : '#59636f';
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 1 }}>
+      <g stroke={stroke} strokeWidth={armed ? 2.1 : 1.5} fill="none" opacity="0.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20,2 L17,12 L23,20 L18,30 L21,38" />
+        <path d="M17,12 L7,15" />
+        <path d="M23,20 L34,17" />
+        <path d="M18,30 L9,34" />
+        <path d="M23,20 L31,31" />
+      </g>
+    </svg>
+  );
+}
+
+// Portal: teal swirl. A map has exactly two; entering one relocates you to the other.
+function PortalOverlay({ size }: { size: number }) {
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 1 }}>
+      <circle cx="20" cy="20" r="14" fill="none" stroke="#22c4d4" strokeWidth="1" opacity="0.35" />
+      <ellipse cx="20" cy="20" rx="12" ry="12" fill="rgba(34,196,212,0.14)" stroke="#22c4d4" strokeWidth="2" />
+      <path d="M20,9 A11,11 0 0 1 31,20" fill="none" stroke="#7fe6f0" strokeWidth="2.2" strokeLinecap="round" opacity="0.9" />
+      <path d="M20,31 A11,11 0 0 1 9,20" fill="none" stroke="#7fe6f0" strokeWidth="2.2" strokeLinecap="round" opacity="0.9" />
+      <circle cx="20" cy="20" r="3.3" fill="#c8f6fc" opacity="0.95" />
     </svg>
   );
 }
