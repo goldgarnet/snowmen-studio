@@ -53,6 +53,14 @@
   background: #d0e8f8;
 }
 
+/* Hole: the cell reads as absent (a void), not a colored tile. Dark fill + dark grid
+   lines so adjacent holes merge into one gap. */
+.grid-cell.hole {
+  background: #07070c !important;
+  border-right-color: rgba(0, 0, 0, 0.55);
+  border-bottom-color: rgba(0, 0, 0, 0.55);
+}
+
 .grid-cell.shaded {
   background: #8a9ab0 !important;
 }

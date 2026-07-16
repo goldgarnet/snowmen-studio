@@ -659,7 +659,8 @@ export default function Editor({ level, setLevel }: EditorProps) {
   const tileRows: EditorTool[][] = [
     ['warm', 'cool'],
     ['edgeArch1', 'edgeArch2'],
-    ['goal'],
+    ['goal', 'hole'],
+    ['crackWarm', 'crackCool'],
   ];
 
   // "오브젝트" section: everything else, arranged exactly as requested.
@@ -671,10 +672,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
     ['snowman1', 'snowman2', 'snowman3'],
     ['triangle', 'yellowWall'],
     ['keyTile', 'yellowButton'],
-    ['laser', 'soulSwap'],
     ['orangeWall', 'orangeButton'],
-    ['portal', 'hole'],
-    ['crackWarm', 'crackCool'],
+    ['laser', 'soulSwap'],
+    ['portal'],
   ];
 
   // Portals must come in pairs (exactly 0 or 2). Count them for an inline warning.

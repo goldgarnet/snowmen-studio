@@ -152,6 +152,7 @@ export default function Grid({
                 tile.isKeyTile ? 'key' : '',
                 tile.isYellowButton ? 'ybutton' : '',
                 tile.isYellowWall ? (yellowSolid ? 'ywall ywall-solid' : 'ywall ywall-open') : '',
+                tile.isHole ? 'hole' : '',
               ].filter(Boolean).join(' ');
 
               return (
@@ -511,12 +512,15 @@ function OrangeWallOverlay({ size, solid }: { size: number; solid: boolean }) {
 
 // Hole: a dark pit that swallows objects that move onto it.
 function HoleOverlay({ size }: { size: number }) {
-  // Solid fills (no <defs>/gradient) so many holes on one map don't share an SVG id.
+  // A hole is a MISSING tile — render the whole cell as a dark void, not a round pit.
+  // Full-bleed dark fill (the cell also gets the `.hole` class for background/borders),
+  // with a slightly lighter rim and darker center to suggest depth. No <defs>/gradient
+  // so many holes on one map don't share an SVG id.
   return (
-    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 1 }}>
-      <ellipse cx="20" cy="21" rx="15.5" ry="14.5" fill="#26262f" stroke="#050508" strokeWidth="1" />
-      <ellipse cx="20" cy="21.5" rx="12" ry="11" fill="#0b0b14" />
-      <ellipse cx="20" cy="15.5" rx="8.5" ry="3.3" fill="#000000" opacity="0.6" />
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40"
+      preserveAspectRatio="none" style={{ zIndex: 1 }}>
+      <rect x="0" y="0" width="40" height="40" fill="#07070c" />
+      <rect x="4" y="4" width="32" height="32" fill="#000000" opacity="0.6" />
     </svg>
   );
 }
