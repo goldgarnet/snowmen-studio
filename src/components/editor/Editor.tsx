@@ -658,9 +658,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
   // clicking cell edges). Laid out in 3 rows.
   const tileRows: EditorTool[][] = [
     ['warm', 'cool'],
+    ['crackWarm', 'crackCool'],
     ['edgeArch1', 'edgeArch2'],
-    ['crackWarm', 'crackCool', 'hole'],
-    ['goal'],
+    ['hole', 'goal'],
   ];
 
   // "오브젝트" section: everything else, arranged exactly as requested.
