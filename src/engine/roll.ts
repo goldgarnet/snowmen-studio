@@ -54,6 +54,29 @@ function resolveRollLeadSpecial(level: Level, group: { pos: Position; obj: GameO
   return false;
 }
 
+// Deflect a single rolling ball off a triangle block EXACTLY like a triangle wall:
+// the ball "passes through" the block's cell (which it can't rest in, being solid) and
+// comes out on the far side in the reflected direction — so the turn happens AT the
+// block's cell, matching a triangle wall of the same corner. Moves the ball to that
+// exit cell and returns the new direction, or null if the roll should stop (the ball
+// hit a solid leg, or the exit cell is blocked / out of bounds).
+function deflectOffTriangleBlock(
+  level: Level, group: { pos: Position; obj: GameObject }[], blockPos: Position, dir: Direction
+): Direction | null {
+  const block = level.objects[blockPos.row][blockPos.col];
+  if (!block || !block.triangleCorner) return null;
+  const nd = TRI_DEFLECT[block.triangleCorner][dir];
+  if (!nd) return null;                                    // solid-leg side → stop
+  if (!canMoveTo(level, blockPos, nd, group[0].obj)) return null; // can't exit toward nd
+  const exitPos = getNextPos(blockPos, nd);
+  if (level.objects[exitPos.row][exitPos.col]) return null; // exit cell occupied → stop
+  const lead = group[0].pos;
+  level.objects[exitPos.row][exitPos.col] = level.objects[lead.row][lead.col];
+  level.objects[lead.row][lead.col] = null;
+  group[0].pos = { row: exitPos.row, col: exitPos.col };
+  return nd;
+}
+
 export function rollSnowball(level: Level, fromPos: Position, dir: Direction, turnCount: number): void {
   const obj = level.objects[fromPos.row][fromPos.col];
   if (!obj || obj.type !== 'snowball') return;
@@ -98,13 +121,16 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
       continue;
     }
 
-    // Triangle block: a single rolling ball deflects off it like a triangle wall of the
-    // same corner (it can't enter the block's cell). Hitting a solid-leg side (no
-    // deflection mapping) just stops, like a normal block.
+    // Triangle block: a single rolling ball reflects off it like a triangle wall at the
+    // block's own cell (see deflectOffTriangleBlock).
     if (obstacle.type === 'block' && obstacle.triangleCorner && rollingGroup.length === 1) {
-      const nd = TRI_DEFLECT[obstacle.triangleCorner][dir];
-      if (nd) { dir = nd; continue; }
-      break;
+      const nd = deflectOffTriangleBlock(level, rollingGroup, nextPos, dir);
+      if (nd === null) break;
+      dir = nd;
+      handleRollFlakeAll(level, rollingGroup);
+      if (killIfOnBeam(level, rollingGroup)) break;
+      if (resolveRollLeadSpecial(level, rollingGroup)) break;
+      continue;
     }
 
     // Collision with obstacle
@@ -192,11 +218,15 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
       continue;
     }
 
-    // Triangle block deflection (single ball only) — see rollSnowball.
+    // Triangle block deflection (single ball only) — see deflectOffTriangleBlock.
     if (obstacle.type === 'block' && obstacle.triangleCorner && group.length === 1) {
-      const nd = TRI_DEFLECT[obstacle.triangleCorner][dir];
-      if (nd) { dir = nd; continue; }
-      break;
+      const nd = deflectOffTriangleBlock(level, group, nextPos, dir);
+      if (nd === null) break;
+      dir = nd;
+      handleRollFlakeAll(level, group);
+      if (killIfOnBeam(level, group)) break;
+      if (resolveRollLeadSpecial(level, group)) break;
+      continue;
     }
 
     const obstacleGroup = getConsecutiveObjects(level, nextPos, dir);

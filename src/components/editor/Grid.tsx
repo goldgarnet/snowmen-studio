@@ -704,20 +704,22 @@ function renderObject(obj: { type: string; size: number; isMelting: boolean; tre
     }
     case 'block': {
       if (obj.triangleCorner) {
-        // Triangle block: a full block with a mirror face. The shaded half marks the
-        // two solid legs; the bright diagonal is the reflecting hypotenuse.
-        const solidHalf: Record<string, string> = {
-          tl: '8,8 32,8 8,32', tr: '32,8 8,8 32,32', bl: '8,32 8,8 32,32', br: '32,32 32,8 8,32',
+        // Triangle block: an actual half-cell triangle (block-colored) sitting in the
+        // corner, with the hypotenuse drawn as the reflecting mirror face. The solid
+        // legs are the two cell edges at the right-angle corner.
+        const tri: Record<string, string> = {
+          tl: '3,3 37,3 3,37', tr: '37,3 3,3 37,37', bl: '3,37 3,3 37,37', br: '37,37 37,3 3,37',
         };
         const mirror: Record<string, [number, number, number, number]> = {
-          tl: [32, 8, 8, 32], br: [32, 8, 8, 32], tr: [8, 8, 32, 32], bl: [8, 8, 32, 32],
+          tl: [37, 3, 3, 37], br: [37, 3, 3, 37], tr: [3, 3, 37, 37], bl: [3, 3, 37, 37],
         };
         const ml = mirror[obj.triangleCorner] ?? mirror.tl;
         return (
-          <svg width={s} height={s} viewBox="0 0 40 40">
-            <rect x="6" y="6" width="28" height="28" fill="#8b6914" stroke="#5a4510" strokeWidth="1.5" rx="2" />
-            <polygon points={solidHalf[obj.triangleCorner] ?? solidHalf.tl} fill="#5a4510" opacity="0.85" />
-            <line x1={ml[0]} y1={ml[1]} x2={ml[2]} y2={ml[3]} stroke="#e8dcc0" strokeWidth="1.8" strokeLinecap="round" />
+          <svg width={cellSize} height={cellSize} viewBox="0 0 40 40">
+            <polygon points={tri[obj.triangleCorner] ?? tri.tl} fill="#8b6914" stroke="#5a4510"
+              strokeWidth="1.5" strokeLinejoin="round" />
+            <line x1={ml[0]} y1={ml[1]} x2={ml[2]} y2={ml[3]} stroke="#e8dcc0" strokeWidth="1.6"
+              strokeLinecap="round" opacity="0.9" />
           </svg>
         );
       }
