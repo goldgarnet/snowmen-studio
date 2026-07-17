@@ -147,6 +147,14 @@ export function canLeaveTile(level: Level, pos: Position, dir: Direction, obj: G
     return false;
   }
 
+  // Yellow/orange walls are partitions: an object can enter the cell only while the
+  // wall is open (button pressed), but once it re-solidifies whatever is inside can no
+  // longer leave — it is trapped. Because this is evaluated per cell-step (during a
+  // roll, canLeaveTile runs each cell), a snowball that rolls over the button and on
+  // into the wall cell gets sealed in the instant it steps off the button.
+  if (tile.isYellowWall && yellowWallsSolid(level)) return false;
+  if (tile.isOrangeWall && orangeWallsSolid(level)) return false;
+
   return true;
 }
 
