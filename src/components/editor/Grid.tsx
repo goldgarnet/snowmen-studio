@@ -459,10 +459,10 @@ function YellowButtonOverlay({ size }: { size: number }) {
 // faint dashed outline of where it will reappear.
 function YellowWallOverlay({ size, solid }: { size: number; solid: boolean }) {
   if (solid) {
-    // zIndex 1 (below objects at z2) so a snowball/player trapped inside the partition
-    // stays visible on top of the wall instead of being hidden behind it.
+    // zIndex 3 (above objects at z2) so an object trapped inside the partition is
+    // hidden behind the wall — it reads as sealed inside, not sitting on top.
     return (
-      <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 1 }}>
+      <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
         <rect x="1" y="1" width="38" height="38" rx="3" fill="#e6b422" stroke="#b5860f" strokeWidth="2" />
         <line x1="0" y1="20" x2="40" y2="20" stroke="#c99320" strokeWidth="1.5" />
         <line x1="20" y1="0" x2="20" y2="20" stroke="#c99320" strokeWidth="1.5" />
@@ -494,9 +494,9 @@ function OrangeButtonOverlay({ size, pressed }: { size: number; pressed: boolean
 // outline of where it will (permanently) stay gone.
 function OrangeWallOverlay({ size, solid }: { size: number; solid: boolean }) {
   if (solid) {
-    // zIndex 1 (below objects) so a trapped object stays visible — see YellowWallOverlay.
+    // zIndex 3 (above objects) so a trapped object is hidden inside — see YellowWallOverlay.
     return (
-      <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 1 }}>
+      <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
         <rect x="1" y="1" width="38" height="38" rx="3" fill="#e07b22" stroke="#a85410" strokeWidth="2" />
         <line x1="0" y1="20" x2="40" y2="20" stroke="#c56320" strokeWidth="1.5" />
         <line x1="20" y1="0" x2="20" y2="20" stroke="#c56320" strokeWidth="1.5" />
