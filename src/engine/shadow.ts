@@ -27,6 +27,12 @@ export function recalcShadows(level: Level): void {
       const obj = level.objects[r][c];
       if (!obj) continue;
 
+      // An object trapped inside a solid wall partition is fully enclosed, so its
+      // shadow can't spill out onto neighboring cells.
+      const objTile = level.tiles[r][c];
+      if (objTile.isYellowWall && ySolid) continue;
+      if (objTile.isOrangeWall && oSolid) continue;
+
       const height = getObjectHeight(obj);
       const shadowLength = Math.floor(height);
 
