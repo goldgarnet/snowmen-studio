@@ -1,11 +1,21 @@
 import { Level } from '../types';
 import { getObjectHeight, getDirectionDelta, getOppositeDirection, isInBounds } from '../utils/level';
+import { yellowWallsSolid, orangeWallsSolid } from './helpers';
 
 export function recalcShadows(level: Level): void {
+  // A solid (active) yellow/orange wall is a partition that fully encloses its cell,
+  // so whatever is trapped inside is permanently in shade. We compute the wall-solid
+  // state once (it's global) and treat those cells as shaded regardless of the sun.
+  const ySolid = yellowWallsSolid(level);
+  const oSolid = orangeWallsSolid(level);
+
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const tile = level.tiles[r][c];
-      tile.isShade = tile.isRowArch || tile.isColumnArch;
+      let shade = tile.isRowArch || tile.isColumnArch;
+      if (tile.isYellowWall && ySolid) shade = true;
+      if (tile.isOrangeWall && oSolid) shade = true;
+      tile.isShade = shade;
     }
   }
 
