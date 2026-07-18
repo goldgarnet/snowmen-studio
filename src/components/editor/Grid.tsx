@@ -592,6 +592,9 @@ function LaserBeamOverlay({ level, cellSize }: { level: Level; cellSize: number 
   const beams: React.ReactElement[] = [];
   const gw = level.width;
   const gh = level.height;
+  // Match the engine: a solid yellow/orange wall blocks the beam like a real wall.
+  const yellowSolid = yellowWallsSolid(level);
+  const orangeSolid = orangeWallsSolid(level);
 
   for (let row = 0; row < gh; row++) {
     for (let col = 0; col < gw; col++) {
@@ -608,6 +611,9 @@ function LaserBeamOverlay({ level, cellSize }: { level: Level; cellSize: number 
       while (cx >= 0 && cy >= 0 && cx < gw && cy < gh) {
         const hit = level.objects[cy]?.[cx];
         if (hit && LASER_BLOCKERS.has(hit.type)) break;
+        // Solid yellow/orange wall stops the beam BEFORE its cell, like a real wall.
+        if (yellowSolid && level.tiles[cy]?.[cx]?.isYellowWall) break;
+        if (orangeSolid && level.tiles[cy]?.[cx]?.isOrangeWall) break;
         endCol = cx; endRow = cy;
         if (level.tiles[cy]?.[cx]?.triangle) break; // triangle stops the beam at this cell
         cx += dx; cy += dy;
