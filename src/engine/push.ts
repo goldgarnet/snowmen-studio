@@ -122,6 +122,15 @@ function resolvePush(
   // A is a wall/tree (size 100)
   if (a.isWall) return { level, playerMoved: false };
 
+  // Indirect force: the player is pushing a BLOCK. A block is a rigid pusher that can
+  // transmit the player's force down a jammed chain and crush a snowball trapped at the
+  // far end against a wall/block. Resolved before the block's own move/no-op cases — it
+  // only fires when the chain is jammed (so it never overrides a legitimate move).
+  if (a.isBlock) {
+    const forced = tryBlockTransmittedForce(level, posA, dir, ps, turnCount);
+    if (forced) return forced;
+  }
+
   // ===== PLAYER SIZE 1 =====
   if (ps === 1) {
     if (!b.exists) {
@@ -387,6 +396,73 @@ function resolvePush(
   }
 
   return { level, playerMoved: false };
+}
+
+// === Indirect (block-transmitted) force ===
+
+/**
+ * The player is pushing a block at posA. A block is a rigid pusher that transmits the
+ * player's force through the contiguous chain of pushable objects in front of it. If
+ * that chain is jammed and ends with a snowball pressed against a HARD object (a wall,
+ * board edge, tree, solid partition, or another block/laser), that snowball crushes —
+ * a size-1 snowball turns to a flake, a size-2 snowball splits — while nothing in the
+ * chain moves (the block stays put, exactly like a snowball the player crushes directly).
+ *
+ * Returns null when there is no such crush (the chain can move, or the trapped object is
+ * only pressed against soft snow), so the caller falls through to the normal push logic.
+ *
+ * Design notes:
+ * - Only BLOCK-started chains reach here. A player pushing a snowball into another
+ *   snowball builds a snowman (higher priority), so a snowball never transmits indirect
+ *   force on its own — which is why the sole tricky case is block-s1-s1-(wall): the far
+ *   snowball (against the wall) flakes and the near one stays, instead of the two merging.
+ * - A snowball crushes only when pressed against a HARD object. Two snowballs pressed
+ *   together (soft) do not crush. This is what leaves the near ball of block-s1-s1 intact.
+ * - The chain "shifts" (and so does NOT crush) only if there is escape space after it AND
+ *   the player is strong enough to push the whole chain (a size-N player pushes ≤ N
+ *   objects). Both jam conditions used here — a hard wall end, or a chain longer than the
+ *   player's strength — are sound: in either case the chain truly cannot move, so this
+ *   never steals a move the normal logic would have made.
+ */
+function tryBlockTransmittedForce(
+  level: Level, posA: Position, dir: Direction, ps: number, turnCount: number
+): PushResult | null {
+  // Walk the contiguous chain of pushable objects starting at the block.
+  const positions: Position[] = [posA];
+  let cur = posA;
+  let wallBacked = false;
+  const limit = level.width + level.height + 1;
+  for (let i = 0; i < limit; i++) {
+    const nextPos = getNextPos(cur, dir);
+    const next = getObjAt(level, nextPos);
+    if (!next.exists) { wallBacked = false; break; }  // empty escape cell ahead
+    if (next.isWall) { wallBacked = true; break; }     // wall / edge / tree / solid partition
+    positions.push(nextPos);                           // block / snowball / snowman → chain member
+    cur = nextPos;
+  }
+
+  const chainLength = positions.length;
+
+  // Can shift (has escape space and fits the player's strength) → not a crush.
+  if (!wallBacked && chainLength <= ps) return null;
+
+  // Jammed: crush the front-most snowball pressed against a hard stationary object.
+  for (let i = chainLength - 1; i >= 1; i--) {
+    const obj = level.objects[positions[i].row][positions[i].col];
+    if (!obj || obj.type !== 'snowball') continue;
+    let successorHard: boolean;
+    if (i === chainLength - 1) {
+      successorHard = wallBacked; // the last object's successor is the wall/edge (or empty)
+    } else {
+      const succ = level.objects[positions[i + 1].row][positions[i + 1].col];
+      successorHard = !!succ && (succ.type === 'block' || succ.type === 'laser');
+    }
+    if (successorHard) {
+      applyForce(level, positions[i], dir, turnCount);
+      return { level, playerMoved: true };
+    }
+  }
+  return null;
 }
 
 // === Action helpers ===
