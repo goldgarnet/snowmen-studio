@@ -33,12 +33,7 @@ export function applyForce(level: Level, pos: Position, dir: Direction, turnCoun
     } else if (!placed1) {
       // One failed: place it at the original pos (if empty)
       if (!level.objects[pos.row][pos.col]) {
-        level.objects[pos.row][pos.col] = {
-          type: 'snowball',
-          size: 1,
-          isMelting: false,
-          createdAt: turnCount,
-        };
+        placeReturnedSnowball(level, pos, turnCount);
       } else {
         // Original pos was taken (e.g. by snowman from placed2) - check if snowman building
         const existing = level.objects[pos.row][pos.col];
@@ -55,12 +50,7 @@ export function applyForce(level: Level, pos: Position, dir: Direction, turnCoun
       }
     } else if (!placed2) {
       if (!level.objects[pos.row][pos.col]) {
-        level.objects[pos.row][pos.col] = {
-          type: 'snowball',
-          size: 1,
-          isMelting: false,
-          createdAt: turnCount,
-        };
+        placeReturnedSnowball(level, pos, turnCount);
       } else {
         const existing = level.objects[pos.row][pos.col];
         if (existing && existing.type === 'snowball') {
@@ -73,6 +63,30 @@ export function applyForce(level: Level, pos: Position, dir: Direction, turnCoun
           level.tiles[pos.row][pos.col].isWarm = false;
         }
       }
+    }
+  }
+}
+
+// Place a size-1 snowball back at its origin cell after a split where the other
+// direction was blocked. If the origin tile holds a snowflake, the returning ball
+// absorbs it and grows to size 2 (the flake is consumed) — the same rule as landing
+// a split ball on any flake tile. This is why splitting a size-2 ball that sits on a
+// flake, with one side walled, yields a size-2 ball at the origin plus a size-1 ball
+// on the open side.
+function placeReturnedSnowball(level: Level, pos: Position, turnCount: number): void {
+  level.objects[pos.row][pos.col] = {
+    type: 'snowball',
+    size: 1,
+    isMelting: false,
+    createdAt: turnCount,
+  };
+  const tile = level.tiles[pos.row][pos.col];
+  if (tile.isFlake) {
+    const sb = level.objects[pos.row][pos.col]!;
+    if (sb.size < 2) {
+      sb.size += 1;
+      tile.isFlake = false;
+      tile.isWarm = false;
     }
   }
 }

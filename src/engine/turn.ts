@@ -407,7 +407,9 @@ function soulTransfer(level: Level, playerPos: { row: number; col: number }): vo
   level.objects[target.row][target.col] = {
     type: 'player',
     size: snowman.size,
-    isMelting: false,
+    // Melting is a property of the body, not the soul: preserve whatever the
+    // target body had so re-entering it doesn't reset its melt progress.
+    isMelting: snowman.isMelting,
     createdAt: 0,
   };
 }
@@ -418,16 +420,19 @@ function doSoulSwap(level: Level, fromPos: Position, targetPos: Position, ts: nu
   const body = level.objects[fromPos.row][fromPos.col];
   const target = level.objects[targetPos.row][targetPos.col];
   if (!body || !target) return;
+  // Melting is a property of the body, not the soul. Carry each body's melt state
+  // across the swap so leaving a body and returning to it (even within one turn via
+  // the M-key soul cycle) keeps its "melting" progress instead of resetting it.
   level.objects[fromPos.row][fromPos.col] = {
     type: 'snowman',
     size: body.size,
-    isMelting: false,
+    isMelting: body.isMelting,
     createdAt: ts,
   };
   level.objects[targetPos.row][targetPos.col] = {
     type: 'player',
     size: target.size,
-    isMelting: false,
+    isMelting: target.isMelting,
     createdAt: 0,
   };
 }
