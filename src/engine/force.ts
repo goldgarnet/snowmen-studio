@@ -2,27 +2,48 @@ import { Level, GameObject, Position, Direction } from '../types';
 import { isInBounds } from '../utils/level';
 import { getNextPos, getPerpendicularDirs, canMoveTo } from './helpers';
 
-export function applyForce(level: Level, pos: Position, dir: Direction, turnCount: number): void {
+/**
+ * Apply a "force" (crush / split) to the snowball at `pos`, pushed in `dir`.
+ *
+ * `direct` distinguishes force the player applies BY DIRECTLY pushing the snowball
+ * (true) from force transmitted INDIRECTLY through a block (false). Building a snowman
+ * is not "applying force" and may only happen from a direct push, so indirect force
+ * never creates a snowman: a size-2 ball with nowhere to split is simply left intact.
+ *
+ * Returns whether anything actually changed (so an indirect no-effect press is a no-op).
+ */
+export function applyForce(
+  level: Level, pos: Position, dir: Direction, turnCount: number, direct = true
+): boolean {
   const obj = level.objects[pos.row][pos.col];
-  if (!obj || obj.type !== 'snowball') return;
+  if (!obj || obj.type !== 'snowball') return false;
 
   if (obj.size === 1) {
     // Crashes: disappears, leaves flake
     level.objects[pos.row][pos.col] = null;
     level.tiles[pos.row][pos.col].isFlake = true;
     level.tiles[pos.row][pos.col].isWarm = false;
-  } else if (obj.size === 2) {
+    return true;
+  }
+
+  if (obj.size === 2) {
     // Splits into two size-1 snowballs perpendicular to force direction
     level.objects[pos.row][pos.col] = null;
     const [dir1, dir2] = getPerpendicularDirs(dir);
     const pos1 = getNextPos(pos, dir1);
     const pos2 = getNextPos(pos, dir2);
 
-    const placed1 = tryPlaceSplitSnowball(level, pos, pos1, dir1, turnCount);
-    const placed2 = tryPlaceSplitSnowball(level, pos, pos2, dir2, turnCount);
+    const placed1 = tryPlaceSplitSnowball(level, pos, pos1, dir1, turnCount, direct);
+    const placed2 = tryPlaceSplitSnowball(level, pos, pos2, dir2, turnCount, direct);
 
     if (!placed1 && !placed2) {
-      // Both failed: two snowballs at original pos -> size 1 snowman
+      if (!direct) {
+        // Indirect force never builds a snowman. With nowhere to split, the ball is
+        // left intact — the block simply couldn't do anything to it.
+        level.objects[pos.row][pos.col] = obj;
+        return false;
+      }
+      // Direct push, both sides blocked: the two halves compact into a size-1 snowman.
       level.objects[pos.row][pos.col] = {
         type: 'snowman',
         size: 1,
@@ -30,15 +51,14 @@ export function applyForce(level: Level, pos: Position, dir: Direction, turnCoun
         createdAt: turnCount,
       };
       level.tiles[pos.row][pos.col].isWarm = false;
+      return true;
     } else if (!placed1) {
-      // One failed: place it at the original pos (if empty)
+      // One side failed: the returning half lands back at the original cell (if empty).
       if (!level.objects[pos.row][pos.col]) {
         placeReturnedSnowball(level, pos, turnCount);
       } else {
-        // Original pos was taken (e.g. by snowman from placed2) - check if snowman building
         const existing = level.objects[pos.row][pos.col];
-        if (existing && existing.type === 'snowball') {
-          // Two snowballs at same pos -> snowman
+        if (direct && existing && existing.type === 'snowball') {
           level.objects[pos.row][pos.col] = {
             type: 'snowman',
             size: 1,
@@ -48,12 +68,13 @@ export function applyForce(level: Level, pos: Position, dir: Direction, turnCoun
           level.tiles[pos.row][pos.col].isWarm = false;
         }
       }
+      return true;
     } else if (!placed2) {
       if (!level.objects[pos.row][pos.col]) {
         placeReturnedSnowball(level, pos, turnCount);
       } else {
         const existing = level.objects[pos.row][pos.col];
-        if (existing && existing.type === 'snowball') {
+        if (direct && existing && existing.type === 'snowball') {
           level.objects[pos.row][pos.col] = {
             type: 'snowman',
             size: 1,
@@ -63,8 +84,12 @@ export function applyForce(level: Level, pos: Position, dir: Direction, turnCoun
           level.tiles[pos.row][pos.col].isWarm = false;
         }
       }
+      return true;
     }
+    return true; // both halves placed
   }
+
+  return false;
 }
 
 // Place a size-1 snowball back at its origin cell after a split where the other
@@ -92,7 +117,8 @@ function placeReturnedSnowball(level: Level, pos: Position, turnCount: number): 
 }
 
 function tryPlaceSplitSnowball(
-  level: Level, originPos: Position, targetPos: Position, dir: Direction, turnCount: number
+  level: Level, originPos: Position, targetPos: Position, dir: Direction, turnCount: number,
+  direct: boolean
 ): boolean {
   // Out of bounds = wall
   if (!isInBounds(level, targetPos)) return false;
@@ -124,8 +150,10 @@ function tryPlaceSplitSnowball(
     return true;
   }
 
-  // Target has a snowball: build snowman
+  // Target has a snowball: build snowman — but only on a direct push. Indirect
+  // (block-transmitted) force never builds a snowman, so treat this side as blocked.
   if (targetObj.type === 'snowball') {
+    if (!direct) return false;
     const snowmanSize = targetObj.size === 2 ? 2 : 1;
     level.objects[targetPos.row][targetPos.col] = {
       type: 'snowman',

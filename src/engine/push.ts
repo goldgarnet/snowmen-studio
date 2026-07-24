@@ -458,8 +458,10 @@ function tryBlockTransmittedForce(
       successorHard = !!succ && (succ.type === 'block' || succ.type === 'laser');
     }
     if (successorHard) {
-      applyForce(level, positions[i], dir, turnCount);
-      return { level, playerMoved: true };
+      // Indirect force (direct=false): crush/split only, never build a snowman. If it
+      // has no effect (a size-2 ball with nowhere to split), treat the push as a no-op.
+      const changed = applyForce(level, positions[i], dir, turnCount, false);
+      return changed ? { level, playerMoved: true } : null;
     }
   }
   return null;
