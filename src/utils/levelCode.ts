@@ -49,6 +49,20 @@ function readBits(bits: number[], offset: number, count: number): number {
   return val;
 }
 
+// A map dimension (width/height) is stored as a 5-bit field. Historically the field
+// held `dimension - 2`, so it could only represent 2..33 — a size of 1 underflowed and
+// decoded back as 33. The editor never allowed sizes above 30, so the top field values
+// (31/32/33) were never used by any real map; we reclaim the pattern for 33 (raw 31) to
+// mean a dimension of 1. This keeps every existing code byte-identical (their dims are
+// 2..30 → raw 0..28) while letting new maps be as thin as 1 cell.
+const DIM_ONE_RAW = 31;
+function encodeDim(dimension: number): number {
+  return dimension === 1 ? DIM_ONE_RAW : dimension - 2;
+}
+function decodeDim(raw: number): number {
+  return raw === DIM_ONE_RAW ? 1 : raw + 2;
+}
+
 function encodeTileV4(bits: number[], tile: Tile): void {
   pushBits(bits, tile.isWarm ? 1 : 0, 1);
   pushBits(bits, tile.isFlake ? 1 : 0, 1);
@@ -129,8 +143,8 @@ export function encodeLevelCode(level: Level): string {
   // v4 marker
   pushBits(bits, V4_MARKER, 3);
 
-  pushBits(bits, level.width - 2, 5);
-  pushBits(bits, level.height - 2, 5);
+  pushBits(bits, encodeDim(level.width), 5);
+  pushBits(bits, encodeDim(level.height), 5);
   pushBits(bits, SUN_DIRS.indexOf(level.sunDirection), 2);
   pushBits(bits, level.hasShadow ? 1 : 0, 1);
   pushBits(bits, level.soulSwapEnabled ? 1 : 0, 1);
@@ -251,12 +265,12 @@ export function decodeLevelCode(code: string): Level | null {
     const edge2bit = isV3 || isV4;
     if (isV2OrLater) pos += 3;
 
-    const width = readBits(bits, pos, 5) + 2; pos += 5;
-    const height = readBits(bits, pos, 5) + 2; pos += 5;
+    const width = decodeDim(readBits(bits, pos, 5)); pos += 5;
+    const height = decodeDim(readBits(bits, pos, 5)); pos += 5;
     const sunIdx = readBits(bits, pos, 2); pos += 2;
     const sunDirection = SUN_DIRS[sunIdx] ?? 'left';
 
-    if (width < 2 || width > 33 || height < 2 || height > 33) return null;
+    if (width < 1 || width > 33 || height < 1 || height > 33) return null;
 
     let hasShadow = true;
     if (isV2OrLater) {
