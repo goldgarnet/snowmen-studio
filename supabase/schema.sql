@@ -163,6 +163,44 @@ $$;
 revoke all on function public.set_map_review(uuid, text, numeric) from public;
 grant execute on function public.set_map_review(uuid, text, numeric) to authenticated;
 
+-- ---------- 맵 폴더(map_folders) ----------
+-- 여러 맵을 하나로 묶는 "폴더". 제작 탭에서 이름만으로 만들고, 그 안에 맵을 새로
+-- 만들거나 폴더 밖 내 맵을 옮겨 넣는다. 허브에 올리면 폴더 카드 하나로 보이고,
+-- 폴더를 열면 안의 맵들이 각각 (단일 맵과 동일하게) 개별 리뷰/난이도/댓글/풀이를 가진다.
+-- 리뷰는 맵별이므로 폴더 자체에는 status/difficulty 가 없고, 표시용 메타만 담는다.
+create table if not exists public.map_folders (
+  id           uuid primary key default gen_random_uuid(),
+  owner_id     uuid not null references public.profiles(id) on delete cascade,
+  name         text not null default '',
+  author_name  text,                       -- 제작자(허브 공개 시 필수)
+  comment      text,                        -- 폴더 설명(스포일러 || || 가능)
+  published    boolean not null default false,
+  published_at timestamptz,                 -- 허브 공개 시각(정렬 기준)
+  created_at   timestamptz not null default now(),  -- 등록일(편집 가능)
+  updated_at   timestamptz not null default now()
+);
+create index if not exists map_folders_owner_idx     on public.map_folders(owner_id);
+create index if not exists map_folders_published_idx on public.map_folders(published);
+
+-- 맵이 속한 폴더(없으면 단독 맵). 폴더 삭제 시 맵은 남고 단독으로 돌아간다.
+alter table public.maps add column if not exists folder_id uuid references public.map_folders(id) on delete set null;
+create index if not exists maps_folder_idx on public.maps(folder_id);
+
+alter table public.map_folders enable row level security;
+-- 공개 폴더는 전원 조회, 초안은 소유자만. 생성/수정/삭제는 소유자만.
+drop policy if exists map_folders_select on public.map_folders;
+create policy map_folders_select on public.map_folders
+  for select to authenticated using (published = true or owner_id = auth.uid());
+drop policy if exists map_folders_insert on public.map_folders;
+create policy map_folders_insert on public.map_folders
+  for insert to authenticated with check (owner_id = auth.uid());
+drop policy if exists map_folders_update on public.map_folders;
+create policy map_folders_update on public.map_folders
+  for update to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+drop policy if exists map_folders_delete on public.map_folders;
+create policy map_folders_delete on public.map_folders
+  for delete to authenticated using (owner_id = auth.uid());
+
 -- ---------- 마이그레이션 (이미 운영 중인 DB에 새 컬럼 추가) ----------
 -- 이 파일 전체를 다시 실행하면 아래 ALTER 들이 idempotent 하게 적용됩니다.
 alter table public.maps     add column if not exists author_difficulty numeric(2,1);

@@ -15,6 +15,7 @@ export function isoToDateStr(iso: string): string {
 
 export interface NewMap {
   owner_id: string;
+  folder_id?: string | null;
   title?: string | null;
   author_name?: string | null;
   code: string;
@@ -42,8 +43,10 @@ export async function listMyMaps(ownerId: string): Promise<MapRow[]> {
   return (data ?? []) as MapRow[];
 }
 
-// All hub (published) maps. Sorted by 생성 날짜(created_at, 등록일) first, and for
-// ties by 공개 날짜(published_at, most recent first).
+// All hub (published) maps, standalone and folder members alike. The hub splits them
+// client-side (standalone → main grid; members → grouped under their folder card) so
+// this query stays independent of the folder_id column existing yet (pre-migration
+// safety). Sorted by 생성 날짜(created_at, 등록일), ties by 공개 날짜(published_at).
 export async function listPublishedMaps(): Promise<MapRow[]> {
   const { data, error } = await supabase
     .from('maps')
@@ -51,6 +54,18 @@ export async function listPublishedMaps(): Promise<MapRow[]> {
     .eq('published', true)
     .order('created_at', { ascending: false })
     .order('published_at', { ascending: false, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as MapRow[];
+}
+
+// Published maps that belong to a given folder (shown inside the folder card).
+export async function listMapsInFolder(folderId: string): Promise<MapRow[]> {
+  const { data, error } = await supabase
+    .from('maps')
+    .select('*')
+    .eq('folder_id', folderId)
+    .eq('published', true)
+    .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as MapRow[];
 }

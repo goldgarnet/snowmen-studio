@@ -82,3 +82,23 @@
   min-height: 0;
   overflow: auto;
 }
+
+/* ===================== folders ===================== */
+.studio-list-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.studio-folder-head-left { display: flex; align-items: center; gap: 14px; }
+
+/* A folder tile in the studio grid — tinted to read as a container, not a map. */
+.studio-folder-card { border-color: #e5d5a8; }
+.studio-folder-card:hover { border-color: #d9c383; }
+
+/* "폴더로 옮길 맵" picker */
+.studio-move-list {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 52vh; overflow-y: auto; margin: 12px 0 4px;
+}
+.studio-move-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+}
+.studio-move-thumb { width: 64px; height: 48px; border-radius: 6px; overflow: hidden; flex: 0 0 auto; background: #eef4fa; }
+.studio-move-title { flex: 1; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

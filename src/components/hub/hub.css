@@ -101,6 +101,30 @@
 .map-card-title { font-weight: 700; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-card-metarow { display: flex; justify-content: space-between; align-items: center; margin-top: 9px; font-size: 12px; color: var(--text-faint); }
 
+/* ===================== folder card ===================== */
+.folder-card { border-color: #e5d5a8; }
+.folder-card:hover { border-color: #d9c383; }
+.folder-card-thumb { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: #eef4fa; }
+.folder-card-badge {
+  position: absolute; top: 10px; left: 10px; z-index: 2;
+  background: rgba(20, 40, 70, 0.72); color: #fff; border: none;
+  box-shadow: 0 1px 4px rgba(20, 40, 70, 0.18);
+}
+.folder-card-empty {
+  display: flex; align-items: center; justify-content: center; height: 100%;
+  color: var(--text-faint); font-size: 13px;
+  background: repeating-linear-gradient(45deg, #eef4fa, #eef4fa 10px, #e7eef7 10px, #e7eef7 20px);
+}
+
+/* ===================== folder detail ===================== */
+.folder-detail { max-width: 1120px; margin: 0 auto; padding: 4px 2px 40px; }
+.folder-detail-head { margin: 18px 2px 22px; }
+.folder-detail-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px;
+  font-size: 13px; color: var(--text-faint);
+}
+.folder-detail-meta b { color: var(--text); }
+
 /* ===================== detail ===================== */
 .map-detail { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .detail-topbar {

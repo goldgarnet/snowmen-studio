@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { listPublishedMaps, insertMap, fetchAllForBackup, registeredToISO } from '../../api/maps';
-import type { MapRow, MapStatus } from '../../api/types';
+import { listPublishedFolders } from '../../api/folders';
+import type { MapRow, MapStatus, FolderRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import MapCard from './MapCard';
 import MapDetail from './MapDetail';
+import FolderCard from './FolderCard';
+import FolderDetail from './FolderDetail';
 import UploadForm, { UploadPayload } from './UploadForm';
 import PlayView from '../editor/PlayView';
 import Pagination from '../common/Pagination';
@@ -47,12 +50,14 @@ function buildBackupText(maps: MapRow[]): string {
 
 export default function MapHub() {
   const { profile } = useAuth();
-  const [maps, setMaps] = useState<MapRow[]>([]);
+  const [maps, setMaps] = useState<MapRow[]>([]); // all published maps (standalone + members)
+  const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const [selected, setSelected] = useState<MapRow | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<FolderRow | null>(null);
   const [playMap, setPlayMap] = useState<MapRow | null>(null);
   const [page, setPage] = useState(1);
 
@@ -60,35 +65,61 @@ export default function MapHub() {
     setLoading(true);
     try { setMaps(await listPublishedMaps()); }
     catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    // Folder table may not exist yet (pre-migration); degrade gracefully to empty.
+    try { setFolders(await listPublishedFolders()); } catch (e) { console.error(e); setFolders([]); }
+    setLoading(false);
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const visible = useMemo(() => {
+  // Split the published maps: standalone go in the main grid; folder members are
+  // grouped under their folder card (for its cover thumbnail + count).
+  const standaloneMaps = useMemo(() => maps.filter((m) => !m.folder_id), [maps]);
+  const mapsByFolder = useMemo(() => {
+    const grouped = new Map<string, MapRow[]>();
+    for (const mp of maps) {
+      if (!mp.folder_id) continue;
+      const arr = grouped.get(mp.folder_id);
+      if (arr) arr.push(mp); else grouped.set(mp.folder_id, [mp]);
+    }
+    return grouped;
+  }, [maps]);
+
+  // Unified list of hub entries — standalone maps + folder cards — newest first.
+  // Folders have no single review status, so they show only under the '전체' filter.
+  const entries = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return maps.filter((m) => {
-      if (filter !== 'all' && m.status !== filter) return false;
-      if (q) {
-        const hay = `${m.title ?? ''} ${m.author_name ?? ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+    type Entry =
+      | { kind: 'map'; map: MapRow; date: string }
+      | { kind: 'folder'; folder: FolderRow; date: string };
+    const list: Entry[] = [];
+    for (const m of standaloneMaps) {
+      if (filter !== 'all' && m.status !== filter) continue;
+      if (q && !`${m.title ?? ''} ${m.author_name ?? ''}`.toLowerCase().includes(q)) continue;
+      list.push({ kind: 'map', map: m, date: m.created_at });
+    }
+    if (filter === 'all') {
+      for (const f of folders) {
+        if (q && !`${f.name ?? ''} ${f.author_name ?? ''}`.toLowerCase().includes(q)) continue;
+        list.push({ kind: 'folder', folder: f, date: f.created_at });
       }
-      return true;
-    });
-  }, [maps, filter, query]);
+    }
+    list.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return list;
+  }, [standaloneMaps, folders, filter, query]);
 
   const stats = useMemo(() => ({
-    total: maps.length,
-    adopted: maps.filter((m) => m.status === 'accepted').length,
-    review: maps.filter((m) => m.status === 'pending').length,
-  }), [maps]);
+    total: standaloneMaps.length,
+    adopted: standaloneMaps.filter((m) => m.status === 'accepted').length,
+    review: standaloneMaps.filter((m) => m.status === 'pending').length,
+  }), [standaloneMaps]);
 
   // Pagination over the filtered list. Reset to page 1 whenever the filter/search
   // changes; clamp if the visible count shrinks below the current page.
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
   useEffect(() => { setPage(1); }, [filter, query]);
   useEffect(() => { setPage((p) => Math.min(p, pageCount)); }, [pageCount]);
-  const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paged = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const doUpload = async (p: UploadPayload) => {
     if (!profile) return;
@@ -147,6 +178,8 @@ export default function MapHub() {
     );
   }
 
+  // Map detail sits on top of everything (including a folder view): backing out just
+  // clears the map, returning to the folder it was opened from (if any) or the hub.
   if (selected) {
     return (
       <MapDetail
@@ -154,6 +187,17 @@ export default function MapHub() {
         onBack={() => setSelected(null)}
         onPlay={(m) => setPlayMap(m)}
         onChanged={onDetailChanged}
+      />
+    );
+  }
+
+  if (selectedFolder) {
+    return (
+      <FolderDetail
+        folder={selectedFolder}
+        onBack={() => setSelectedFolder(null)}
+        onOpenMap={setSelected}
+        onChanged={refresh}
       />
     );
   }
@@ -201,14 +245,16 @@ export default function MapHub() {
 
       {loading ? (
         <div className="hub-empty">불러오는 중…</div>
-      ) : visible.length === 0 ? (
+      ) : entries.length === 0 ? (
         <div className="hub-empty">
-          {maps.length === 0 ? '아직 업로드된 맵이 없습니다. 첫 맵을 올려보세요!' : '조건에 맞는 맵이 없습니다.'}
+          {standaloneMaps.length === 0 && folders.length === 0 ? '아직 업로드된 맵이 없습니다. 첫 맵을 올려보세요!' : '조건에 맞는 맵이 없습니다.'}
         </div>
       ) : (
         <>
           <div className="hub-grid">
-            {paged.map((m) => <MapCard key={m.id} map={m} onOpen={setSelected} />)}
+            {paged.map((e) => e.kind === 'folder'
+              ? <FolderCard key={`f-${e.folder.id}`} folder={e.folder} maps={mapsByFolder.get(e.folder.id) ?? []} onOpen={setSelectedFolder} />
+              : <MapCard key={`m-${e.map.id}`} map={e.map} onOpen={setSelected} />)}
           </div>
           <Pagination page={page} pageCount={pageCount} onChange={setPage} />
         </>

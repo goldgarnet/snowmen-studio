@@ -9,9 +9,22 @@ export interface Profile {
   created_at: string;
 }
 
+export interface FolderRow {
+  id: string;
+  owner_id: string;
+  name: string;
+  author_name: string | null;
+  comment: string | null;
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MapRow {
   id: string;
   owner_id: string;
+  folder_id: string | null;           // 속한 맵 폴더 (null = 단독 맵)
   title: string | null;
   author_name: string | null;
   code: string;
