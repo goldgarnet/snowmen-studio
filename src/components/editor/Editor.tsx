@@ -297,17 +297,28 @@ export default function Editor({ level, setLevel }: EditorProps) {
   useEffect(() => { setWidthInput(level.width.toString()); }, [level.width]);
   useEffect(() => { setHeightInput(level.height.toString()); }, [level.height]);
 
+  // A map must be at least 2×2 — the map-code format cannot represent a width/height
+  // below 2 (it stores dimension-2 in 5 bits, so 1 would underflow to a corrupt value).
+  // Keep the raw text in local state so the field can be cleared/partially typed, but
+  // only actually resize on a valid dimension, and snap the field back on blur.
+  const DIM_MIN = 2, DIM_MAX = 30;
   const handleWidthChange = (raw: string) => {
     setWidthInput(raw);
-    if (raw === '') { resizeMap(0, level.height); return; }
     const n = parseInt(raw, 10);
-    if (!isNaN(n)) resizeMap(n, level.height);
+    if (!isNaN(n) && n >= DIM_MIN && n <= DIM_MAX) resizeMap(n, level.height);
   };
   const handleHeightChange = (raw: string) => {
     setHeightInput(raw);
-    if (raw === '') { resizeMap(level.width, 0); return; }
     const n = parseInt(raw, 10);
-    if (!isNaN(n)) resizeMap(level.width, n);
+    if (!isNaN(n) && n >= DIM_MIN && n <= DIM_MAX) resizeMap(level.width, n);
+  };
+  const handleWidthBlur = () => {
+    const n = parseInt(widthInput, 10);
+    if (isNaN(n) || n < DIM_MIN || n > DIM_MAX) setWidthInput(level.width.toString());
+  };
+  const handleHeightBlur = () => {
+    const n = parseInt(heightInput, 10);
+    if (isNaN(n) || n < DIM_MIN || n > DIM_MAX) setHeightInput(level.height.toString());
   };
 
   const handleCellClick = (row: number, col: number) => {
@@ -531,8 +542,10 @@ export default function Editor({ level, setLevel }: EditorProps) {
   };
 
   const resizeMap = (newWidth: number, newHeight: number) => {
-    const w = Math.max(0, Math.min(30, newWidth));
-    const h = Math.max(0, Math.min(30, newHeight));
+    // Clamp to the valid map range: min 2 (the code format can't store a smaller
+    // dimension — 1 would underflow and decode back as 33), max 30.
+    const w = Math.max(2, Math.min(30, newWidth));
+    const h = Math.max(2, Math.min(30, newHeight));
     pushUndo();
     const newLevel: Level = {
       width: w,
@@ -721,13 +734,15 @@ export default function Editor({ level, setLevel }: EditorProps) {
           <div className="size-controls">
             <label>
               가로:
-              <input type="number" min={0} max={30} value={widthInput}
-                onChange={(e) => handleWidthChange(e.target.value)} />
+              <input type="number" min={2} max={30} value={widthInput}
+                onChange={(e) => handleWidthChange(e.target.value)}
+                onBlur={handleWidthBlur} />
             </label>
             <label>
               세로:
-              <input type="number" min={0} max={30} value={heightInput}
-                onChange={(e) => handleHeightChange(e.target.value)} />
+              <input type="number" min={2} max={30} value={heightInput}
+                onChange={(e) => handleHeightChange(e.target.value)}
+                onBlur={handleHeightBlur} />
             </label>
           </div>
           <button className={`shadow-toggle ${level.hasShadow ? 'on' : 'off'}`}
