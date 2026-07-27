@@ -14,6 +14,7 @@ import Editor from '../editor/Editor';
 import PlayView from '../editor/PlayView';
 import UploadForm, { UploadPayload } from '../hub/UploadForm';
 import FolderForm, { FolderFormPayload } from '../hub/FolderForm';
+import FolderGlyph from '../hub/FolderGlyph';
 import MapThumbnail from '../hub/MapThumbnail';
 import SolutionRecorder from '../hub/SolutionRecorder';
 import { insertSolution, deleteSolutionsForMap } from '../../api/solutions';
@@ -568,9 +569,7 @@ export default function MapStudio() {
           {pagedEntries.map((e) => e.kind === 'folder' ? (
             <div className="studio-card studio-folder-card" key={`f-${e.folder.id}`} onClick={() => { setCurrentFolderId(e.folder.id); setView('folder'); }}>
               <div className="studio-card-thumb folder-card-thumb">
-                {maps.find((m) => m.folder_id === e.folder.id)
-                  ? <MapThumbnail code={maps.find((m) => m.folder_id === e.folder.id)!.code} />
-                  : <div className="folder-card-empty">빈 폴더</div>}
+                <FolderGlyph />
                 <span className="badge folder-card-badge">📁 {maps.filter((m) => m.folder_id === e.folder.id).length}</span>
                 {e.folder.published && <span className="badge badge-accepted studio-card-badge">허브 공개</span>}
               </div>

@@ -90,21 +90,25 @@ export default function MapHub() {
   const entries = useMemo(() => {
     const q = query.trim().toLowerCase();
     type Entry =
-      | { kind: 'map'; map: MapRow; date: string }
-      | { kind: 'folder'; folder: FolderRow; date: string };
+      | { kind: 'map'; map: MapRow; date: string; pub: string }
+      | { kind: 'folder'; folder: FolderRow; date: string; pub: string };
     const list: Entry[] = [];
     for (const m of standaloneMaps) {
       if (filter !== 'all' && m.status !== filter) continue;
       if (q && !`${m.title ?? ''} ${m.author_name ?? ''}`.toLowerCase().includes(q)) continue;
-      list.push({ kind: 'map', map: m, date: m.created_at });
+      list.push({ kind: 'map', map: m, date: m.created_at, pub: m.published_at ?? '' });
     }
     if (filter === 'all') {
       for (const f of folders) {
         if (q && !`${f.name ?? ''} ${f.author_name ?? ''}`.toLowerCase().includes(q)) continue;
-        list.push({ kind: 'folder', folder: f, date: f.created_at });
+        list.push({ kind: 'folder', folder: f, date: f.created_at, pub: f.published_at ?? '' });
       }
     }
-    list.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    // Newest 등록일(created_at) first; ties broken by 공개 시각(published_at, minute/second
+    // precision) — the same order the SQL uses for maps, now applied across the merged
+    // map+folder list so folders slot in at the right spot.
+    list.sort((a, b) =>
+      a.date < b.date ? 1 : a.date > b.date ? -1 : a.pub < b.pub ? 1 : a.pub > b.pub ? -1 : 0);
     return list;
   }, [standaloneMaps, folders, filter, query]);
 

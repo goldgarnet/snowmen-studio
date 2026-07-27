@@ -51,7 +51,10 @@
 .studio-card-body { padding: 13px 14px 15px; }
 .studio-card-title { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-card-meta { font-size: 12px; color: var(--text-faint); margin: 6px 0 12px; }
-.studio-card-actions { display: flex; gap: 8px; }
+.studio-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Keep each action label on one line; the row wraps to a second line if needed
+   (e.g. 이어서 만들기 · 폴더에서 빼기 · 삭제 inside a folder). */
+.studio-card-actions .btn { white-space: nowrap; }
 
 .btn-sm { height: 30px; padding: 0 11px; font-size: 12px; }
 
