@@ -186,6 +186,11 @@ create index if not exists map_folders_published_idx on public.map_folders(publi
 alter table public.maps add column if not exists folder_id uuid references public.map_folders(id) on delete set null;
 create index if not exists maps_folder_idx on public.maps(folder_id);
 
+-- 폴더 안에서의 순서(제작 탭에서 드래그로 변경). null = 아직 순서를 지정한 적 없음
+-- → 등록일(created_at) 순으로 뒤에 붙는다.
+alter table public.maps add column if not exists sort_order integer;
+create index if not exists maps_folder_order_idx on public.maps(folder_id, sort_order);
+
 alter table public.map_folders enable row level security;
 -- 공개 폴더는 전원 조회, 초안은 소유자만. 생성/수정/삭제는 소유자만.
 drop policy if exists map_folders_select on public.map_folders;

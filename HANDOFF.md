@@ -55,6 +55,7 @@ npm run build                      # tsc -b && vite build — 무오류여야 �
 - `profiles`, `maps`, `comments`, **`solutions`**(풀이) 테이블 + RLS + RPC `set_map_review`.
 - `maps.author_difficulty`(출제자 난이도), `maps.difficulty`(회의 결정 난이도, null=미결정), `maps.published_at`(허브 공개 시각), `maps.solution`(구 출제자 풀이 — solutions 테이블로 1회 이관 후 사실상 미사용).
 - `comments.suggested_difficulty`(피드백 난이도 제안).
+- **`map_folders`**(맵 폴더) 테이블 + RLS, `maps.folder_id`(속한 폴더), **`maps.sort_order`**(폴더 안 순서 — 제작 탭에서 카드 드래그로 변경, null=미지정이라 등록일 순으로 맨 뒤).
 - 각종 1회성 백필(난이도 이관, published_at 백필, solution 이관) — 모두 재실행 안전하게 가드됨.
 
 ---

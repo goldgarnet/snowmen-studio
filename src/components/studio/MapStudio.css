@@ -94,6 +94,37 @@
 .studio-folder-card { border-color: #e5d5a8; }
 .studio-folder-card:hover { border-color: #d9c383; }
 
+/* ---- 폴더 안 맵 순서 바꾸기 (드래그 앤 드롭) ---- */
+.studio-card-draggable { cursor: grab; }
+.studio-card-draggable:active { cursor: grabbing; }
+/* The tile being dragged fades out; its ghost follows the cursor. */
+.studio-card-draggable.is-dragging { opacity: 0.4; transform: none; }
+/* The tile the drag is hovering over — the slot the dragged map will land in. */
+.studio-card-draggable.is-drop-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 16px 34px -16px rgba(40, 70, 110, 0.55);
+  transform: translateY(-3px);
+}
+/* Grip badge in the thumbnail corner — a hint that the card can be dragged. */
+.studio-drag-handle {
+  position: absolute;
+  top: 8px; left: 8px;
+  z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 7px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 13px; line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.studio-card-draggable:hover .studio-drag-handle,
+.studio-card-draggable.is-dragging .studio-drag-handle { opacity: 1; }
+.studio-reordering { color: var(--status-held); font-weight: 700; }
+
 /* "폴더로 옮길 맵" picker */
 .studio-move-list {
   display: flex; flex-direction: column; gap: 8px;

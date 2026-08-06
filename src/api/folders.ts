@@ -70,12 +70,15 @@ export async function deleteFolder(id: string): Promise<void> {
 // Move a map into a folder (folderId) or back out (null). A map's published state is
 // kept in lockstep with its folder: joining a published folder publishes it, joining a
 // draft folder (or leaving a folder) turns it back into a private draft.
+// `sortOrder` places the map inside the new folder (pass the current member count to
+// append it); leaving a folder clears the order so it can't jump the queue later.
 export async function moveMapToFolder(
-  mapId: string, folderId: string | null, published: boolean
+  mapId: string, folderId: string | null, published: boolean, sortOrder: number | null = null
 ): Promise<void> {
   const patch: Record<string, unknown> = {
     folder_id: folderId,
     published,
+    sort_order: folderId ? sortOrder : null,
     updated_at: new Date().toISOString(),
   };
   if (published) patch.published_at = new Date().toISOString();

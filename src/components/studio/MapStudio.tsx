@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type DragEvent } from 'react';
 import type { Level } from '../../types';
 import { createLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
 import { useAuth } from '../../context/AuthContext';
 import { useGuard, StudioApi } from '../../context/GuardContext';
-import { listMyMaps, insertMap, updateMap, deleteMap, registeredToISO, isoToDateStr } from '../../api/maps';
+import {
+  listMyMaps, insertMap, updateMap, deleteMap, registeredToISO, isoToDateStr,
+  compareMapOrder, reorderMapsInFolder,
+} from '../../api/maps';
 import {
   listMyFolders, insertFolder, updateFolder, deleteFolder, moveMapToFolder, publishFolder,
 } from '../../api/folders';
@@ -67,9 +70,15 @@ export default function MapStudio() {
   const [showMovePicker, setShowMovePicker] = useState(false);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderRow | null>(null);
 
+  // ---- folder map ordering (drag & drop) ----
+  const [dragMapId, setDragMapId] = useState<string | null>(null);   // tile being dragged
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null); // tile hovered over
+  const [reordering, setReordering] = useState(false);
+
   const currentFolder = folders.find((f) => f.id === currentFolderId) ?? null;
   const rootMaps = maps.filter((m) => !m.folder_id);              // maps outside any folder
-  const folderMaps = maps.filter((m) => m.folder_id === currentFolderId);
+  // Inside a folder the maps follow the owner's manual order (same order the hub shows).
+  const folderMaps = maps.filter((m) => m.folder_id === currentFolderId).sort(compareMapOrder);
 
   // The list page mixes folders and root maps (folders first), newest first within each.
   const listEntries: ({ kind: 'folder'; folder: FolderRow } | { kind: 'map'; map: MapRow })[] = [
@@ -189,7 +198,14 @@ export default function MapStudio() {
   const addMapToFolder = async (mapId: string) => {
     if (!currentFolderId) return;
     setBusyId(mapId);
-    try { await moveMapToFolder(mapId, currentFolderId, currentFolder?.published ?? false); refresh(); }
+    // Append after the maps already in the folder, then renumber the whole folder so a
+    // never-reordered folder (all sort_order null) doesn't push the newcomer to the front.
+    const ordered = [...folderMaps.map((m) => m.id), mapId];
+    try {
+      await moveMapToFolder(mapId, currentFolderId, currentFolder?.published ?? false, ordered.length - 1);
+      await reorderMapsInFolder(ordered);
+      refresh();
+    }
     catch (e) { alert('맵 이동 실패: ' + (e as Error).message); }
     finally { setBusyId(null); }
   };
@@ -199,6 +215,52 @@ export default function MapStudio() {
     try { await moveMapToFolder(mapId, null, false); refresh(); }
     catch (e) { alert('맵 이동 실패: ' + (e as Error).message); }
     finally { setBusyId(null); }
+  };
+
+  // ---- reordering maps inside a folder by dragging one tile onto another ----
+  const clearDrag = () => { setDragMapId(null); setDropTargetId(null); };
+
+  // Move `draggedId` to the slot `targetId` currently occupies, then renumber the
+  // whole folder. The new order is applied to local state first so the grid follows
+  // the drop immediately; a failed save falls back to the server order.
+  const moveMapBefore = async (draggedId: string, targetId: string) => {
+    const ids = folderMaps.map((m) => m.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0 || from === to) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+
+    const rank = new Map(ids.map((id, i) => [id, i]));
+    setMaps((prev) => prev.map((m) => (rank.has(m.id) ? { ...m, sort_order: rank.get(m.id)! } : m)));
+    setReordering(true);
+    try {
+      await reorderMapsInFolder(ids);
+      showFlash('순서를 저장했습니다');
+    } catch (e) {
+      alert('순서 저장 실패: ' + (e as Error).message
+        + '\n(supabase/schema.sql 의 sort_order 마이그레이션이 아직 적용되지 않았을 수 있어요)');
+      refresh();
+    } finally { setReordering(false); }
+  };
+
+  const onTileDragStart = (e: DragEvent, mapId: string) => {
+    setDragMapId(mapId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', mapId); // Firefox needs payload to start a drag
+  };
+
+  const onTileDragOver = (e: DragEvent, mapId: string) => {
+    if (!dragMapId) return;
+    e.preventDefault();                 // allow the drop
+    e.dataTransfer.dropEffect = 'move';
+    if (mapId !== dropTargetId) setDropTargetId(mapId);
+  };
+
+  const onTileDrop = (e: DragEvent, mapId: string) => {
+    e.preventDefault();
+    const dragged = dragMapId;
+    clearDrag();
+    if (dragged && dragged !== mapId) void moveMapBefore(dragged, mapId);
   };
 
   const leaveEditor = () => guard.attempt(() => {
@@ -298,10 +360,28 @@ export default function MapStudio() {
 
   // A saved-map tile, shared by the flat list and the folder view. In a folder the
   // per-card action is "폴더에서 빼기"; in the root list it's the "다시 공개" shortcut.
-  const renderMapTile = (m: MapRow, context: 'list' | 'folder') => (
-    <div className="studio-card" key={m.id} onClick={() => openExisting(m)}>
+  const renderMapTile = (m: MapRow, context: 'list' | 'folder') => {
+    const dnd = context === 'folder';
+    const cls = [
+      'studio-card',
+      dnd ? 'studio-card-draggable' : '',
+      dnd && dragMapId === m.id ? 'is-dragging' : '',
+      dnd && dropTargetId === m.id && dragMapId !== m.id ? 'is-drop-target' : '',
+    ].filter(Boolean).join(' ');
+    return (
+    <div
+      className={cls}
+      key={m.id}
+      onClick={() => openExisting(m)}
+      draggable={dnd}
+      onDragStart={dnd ? (e) => onTileDragStart(e, m.id) : undefined}
+      onDragOver={dnd ? (e) => onTileDragOver(e, m.id) : undefined}
+      onDrop={dnd ? (e) => onTileDrop(e, m.id) : undefined}
+      onDragEnd={dnd ? clearDrag : undefined}
+    >
       <div className="studio-card-thumb">
         <MapThumbnail code={m.code} />
+        {dnd && <span className="studio-drag-handle" title="드래그해서 순서 바꾸기">⠿</span>}
         {m.published
           ? <span className={`badge badge-${m.status} studio-card-badge`}>{STATUS_LABEL[m.status]}</span>
           : m.published_at
@@ -313,7 +393,9 @@ export default function MapStudio() {
         <div className="studio-card-meta">
           {m.published ? '허브 공개' : m.published_at ? '비공개' : '제작중'} · {formatDate(m.updated_at)}
         </div>
-        <div className="studio-card-actions" onClick={(e) => e.stopPropagation()}>
+        {/* Buttons sit inside a draggable card — drag must start from the card, not
+            from a button, or a click-and-hold on 삭제 would begin a reorder. */}
+        <div className="studio-card-actions" draggable={false} onDragStart={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           <button className="btn btn-sm" onClick={() => openExisting(m)}>이어서 만들기</button>
           {context === 'list' && !m.published && m.published_at && (
             <button className="btn btn-sm btn-primary" onClick={() => republish(m)} disabled={busyId === m.id}>다시 공개</button>
@@ -325,7 +407,8 @@ export default function MapStudio() {
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const newFolderModal = showNewFolder && (
     <div className="modal-backdrop" onClick={() => setShowNewFolder(false)}>
@@ -447,6 +530,8 @@ export default function MapStudio() {
               <h2>📁 {currentFolder.name || '이름 없는 폴더'}</h2>
               <p className="studio-sub">
                 {currentFolder.published ? '허브에 공개된 폴더' : '제작 중인 폴더'} · 맵 {folderMaps.length}개
+                {folderMaps.length > 1 && ' · 카드를 드래그해 순서를 바꿀 수 있어요'}
+                {reordering && <span className="studio-reordering"> 순서 저장 중…</span>}
               </p>
             </div>
           </div>

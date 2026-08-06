@@ -58,16 +58,36 @@ export async function listPublishedMaps(): Promise<MapRow[]> {
   return (data ?? []) as MapRow[];
 }
 
+// Order of maps inside a folder: the manual order set by dragging in the studio,
+// then (for maps never dragged) the 등록일 순. Sorting client-side keeps the query
+// working even before the sort_order column migration is applied.
+export function compareMapOrder(a: MapRow, b: MapRow): number {
+  const ao = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+  const bo = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+  if (ao !== bo) return ao - bo;
+  return a.created_at.localeCompare(b.created_at);   // ISO timestamps compare lexically
+}
+
 // Published maps that belong to a given folder (shown inside the folder card).
 export async function listMapsInFolder(folderId: string): Promise<MapRow[]> {
   const { data, error } = await supabase
     .from('maps')
     .select('*')
     .eq('folder_id', folderId)
-    .eq('published', true)
-    .order('created_at', { ascending: true });
+    .eq('published', true);
   if (error) throw new Error(error.message);
-  return (data ?? []) as MapRow[];
+  return ((data ?? []) as MapRow[]).sort(compareMapOrder);
+}
+
+// Persist a folder's map order: sort_order becomes the index in `orderedIds`, so the
+// list is renumbered 0..n-1 on every drop (no gaps, no nulls left behind).
+// updated_at is deliberately left untouched — reordering isn't an edit of the map.
+export async function reorderMapsInFolder(orderedIds: string[]): Promise<void> {
+  const results = await Promise.all(
+    orderedIds.map((id, i) => supabase.from('maps').update({ sort_order: i }).eq('id', id)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
 }
 
 // Take a published map back to a private draft (owner-only). Keeps its metadata so

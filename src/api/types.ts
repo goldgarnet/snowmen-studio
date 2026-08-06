@@ -25,6 +25,7 @@ export interface MapRow {
   id: string;
   owner_id: string;
   folder_id: string | null;           // 속한 맵 폴더 (null = 단독 맵)
+  sort_order: number | null;          // 폴더 안에서의 순서 (null = 미지정 → 등록일 순으로 맨 뒤)
   title: string | null;
   author_name: string | null;
   code: string;
