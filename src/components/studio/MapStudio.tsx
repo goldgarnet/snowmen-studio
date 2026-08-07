@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type DragEvent } from 'react'
 import type { Level } from '../../types';
 import { createLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
+import GameLevelExport from '../common/GameLevelExport';
 import { useAuth } from '../../context/AuthContext';
 import { useGuard, StudioApi } from '../../context/GuardContext';
 import {
@@ -274,6 +275,9 @@ export default function MapStudio() {
     showFlash('맵 코드 복사됨');
   };
 
+  // 게임에 넣을 레벨 JSON 을 보여주는 모달 (복사만 하면 뭐가 들어갔는지 확인이 안 된다)
+  const [showExport, setShowExport] = useState(false);
+
   const testPlay = () => { setPlayCode(encodeLevelCode(level)); setView('play'); };
 
   const doPublish = async (p: UploadPayload) => {
@@ -473,6 +477,10 @@ export default function MapStudio() {
           {isDirty && <span className="studio-dirty">● 저장 안 됨</span>}
           <div className="studio-toolbar-spacer" />
           {flash && <span className="studio-flash">{flash}</span>}
+          <button className="btn" onClick={() => setShowExport(true)}
+            title="snowmen-adventure 의 levels/L<번호>.json 에 그대로 붙여넣을 JSON 을 보여줍니다">
+            📋 게임에 넣기
+          </button>
           <button className="btn" onClick={copyCode}>맵 코드 복사</button>
           <button className="btn" onClick={testPlay}>▶ 시뮬레이터</button>
           {published && editId && (
@@ -513,6 +521,14 @@ export default function MapStudio() {
             }}
             onSubmit={doPublish}
             onCancel={() => setShowPublish(false)}
+          />
+        )}
+
+        {showExport && (
+          <GameLevelExport
+            code={encodeLevelCode(level)}
+            title={editTitle}
+            onClose={() => setShowExport(false)}
           />
         )}
       </div>

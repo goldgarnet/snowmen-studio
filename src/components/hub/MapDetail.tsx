@@ -14,6 +14,7 @@ import ConfirmModal from '../common/ConfirmModal';
 import SolutionRecorder from './SolutionRecorder';
 import SolutionPlayer from './SolutionPlayer';
 import SolutionList from './SolutionList';
+import GameLevelExport from '../common/GameLevelExport';
 
 interface MapDetailProps {
   map: MapRow;
@@ -42,6 +43,8 @@ export default function MapDetail({ map: initial, onBack, onChanged }: MapDetail
   const [solutionMode, setSolutionMode] = useState<'record' | 'play' | 'view' | null>(null);
   const [viewSolution, setViewSolution] = useState<SolutionRow | null>(null);
   const [solToken, setSolToken] = useState(0); // bump to reload the solution list
+  // 게임(snowmen-adventure)에 넣을 레벨 JSON 을 보여주는 모달
+  const [showExport, setShowExport] = useState(false);
 
   const isOwner = profile?.id === map.owner_id;
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1500); };
@@ -174,6 +177,15 @@ export default function MapDetail({ map: initial, onBack, onChanged }: MapDetail
             >▶ 바로 플레이</button>
             <div className="detail-play-hint">클리어하면 이 플레이를 풀이로 등록할 수 있어요.</div>
 
+            {/* 게임(snowmen-adventure)에 넣기. raw 맵 코드는 파일에 그대로 못 넣으므로
+                붙여넣으면 바로 도는 JSON 을 **보여주고** 복사시킨다. */}
+            <div className="detail-export-btns">
+              <button className="btn btn-primary" onClick={() => setShowExport(true)}>
+                📋 게임에 넣기 (레벨 JSON)
+              </button>
+              <button className="btn" onClick={copyCode}>맵 코드만 복사</button>
+            </div>
+
             <SolutionList
               mapId={map.id}
               mapOwnerId={map.owner_id}
@@ -276,6 +288,14 @@ export default function MapDetail({ map: initial, onBack, onChanged }: MapDetail
           busy={busy}
           onConfirm={doUnpublish}
           onCancel={() => setConfirmUnpublish(false)}
+        />
+      )}
+
+      {showExport && (
+        <GameLevelExport
+          code={map.code}
+          title={map.title || ''}
+          onClose={() => setShowExport(false)}
         />
       )}
 
