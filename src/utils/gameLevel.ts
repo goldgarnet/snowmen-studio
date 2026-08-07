@@ -6,6 +6,11 @@
 // (game/rules/level_io.gd) 가 studio 의 levelCode.ts 와 **같은 비트 레이아웃**이라
 // 코드 문자열 하나로 맵 전체가 재현된다.
 //
+// ⚠ 레벨 번호는 **제목에서 추측하지 않는다.** 챕터 순서가 아직 안 정해졌고 제목에
+//   번호를 붙이는 규칙도 없다. 사용자가 모달에서 직접 지정한다.
+//   (제목을 파싱하던 버전이 있었는데, "눈사람 만들기 - 12" 를 L2 로 읽는 등
+//    조용히 틀리는 데다 애초에 근거 없는 추측이라 걷어냈다.)
+//
 // 관련: snowmen-adventure/levels/README.md
 
 export interface GameLevelJson {
@@ -14,26 +19,8 @@ export interface GameLevelJson {
   code: string;
 }
 
-/**
- * 맵 제목에서 레벨 번호를 추측한다.
- * 팀이 실제로 "2. 눈꽃과 크기 변화" 처럼 앞에 번호를 붙여 쓰고 있어서,
- * 그 번호를 그대로 레벨 번호로 쓰고 제목에서는 떼어낸다.
- *   "2. 눈꽃과 크기 변화" → { num: 2, name: "눈꽃과 크기 변화" }
- *   "튜토리얼"            → { num: null, name: "튜토리얼" }
- */
-export function splitLeadingNumber(title: string): { num: number | null; name: string } {
-  const t = (title ?? '').trim();
-  const m = t.match(/^(\d{1,3})\s*[.)\-:]\s*(.*)$/);
-  if (m) {
-    const num = parseInt(m[1], 10);
-    const rest = m[2].trim();
-    if (num > 0 && rest.length > 0) return { num, name: rest };
-  }
-  return { num: null, name: t || '이름 없음' };
-}
-
 export function buildGameLevel(code: string, levelNumber: number, name: string): GameLevelJson {
-  return { id: `L${levelNumber}`, name, code };
+  return { id: `L${levelNumber}`, name: (name ?? '').trim() || '이름 없음', code };
 }
 
 /** 파일에 그대로 쓸 수 있는 텍스트 (끝에 개행 포함 — 에디터가 붙이는 것과 맞춘다) */
