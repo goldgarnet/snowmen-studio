@@ -11,6 +11,7 @@ import {
 import MapThumbnail from '../hub/MapThumbnail';
 import StarRating from '../hub/StarRating';
 import ConfirmModal from '../common/ConfirmModal';
+import PlayView from '../editor/PlayView';
 import './chapters.css';
 
 // 스테이지 번호는 저장되지 않고 위치에서 파생된다: "챕터번호-순번" (예: 2-1).
@@ -190,6 +191,7 @@ export default function ChapterComposer() {
   const [deleteChapterTarget, setDeleteChapterTarget] = useState<ChapterRow | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [deleteStageTarget, setDeleteStageTarget] = useState<StageRow | null>(null);
+  const [playStage, setPlayStage] = useState<{ code: string; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   // 로컬 편집 드래프트 (blur 시 저장): stage id → 필드별 텍스트
@@ -325,6 +327,18 @@ export default function ChapterComposer() {
   const setDraft = (id: string, field: 'description' | 'requires' | 'unlocks', value: string) =>
     setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
 
+  // ---- 플레이 서브모드: 스테이지의 맵을 클릭하면 곧바로 플레이 화면으로 ----
+  if (playStage) {
+    return (
+      <PlayView
+        code={playStage.code}
+        title={playStage.title}
+        backLabel="챕터 구성으로"
+        onClose={() => setPlayStage(null)}
+      />
+    );
+  }
+
   return (
     <div className="chapters">
       <div className="chapters-head">
@@ -387,12 +401,27 @@ export default function ChapterComposer() {
                   {stages.map((s, i) => (
                     <div className="stage-row" key={s.id}>
                       <div className="stage-no">{stageNo(selected, i)}</div>
-                      <div className="stage-thumb">
+                      <div
+                        className={`stage-thumb${s.map ? ' stage-thumb-playable' : ''}`}
+                        title={s.map ? '클릭하면 바로 플레이' : undefined}
+                        onClick={() => s.map && setPlayStage({
+                          code: s.map.code,
+                          title: `${stageNo(selected, i)} · ${s.map.title || '제목 없음'}`,
+                        })}
+                      >
                         {s.map ? <MapThumbnail code={s.map.code} /> : <div className="stage-thumb-missing">맵 없음</div>}
+                        {s.map && <span className="stage-thumb-play">▶</span>}
                       </div>
                       <div className="stage-fields">
                         <div className="stage-map-line">
-                          <span className="stage-map-title">{s.map?.title || '제목 없음'}</span>
+                          <span
+                            className={`stage-map-title${s.map ? ' stage-map-title-playable' : ''}`}
+                            title={s.map ? '클릭하면 바로 플레이' : undefined}
+                            onClick={() => s.map && setPlayStage({
+                              code: s.map.code,
+                              title: `${stageNo(selected, i)} · ${s.map.title || '제목 없음'}`,
+                            })}
+                          >{s.map?.title || '제목 없음'}</span>
                           {s.map && <span className={`badge badge-${s.map.status}`}>{STATUS_LABEL[s.map.status]}</span>}
                           {s.map?.folder_id && (
                             <span className="badge badge-draft">📁 {folderNames.get(s.map.folder_id) ?? '폴더'}</span>
