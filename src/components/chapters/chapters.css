@@ -75,8 +75,12 @@
 
 /* 맵 클릭 → 바로 플레이 */
 .stage-thumb-playable { position: relative; cursor: pointer; }
+/* The board renders tiles/objects/overlays at z-index up to 7. Trap that whole
+   stack inside the thumbnail's own stacking context (position + z-index: 0) so the
+   play overlay above it can't be pierced by a wall/block. */
+.stage-thumb-playable .map-thumb { position: relative; z-index: 0; }
 .stage-thumb-play {
-  position: absolute; inset: 0;
+  position: absolute; inset: 0; z-index: 1;
   display: flex; align-items: center; justify-content: center;
   font-size: 22px; color: #fff;
   background: rgba(20, 40, 70, 0.38);

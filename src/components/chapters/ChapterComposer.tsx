@@ -344,7 +344,10 @@ export default function ChapterComposer() {
       <div className="chapters-head">
         <div>
           <h1 className="hub-title">챕터 구성</h1>
-          <p className="hub-sub">게임에 들어갈 챕터와 스테이지를 배치해요. 스테이지 번호는 순서에 따라 자동으로 매겨집니다.</p>
+          <p className="hub-sub">
+            게임에 들어갈 챕터와 스테이지를 배치해요. 스테이지 번호는 순서에 따라 자동으로 매겨집니다.
+            <br />스테이지의 맵 이미지나 제목을 클릭하면 바로 플레이할 수 있어요.
+          </p>
         </div>
         {flash && <span className="detail-flash">{flash}</span>}
       </div>
