@@ -73,6 +73,82 @@ function ChapterFormModal({ title, initial, submitLabel, onSubmit, onCancel }: C
   );
 }
 
+// ---------- 스테이지 수정 모달 ----------
+// 카드에서 바로 고치지 않고 이 모달에서 한 번에 저장한다 (목록은 읽기 전용으로 깔끔하게).
+
+interface StageEditPayload {
+  description: string | null;
+  requires: string | null;
+  unlocks: string | null;
+  note: string | null;
+}
+
+interface StageEditProps {
+  stage: StageRow;
+  stageNumber: string;
+  onSubmit: (p: StageEditPayload) => Promise<void>;
+  onCancel: () => void;
+}
+
+function StageEditModal({ stage, stageNumber, onSubmit, onCancel }: StageEditProps) {
+  const [description, setDescription] = useState(stage.description ?? '');
+  const [requires, setRequires] = useState(stage.requires ?? '');
+  const [unlocks, setUnlocks] = useState(stage.unlocks ?? '');
+  const [note, setNote] = useState(stage.note ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await onSubmit({
+        description: description.trim() || null,
+        requires: requires.trim() || null,
+        unlocks: unlocks.trim() || null,
+        note: note.trim() || null,
+      });
+    } catch (e) { setError((e as Error).message); setBusy(false); }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <h3 className="modal-title">스테이지 {stageNumber} 수정</h3>
+        <div className="stage-edit-map">{stage.map?.title || '제목 없음'}</div>
+
+        <label className="field-label" style={{ marginTop: 12 }}>스테이지 설명</label>
+        <textarea className="field-textarea" rows={2} value={description} autoFocus
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="(선택) 이 스테이지의 목표나 의도" disabled={busy} />
+
+        <div className="upload-grid" style={{ marginTop: 12 }}>
+          <div>
+            <label className="field-label">선행 스테이지</label>
+            <input className="field-input" value={requires} onChange={(e) => setRequires(e.target.value)}
+              placeholder="예: 1-3, 2-1" disabled={busy} />
+          </div>
+          <div>
+            <label className="field-label">해금 스테이지</label>
+            <input className="field-input" value={unlocks} onChange={(e) => setUnlocks(e.target.value)}
+              placeholder="예: 2-3, 3-1" disabled={busy} />
+          </div>
+        </div>
+
+        <label className="field-label" style={{ marginTop: 12 }}>비고</label>
+        <textarea className="field-textarea" rows={2} value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="(선택) 배치 관련 메모, 확인할 점 등" disabled={busy} />
+
+        {error && <div className="login-error" style={{ marginTop: 12 }}>{error}</div>}
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onCancel} disabled={busy}>취소</button>
+          <button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? '저장 중…' : '저장'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- 스테이지 추가(맵 선택) 모달 ----------
 
 type PickerSort = 'accepted' | 'latest';
@@ -192,10 +268,8 @@ export default function ChapterComposer() {
   const [showPicker, setShowPicker] = useState(false);
   const [deleteStageTarget, setDeleteStageTarget] = useState<StageRow | null>(null);
   const [playStage, setPlayStage] = useState<{ code: string; title: string } | null>(null);
+  const [editingStage, setEditingStage] = useState<{ stage: StageRow; no: string } | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // 로컬 편집 드래프트 (blur 시 저장): stage id → 필드별 텍스트
-  const [drafts, setDrafts] = useState<Record<string, { description: string; requires: string; unlocks: string }>>({});
 
   const selected = chapters.find((c) => c.id === selectedId) ?? null;
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1600); };
@@ -214,14 +288,8 @@ export default function ChapterComposer() {
 
   const loadStages = useCallback(async (chapterId: string) => {
     setStagesLoading(true);
-    try {
-      const rows = await listStages(chapterId);
-      setStages(rows);
-      // 드래프트를 서버 값으로 초기화
-      const d: typeof drafts = {};
-      for (const s of rows) d[s.id] = { description: s.description ?? '', requires: s.requires ?? '', unlocks: s.unlocks ?? '' };
-      setDrafts(d);
-    } catch (e) { console.error(e); }
+    try { setStages(await listStages(chapterId)); }
+    catch (e) { console.error(e); }
     finally { setStagesLoading(false); }
   }, []);
 
@@ -311,21 +379,15 @@ export default function ChapterComposer() {
     catch (e) { alert('순서 변경 실패: ' + (e as Error).message); loadStages(selectedId); }
   };
 
-  // blur 시 변경된 필드만 저장.
-  const saveDraft = async (s: StageRow, field: 'description' | 'requires' | 'unlocks') => {
-    const draft = drafts[s.id];
-    if (!draft) return;
-    const value = draft[field].trim() || null;
-    if (value === (s[field] ?? null)) return;
-    try {
-      await updateStage(s.id, { [field]: value });
-      setStages((prev) => prev.map((x) => (x.id === s.id ? { ...x, [field]: value } : x)));
-      showFlash('저장됨');
-    } catch (e) { alert('저장 실패: ' + (e as Error).message); }
+  // 스테이지 세부 정보는 "수정" 모달에서 한 번에 저장한다 (즉시 반영 편집 아님).
+  const saveStageEdit = async (p: StageEditPayload) => {
+    if (!editingStage) return;
+    const { stage } = editingStage;
+    const updated = await updateStage(stage.id, p);
+    setStages((prev) => prev.map((x) => (x.id === stage.id ? { ...updated, map: x.map } : x)));
+    setEditingStage(null);
+    showFlash('스테이지를 수정했습니다');
   };
-
-  const setDraft = (id: string, field: 'description' | 'requires' | 'unlocks', value: string) =>
-    setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
 
   // ---- 플레이 서브모드: 스테이지의 맵을 클릭하면 곧바로 플레이 화면으로 ----
   if (playStage) {
@@ -429,32 +491,31 @@ export default function ChapterComposer() {
                           {s.map?.folder_id && (
                             <span className="badge badge-draft">📁 {folderNames.get(s.map.folder_id) ?? '폴더'}</span>
                           )}
+                          {s.map && (s.map.difficulty ?? s.map.author_difficulty) != null && (
+                            <span className="stage-map-diff" title={s.map.difficulty != null ? '회의 결정 난이도' : '출제자 난이도'}>
+                              <StarRating value={s.map.difficulty ?? s.map.author_difficulty} size={13} />
+                              <span className="difficulty-num">{(s.map.difficulty ?? s.map.author_difficulty)!.toFixed(1)}</span>
+                            </span>
+                          )}
                           <span className="stage-map-author">@{s.map?.author_name || '익명'}</span>
                         </div>
-                        <input className="field-input stage-input" value={drafts[s.id]?.description ?? ''}
-                          onChange={(e) => setDraft(s.id, 'description', e.target.value)}
-                          onBlur={() => saveDraft(s, 'description')}
-                          placeholder="스테이지 설명 (선택)" />
-                        <div className="stage-links">
-                          <label>
-                            <span className="stage-links-label">선행 스테이지</span>
-                            <input className="field-input stage-input" value={drafts[s.id]?.requires ?? ''}
-                              onChange={(e) => setDraft(s.id, 'requires', e.target.value)}
-                              onBlur={() => saveDraft(s, 'requires')}
-                              placeholder="예: 1-3, 2-1" />
-                          </label>
-                          <label>
-                            <span className="stage-links-label">해금 스테이지</span>
-                            <input className="field-input stage-input" value={drafts[s.id]?.unlocks ?? ''}
-                              onChange={(e) => setDraft(s.id, 'unlocks', e.target.value)}
-                              onBlur={() => saveDraft(s, 'unlocks')}
-                              placeholder="예: 2-3, 3-1" />
-                          </label>
-                        </div>
+
+                        {s.description && <div className="stage-desc">{s.description}</div>}
+
+                        {(s.requires || s.unlocks || s.note) && (
+                          <dl className="stage-meta">
+                            {s.requires && (<><dt>선행</dt><dd>{s.requires}</dd></>)}
+                            {s.unlocks && (<><dt>해금</dt><dd>{s.unlocks}</dd></>)}
+                            {s.note && (<><dt>비고</dt><dd>{s.note}</dd></>)}
+                          </dl>
+                        )}
                       </div>
                       <div className="stage-actions">
-                        <button className="btn btn-sm" onClick={() => moveStage(i, -1)} disabled={i === 0} title="위로">↑</button>
-                        <button className="btn btn-sm" onClick={() => moveStage(i, 1)} disabled={i === stages.length - 1} title="아래로">↓</button>
+                        <div className="stage-move">
+                          <button className="btn btn-sm" onClick={() => moveStage(i, -1)} disabled={i === 0} title="위로">↑</button>
+                          <button className="btn btn-sm" onClick={() => moveStage(i, 1)} disabled={i === stages.length - 1} title="아래로">↓</button>
+                        </div>
+                        <button className="btn btn-sm" onClick={() => setEditingStage({ stage: s, no: stageNo(selected, i) })}>수정</button>
                         <button className="btn btn-sm btn-danger" onClick={() => setDeleteStageTarget(s)}>제거</button>
                       </div>
                     </div>
@@ -484,6 +545,15 @@ export default function ChapterComposer() {
           message={<>'챕터 {deleteChapterTarget.number} · {deleteChapterTarget.name}' 을(를) 삭제할까요? 안의 <b>스테이지 배치도 함께 삭제</b>됩니다 (맵 자체는 허브에 그대로 남습니다).</>}
           confirmLabel="삭제" danger busy={busy}
           onConfirm={doDeleteChapter} onCancel={() => setDeleteChapterTarget(null)} />
+      )}
+
+      {editingStage && (
+        <StageEditModal
+          stage={editingStage.stage}
+          stageNumber={editingStage.no}
+          onSubmit={saveStageEdit}
+          onCancel={() => setEditingStage(null)}
+        />
       )}
 
       {deleteStageTarget && (

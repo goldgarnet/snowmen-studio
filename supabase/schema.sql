@@ -228,9 +228,11 @@ create table if not exists public.stages (
   description text,
   requires    text,   -- 이 맵에 접근하기 위해 풀었어야 하는 스테이지 번호들 (예: "1-3, 2-1")
   unlocks     text,   -- 이 맵을 풀면 해금되는 스테이지 번호들
+  note        text,   -- 비고 (자유 메모)
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+alter table public.stages add column if not exists note text;
 create index if not exists stages_chapter_idx on public.stages(chapter_id);
 create index if not exists stages_map_idx     on public.stages(map_id);
 

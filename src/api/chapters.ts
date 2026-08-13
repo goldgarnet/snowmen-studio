@@ -20,6 +20,7 @@ export interface StageRow {
   description: string | null;
   requires: string | null;   // 접근에 필요한 선행 스테이지 번호들 (예: "1-3, 2-1")
   unlocks: string | null;    // 클리어 시 해금되는 스테이지 번호들
+  note: string | null;       // 비고 (자유 메모)
   created_at: string;
   updated_at: string;
   map?: MapRow | null;       // joined map row (list query)
@@ -87,7 +88,7 @@ export async function listAllStages(): Promise<StageRow[]> {
 
 export async function insertStage(payload: {
   chapter_id: string; map_id: string; sort_order: number;
-  description?: string | null; requires?: string | null; unlocks?: string | null;
+  description?: string | null; requires?: string | null; unlocks?: string | null; note?: string | null;
 }): Promise<StageRow> {
   const { data, error } = await supabase
     .from('stages')
@@ -100,7 +101,7 @@ export async function insertStage(payload: {
 
 export async function updateStage(
   id: string,
-  patch: Partial<Pick<StageRow, 'description' | 'requires' | 'unlocks' | 'sort_order' | 'chapter_id'>>,
+  patch: Partial<Pick<StageRow, 'description' | 'requires' | 'unlocks' | 'note' | 'sort_order' | 'chapter_id'>>,
 ): Promise<StageRow> {
   const { data, error } = await supabase
     .from('stages')
