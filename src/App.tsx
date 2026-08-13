@@ -5,6 +5,7 @@ import LoginScreen from './components/auth/LoginScreen';
 import TopNav, { Tab } from './components/layout/TopNav';
 import MapStudio from './components/studio/MapStudio';
 import MapHub from './components/hub/MapHub';
+import ChapterComposer from './components/chapters/ChapterComposer';
 import './App.css';
 
 export default function App() {
@@ -33,7 +34,7 @@ export default function App() {
       <div className="app">
         <TopNav tab={tab} setTab={guardedSetTab} userName={profile.name} onLogout={() => attempt(signOut)} />
         <main className="app-main">
-          {tab === 'studio' ? <MapStudio /> : <MapHub />}
+          {tab === 'studio' ? <MapStudio /> : tab === 'chapters' ? <ChapterComposer /> : <MapHub />}
         </main>
       </div>
 

@@ -206,6 +206,56 @@ drop policy if exists map_folders_delete on public.map_folders;
 create policy map_folders_delete on public.map_folders
   for delete to authenticated using (owner_id = auth.uid());
 
+-- ---------- 챕터 구성(chapters / stages) ----------
+-- 실제 게임에 들어갈 챕터·스테이지 배치. 게임 구조는 팀의 공동 작업물이므로
+-- (회의 리뷰와 동일하게) 로그인한 팀원 전원이 추가/수정/삭제할 수 있다.
+create table if not exists public.chapters (
+  id          uuid primary key default gen_random_uuid(),
+  number      integer not null default 1,   -- 챕터 번호 (스테이지 번호 "2-1"의 앞부분)
+  name        text not null default '',
+  description text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+-- 스테이지 = 챕터 안에 배치된 허브 맵 하나. 번호는 저장하지 않는다 —
+-- 챕터 안 순서(sort_order)로부터 "챕터번호-순번"(예: 2-1)이 자동으로 매겨진다.
+create table if not exists public.stages (
+  id          uuid primary key default gen_random_uuid(),
+  chapter_id  uuid not null references public.chapters(id) on delete cascade,
+  map_id      uuid not null references public.maps(id) on delete cascade,
+  sort_order  integer not null default 0,
+  description text,
+  requires    text,   -- 이 맵에 접근하기 위해 풀었어야 하는 스테이지 번호들 (예: "1-3, 2-1")
+  unlocks     text,   -- 이 맵을 풀면 해금되는 스테이지 번호들
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists stages_chapter_idx on public.stages(chapter_id);
+create index if not exists stages_map_idx     on public.stages(map_id);
+
+alter table public.chapters enable row level security;
+alter table public.stages   enable row level security;
+
+-- 챕터/스테이지: 팀원(로그인 사용자) 전원이 조회·추가·수정·삭제 가능.
+drop policy if exists chapters_select on public.chapters;
+create policy chapters_select on public.chapters for select to authenticated using (true);
+drop policy if exists chapters_insert on public.chapters;
+create policy chapters_insert on public.chapters for insert to authenticated with check (true);
+drop policy if exists chapters_update on public.chapters;
+create policy chapters_update on public.chapters for update to authenticated using (true) with check (true);
+drop policy if exists chapters_delete on public.chapters;
+create policy chapters_delete on public.chapters for delete to authenticated using (true);
+
+drop policy if exists stages_select on public.stages;
+create policy stages_select on public.stages for select to authenticated using (true);
+drop policy if exists stages_insert on public.stages;
+create policy stages_insert on public.stages for insert to authenticated with check (true);
+drop policy if exists stages_update on public.stages;
+create policy stages_update on public.stages for update to authenticated using (true) with check (true);
+drop policy if exists stages_delete on public.stages;
+create policy stages_delete on public.stages for delete to authenticated using (true);
+
 -- ---------- 마이그레이션 (이미 운영 중인 DB에 새 컬럼 추가) ----------
 -- 이 파일 전체를 다시 실행하면 아래 ALTER 들이 idempotent 하게 적용됩니다.
 alter table public.maps     add column if not exists author_difficulty numeric(2,1);

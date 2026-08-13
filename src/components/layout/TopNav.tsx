@@ -1,7 +1,7 @@
 import { useTheme } from '../../context/ThemeContext';
 import './TopNav.css';
 
-export type Tab = 'studio' | 'hub';
+export type Tab = 'studio' | 'hub' | 'chapters';
 
 interface TopNavProps {
   tab: Tab;
@@ -22,6 +22,7 @@ export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps)
       <nav className="topnav-tabs">
         <button className={tab === 'hub' ? 'active' : ''} onClick={() => setTab('hub')}>맵 허브</button>
         <button className={tab === 'studio' ? 'active' : ''} onClick={() => setTab('studio')}>맵 제작</button>
+        <button className={tab === 'chapters' ? 'active' : ''} onClick={() => setTab('chapters')}>챕터 구성</button>
       </nav>
 
       <div className="topnav-user">

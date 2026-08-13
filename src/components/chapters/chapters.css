@@ -1,0 +1,113 @@
+/* ===================== 챕터 구성 ===================== */
+.chapters { max-width: 1180px; margin: 0 auto; padding: 4px 2px 40px; }
+
+.chapters-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; margin-bottom: 20px;
+}
+
+.chapters-body {
+  display: grid; grid-template-columns: 250px 1fr; gap: 20px;
+  align-items: start;
+}
+@media (max-width: 860px) { .chapters-body { grid-template-columns: 1fr; } }
+
+/* ---- 왼쪽: 챕터 목록 ---- */
+.chapters-side {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; padding: 12px; position: sticky; top: 76px;
+}
+.chapters-new { width: 100%; margin-bottom: 10px; }
+.chapters-side-empty { color: var(--text-faint); font-size: 13px; text-align: center; padding: 18px 4px; }
+.chapters-list { display: flex; flex-direction: column; gap: 6px; }
+.chapters-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 10px; border-radius: 10px; border: 1px solid transparent;
+  background: transparent; color: var(--text); cursor: pointer; text-align: left;
+}
+.chapters-item:hover { background: var(--accent-soft); }
+.chapters-item.active { background: var(--accent-soft); border-color: var(--line); }
+.chapters-item-num { font-size: 12px; font-weight: 700; color: var(--text-dim); flex: 0 0 auto; }
+.chapters-item-name {
+  flex: 1; font-size: 14px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chapters-item-count {
+  flex: 0 0 auto; font-size: 11.5px; color: var(--text-faint);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 8px;
+}
+
+/* ---- 오른쪽: 선택된 챕터 ---- */
+.chapters-main { min-width: 0; }
+.chapter-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.chapter-header-info h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
+.chapter-desc { color: var(--text-dim); font-size: 13.5px; margin-top: 6px; white-space: pre-wrap; }
+.chapter-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.chapter-header-actions .btn { white-space: nowrap; }
+
+/* ---- 스테이지 목록 ---- */
+.stage-list { display: flex; flex-direction: column; gap: 12px; }
+.stage-row {
+  display: flex; gap: 14px; align-items: stretch;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; padding: 12px;
+}
+.stage-no {
+  flex: 0 0 auto; align-self: flex-start;
+  font-weight: 800; font-size: 15px; color: var(--accent, #3b82d6);
+  background: var(--accent-soft); border-radius: 10px; padding: 6px 10px;
+  min-width: 46px; text-align: center;
+}
+.stage-thumb {
+  flex: 0 0 116px; width: 116px; height: 88px;
+  border-radius: 10px; overflow: hidden; background: #eef4fa;
+  align-self: flex-start;
+}
+.stage-thumb-missing {
+  display: flex; align-items: center; justify-content: center; height: 100%;
+  color: var(--text-faint); font-size: 12px;
+}
+.stage-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.stage-map-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stage-map-title { font-weight: 700; font-size: 14.5px; }
+.stage-map-author { font-size: 12px; color: var(--text-faint); }
+.stage-input { font-size: 13px; }
+.stage-links { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 640px) { .stage-links { grid-template-columns: 1fr; } }
+.stage-links label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stage-links-label { font-size: 11.5px; font-weight: 600; color: var(--text-dim); }
+.stage-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.stage-actions .btn { white-space: nowrap; }
+
+/* ---- 스테이지 추가(맵 선택) 모달 ---- */
+.stage-picker { max-width: 720px; width: min(720px, 94vw); }
+.stage-picker-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.stage-picker-sort { width: auto; }
+.stage-picker-list {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 48vh; overflow-y: auto; margin-top: 12px;
+}
+.stage-picker-empty { color: var(--text-faint); text-align: center; padding: 26px 0; font-size: 13.5px; }
+.stage-picker-row {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px;
+  background: var(--surface);
+}
+.stage-picker-thumb {
+  flex: 0 0 72px; width: 72px; height: 54px;
+  border-radius: 6px; overflow: hidden; background: #eef4fa;
+}
+.stage-picker-info { flex: 1; min-width: 0; }
+.stage-picker-titlerow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.stage-picker-title {
+  font-weight: 700; font-size: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+.stage-picker-meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--text-faint); }
