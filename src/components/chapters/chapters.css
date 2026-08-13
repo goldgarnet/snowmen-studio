@@ -113,11 +113,26 @@
 .stage-move { display: flex; gap: 6px; }
 .stage-move .btn { flex: 1; padding: 0 8px; }
 
+/* 수정 모달의 현재 맵 (썸네일 + 정보 + 맵 변경 버튼) */
 .stage-edit-map {
-  font-size: 13px; color: var(--text-dim);
-  background: var(--accent-soft); border-radius: 8px; padding: 7px 10px;
+  display: flex; align-items: center; gap: 11px;
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px;
+  background: var(--surface);
+}
+.stage-edit-map-thumb {
+  flex: 0 0 72px; width: 72px; height: 54px;
+  border-radius: 6px; overflow: hidden; background: #eef4fa;
+}
+.stage-edit-map-info { flex: 1; min-width: 0; }
+.stage-edit-map-title {
+  font-weight: 700; font-size: 14px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.stage-edit-map-meta {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-top: 4px; font-size: 12px; color: var(--text-faint);
+}
+.stage-edit-map-changed { color: var(--accent); font-weight: 700; }
 
 /* ---- 스테이지 추가(맵 선택) 모달 ---- */
 .stage-picker { max-width: 720px; width: min(720px, 94vw); }

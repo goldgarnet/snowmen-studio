@@ -101,7 +101,7 @@ export async function insertStage(payload: {
 
 export async function updateStage(
   id: string,
-  patch: Partial<Pick<StageRow, 'description' | 'requires' | 'unlocks' | 'note' | 'sort_order' | 'chapter_id'>>,
+  patch: Partial<Pick<StageRow, 'description' | 'requires' | 'unlocks' | 'note' | 'sort_order' | 'chapter_id' | 'map_id'>>,
 ): Promise<StageRow> {
   const { data, error } = await supabase
     .from('stages')

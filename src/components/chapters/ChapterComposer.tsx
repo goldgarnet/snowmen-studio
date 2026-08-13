@@ -77,6 +77,7 @@ function ChapterFormModal({ title, initial, submitLabel, onSubmit, onCancel }: C
 // 카드에서 바로 고치지 않고 이 모달에서 한 번에 저장한다 (목록은 읽기 전용으로 깔끔하게).
 
 interface StageEditPayload {
+  map_id: string;
   description: string | null;
   requires: string | null;
   unlocks: string | null;
@@ -86,11 +87,15 @@ interface StageEditPayload {
 interface StageEditProps {
   stage: StageRow;
   stageNumber: string;
+  pickedMap: MapRow | null;          // 맵 변경으로 새로 고른 맵 (null = 원래 맵 유지)
+  onRequestPickMap: () => void;
   onSubmit: (p: StageEditPayload) => Promise<void>;
   onCancel: () => void;
 }
 
-function StageEditModal({ stage, stageNumber, onSubmit, onCancel }: StageEditProps) {
+function StageEditModal({
+  stage, stageNumber, pickedMap, onRequestPickMap, onSubmit, onCancel,
+}: StageEditProps) {
   const [description, setDescription] = useState(stage.description ?? '');
   const [requires, setRequires] = useState(stage.requires ?? '');
   const [unlocks, setUnlocks] = useState(stage.unlocks ?? '');
@@ -98,10 +103,14 @@ function StageEditModal({ stage, stageNumber, onSubmit, onCancel }: StageEditPro
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const map = pickedMap ?? stage.map ?? null;
+
   const submit = async () => {
+    if (!map) { setError('맵을 선택하세요.'); return; }
     setBusy(true);
     try {
       await onSubmit({
+        map_id: map.id,
         description: description.trim() || null,
         requires: requires.trim() || null,
         unlocks: unlocks.trim() || null,
@@ -114,7 +123,22 @@ function StageEditModal({ stage, stageNumber, onSubmit, onCancel }: StageEditPro
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
         <h3 className="modal-title">스테이지 {stageNumber} 수정</h3>
-        <div className="stage-edit-map">{stage.map?.title || '제목 없음'}</div>
+
+        <label className="field-label">맵</label>
+        <div className="stage-edit-map">
+          <div className="stage-edit-map-thumb">
+            {map ? <MapThumbnail code={map.code} /> : <div className="stage-thumb-missing">맵 없음</div>}
+          </div>
+          <div className="stage-edit-map-info">
+            <div className="stage-edit-map-title">{map?.title || '맵 없음'}</div>
+            <div className="stage-edit-map-meta">
+              {map && <span className={`badge badge-${map.status}`}>{STATUS_LABEL[map.status]}</span>}
+              <span>@{map?.author_name || '익명'}</span>
+              {pickedMap && <span className="stage-edit-map-changed">변경됨</span>}
+            </div>
+          </div>
+          <button className="btn btn-sm" onClick={onRequestPickMap} disabled={busy}>맵 변경</button>
+        </div>
 
         <label className="field-label" style={{ marginTop: 12 }}>스테이지 설명</label>
         <textarea className="field-textarea" rows={2} value={description} autoFocus
@@ -154,6 +178,7 @@ function StageEditModal({ stage, stageNumber, onSubmit, onCancel }: StageEditPro
 type PickerSort = 'accepted' | 'latest';
 
 interface MapPickerProps {
+  title: string;
   maps: MapRow[];                          // all published maps (standalone + folder members)
   folderNames: Map<string, string>;        // folder_id → 폴더 이름
   placedNos: Map<string, string>;          // map_id → 이미 배치된 스테이지 번호 (전 챕터)
@@ -161,7 +186,7 @@ interface MapPickerProps {
   onCancel: () => void;
 }
 
-function MapPickerModal({ maps, folderNames, placedNos, onPick, onCancel }: MapPickerProps) {
+function MapPickerModal({ title, maps, folderNames, placedNos, onPick, onCancel }: MapPickerProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | MapRow['status']>('all');
   const [sort, setSort] = useState<PickerSort>('accepted');
@@ -193,7 +218,7 @@ function MapPickerModal({ maps, folderNames, placedNos, onPick, onCancel }: MapP
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal stage-picker" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">스테이지로 추가할 맵 선택</h3>
+        <h3 className="modal-title">{title}</h3>
 
         <div className="stage-picker-toolbar">
           <div className="hub-filters">
@@ -265,10 +290,12 @@ export default function ChapterComposer() {
   const [showNewChapter, setShowNewChapter] = useState(false);
   const [editingChapter, setEditingChapter] = useState<ChapterRow | null>(null);
   const [deleteChapterTarget, setDeleteChapterTarget] = useState<ChapterRow | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
+  // 맵 선택 모달은 두 용도로 쓴다: 'add' = 새 스테이지 추가, 'swap' = 수정 중인 스테이지의 맵 교체.
+  const [pickerMode, setPickerMode] = useState<'add' | 'swap' | null>(null);
   const [deleteStageTarget, setDeleteStageTarget] = useState<StageRow | null>(null);
   const [playStage, setPlayStage] = useState<{ code: string; title: string } | null>(null);
   const [editingStage, setEditingStage] = useState<{ stage: StageRow; no: string } | null>(null);
+  const [editStageMap, setEditStageMap] = useState<MapRow | null>(null); // 수정 모달에서 새로 고른 맵
   const [busy, setBusy] = useState(false);
 
   const selected = chapters.find((c) => c.id === selectedId) ?? null;
@@ -346,7 +373,7 @@ export default function ChapterComposer() {
     if (!selectedId) return;
     try {
       await insertStage({ chapter_id: selectedId, map_id: map.id, sort_order: stages.length });
-      setShowPicker(false);
+      setPickerMode(null);
       showFlash('스테이지를 추가했습니다');
       loadStages(selectedId);
       listAllStages().then(setAllStages).catch(() => {});
@@ -383,10 +410,23 @@ export default function ChapterComposer() {
   const saveStageEdit = async (p: StageEditPayload) => {
     if (!editingStage) return;
     const { stage } = editingStage;
+    const mapChanged = p.map_id !== stage.map_id;
     const updated = await updateStage(stage.id, p);
-    setStages((prev) => prev.map((x) => (x.id === stage.id ? { ...updated, map: x.map } : x)));
-    setEditingStage(null);
+    // joined map 은 update 응답에 없으므로 교체한 맵(또는 기존 맵)을 그대로 붙여준다.
+    const map = mapChanged ? editStageMap : stage.map;
+    setStages((prev) => prev.map((x) => (x.id === stage.id ? { ...updated, map } : x)));
+    closeStageEdit();
     showFlash('스테이지를 수정했습니다');
+    // 맵이 바뀌면 "배치됨" 배지 기준이 달라지므로 전 챕터 배치를 다시 읽는다.
+    if (mapChanged) listAllStages().then(setAllStages).catch(() => {});
+  };
+
+  const closeStageEdit = () => { setEditingStage(null); setEditStageMap(null); };
+
+  // 맵 선택 모달에서 맵을 고름 — 'add' 면 새 스테이지, 'swap' 이면 수정 중인 맵 교체.
+  const pickMap = (map: MapRow) => {
+    if (pickerMode === 'swap') { setEditStageMap(map); setPickerMode(null); return; }
+    addStage(map);
   };
 
   // ---- 플레이 서브모드: 스테이지의 맵을 클릭하면 곧바로 플레이 화면으로 ----
@@ -453,7 +493,7 @@ export default function ChapterComposer() {
                 <div className="chapter-header-actions">
                   <button className="btn" onClick={() => setEditingChapter(selected)}>챕터 수정</button>
                   <button className="btn btn-danger" onClick={() => setDeleteChapterTarget(selected)}>챕터 삭제</button>
-                  <button className="btn btn-primary" onClick={() => setShowPicker(true)}>+ 스테이지 추가</button>
+                  <button className="btn btn-primary" onClick={() => setPickerMode('add')}>+ 스테이지 추가</button>
                 </div>
               </div>
 
@@ -547,12 +587,15 @@ export default function ChapterComposer() {
           onConfirm={doDeleteChapter} onCancel={() => setDeleteChapterTarget(null)} />
       )}
 
+      {/* 수정 모달은 맵 선택 모달을 띄운 동안에도 계속 마운트해 둔다 (입력 중이던 내용 보존). */}
       {editingStage && (
         <StageEditModal
           stage={editingStage.stage}
           stageNumber={editingStage.no}
+          pickedMap={editStageMap}
+          onRequestPickMap={() => setPickerMode('swap')}
           onSubmit={saveStageEdit}
-          onCancel={() => setEditingStage(null)}
+          onCancel={closeStageEdit}
         />
       )}
 
@@ -564,13 +607,14 @@ export default function ChapterComposer() {
           onConfirm={removeStage} onCancel={() => setDeleteStageTarget(null)} />
       )}
 
-      {showPicker && (
+      {pickerMode && (
         <MapPickerModal
+          title={pickerMode === 'swap' ? '이 스테이지에 쓸 맵 선택' : '스테이지로 추가할 맵 선택'}
           maps={hubMaps}
           folderNames={folderNames}
           placedNos={placedNos}
-          onPick={addStage}
-          onCancel={() => setShowPicker(false)}
+          onPick={pickMap}
+          onCancel={() => setPickerMode(null)}
         />
       )}
     </div>
