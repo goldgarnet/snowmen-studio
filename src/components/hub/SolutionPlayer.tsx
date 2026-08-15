@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { gameStateFromCode } from '../../utils/game';
-import { playMoves, decodeSolution, MOVE_LABEL, SolutionMove } from '../../utils/solution';
+import {
+  advanceSolutionState,
+  createSolutionState,
+  decodeSolution,
+  MOVE_LABEL,
+  SolutionMove,
+} from '../../utils/solution';
 import Grid from '../editor/Grid';
 import '../editor/Simulator.css';
 import '../editor/PlayView.css';
@@ -17,9 +23,8 @@ const MIN_SPEED = 1;
 const MAX_SPEED = 20;
 const DEFAULT_SPEED = 6;
 
-// Replays a stored 풀이 step by step. State at any step is derived from
-// playMoves(startLevel, moves.slice(0, step)) — the same derivation the recorder
-// uses — so the playback matches exactly how the solution was recorded.
+// Replays a stored 풀이 step by step. Derived steps are cached, so normal forward
+// playback executes only the next move instead of replaying every preceding move.
 export default function SolutionPlayer({ code, solution, title, onClose }: SolutionPlayerProps) {
   const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
   const moves = useMemo<SolutionMove[] | null>(() => decodeSolution(solution), [solution]);
@@ -29,10 +34,15 @@ export default function SolutionPlayer({ code, solution, title, onClose }: Solut
   const [auto, setAuto] = useState(false);
   const [speed, setSpeed] = useState(DEFAULT_SPEED); // 칸/초
 
-  const state = useMemo(
-    () => (startLevel && moves ? playMoves(startLevel, moves.slice(0, step)) : null),
-    [startLevel, moves, step],
-  );
+  const timeline = useMemo(() => {
+    if (!startLevel || !moves) return null;
+    const states = [createSolutionState(startLevel)];
+    for (const move of moves) {
+      states.push(advanceSolutionState(states[states.length - 1], move));
+    }
+    return states;
+  }, [startLevel, moves]);
+  const state = timeline?.[step] ?? null;
 
   const atEnd = step >= total;
   const lastMove = step > 0 && moves ? moves[step - 1] : null;

@@ -12,6 +12,9 @@ export type Direction = 'left' | 'right' | 'up' | 'down';
 export type TriangleCorner = 'tl' | 'tr' | 'bl' | 'br';
 
 export interface Tile {
+  // Authored board mask. A void cell is outside the playable ground even though it
+  // remains in the rectangular storage grid. It behaves exactly like the map edge.
+  isVoid?: boolean;
   isWarm: boolean;
   isShade: boolean;
   isFlake: boolean;

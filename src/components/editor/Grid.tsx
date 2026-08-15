@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Level } from '../../types';
+import { memo, useState, useCallback, useRef, useEffect, useId } from 'react';
+import { GameObject, Level, Tile } from '../../types';
 import { yellowWallsSolid, orangeWallsSolid } from '../../engine/helpers';
 import './Grid.css';
 
@@ -23,16 +23,124 @@ interface GridProps {
   } | null;
 }
 
+interface GridCellProps {
+  row: number;
+  col: number;
+  tile: Tile;
+  obj: GameObject | null;
+  cellSize: number;
+  goalActive: boolean;
+  yellowSolid: boolean;
+  orangeSolid: boolean;
+  highlightPlayer?: boolean;
+  thumbnail?: boolean;
+  isSelected: boolean;
+  snowmanFilterId: string;
+  goalGradientId: string;
+  onMouseDown: (row: number, col: number, button: number) => void;
+  onMouseEnter: (row: number, col: number) => void;
+}
+
+function shallowEqualRecord(a: object | null, b: object | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const aRecord = a as Record<string, unknown>;
+  const bRecord = b as Record<string, unknown>;
+  const aKeys = Object.keys(aRecord);
+  if (aKeys.length !== Object.keys(bRecord).length) return false;
+  return aKeys.every((key) => aRecord[key] === bRecord[key]);
+}
+
+// A turn clones the level for engine safety, so unchanged cells receive new object
+// references. Compare their primitive fields and retain the existing DOM/SVG subtree
+// unless that particular cell actually changed.
+const GridCell = memo(function GridCell({
+  row, col, tile, obj, cellSize, goalActive, yellowSolid, orangeSolid,
+  highlightPlayer, thumbnail, isSelected, snowmanFilterId, goalGradientId,
+  onMouseDown, onMouseEnter,
+}: GridCellProps) {
+  const tileClasses = [
+    'grid-cell',
+    tile.isVoid ? 'void' : '',
+    tile.isWarm ? 'warm' : 'cool',
+    tile.isShade ? 'shaded' : '',
+    tile.isFlake ? 'flake' : '',
+    tile.isGoal ? 'goal' : '',
+    tile.isGoal && !goalActive ? 'goal-locked' : '',
+    tile.isRowArch ? 'row-arch' : '',
+    tile.isColumnArch ? 'col-arch' : '',
+    tile.isSoulSwap ? 'soul' : '',
+    tile.isKeyTile ? 'key' : '',
+    tile.isYellowButton ? 'ybutton' : '',
+    tile.isYellowWall ? (yellowSolid ? 'ywall ywall-solid' : 'ywall ywall-open') : '',
+    tile.isHole ? 'hole' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div
+      className={tileClasses}
+      onMouseDown={thumbnail ? undefined : (event) => {
+        if (event.button === 2) event.preventDefault();
+        onMouseDown(row, col, event.button);
+      }}
+      onMouseEnter={thumbnail ? undefined : () => onMouseEnter(row, col)}
+      onContextMenu={(event) => event.preventDefault()}
+      style={{ width: cellSize, height: cellSize, position: 'relative' }}
+    >
+      {!tile.isVoid && tile.isGoal && <GoalOverlay size={cellSize} locked={!goalActive} gradientId={goalGradientId} />}
+      {tile.isFlake && !obj && <FlakeOverlay size={cellSize} />}
+      {(tile.isRowArch || tile.isColumnArch) && (
+        <TunnelOverlay size={cellSize} isRow={tile.isRowArch} />
+      )}
+      {tile.isSoulSwap && <SoulSwapOverlay size={cellSize} />}
+      {tile.isKeyTile && <GreenButtonOverlay size={cellSize} />}
+      {tile.isYellowButton && <YellowButtonOverlay size={cellSize} />}
+      {tile.isYellowWall && <YellowWallOverlay size={cellSize} solid={yellowSolid} />}
+      {tile.isOrangeButton && <OrangeButtonOverlay size={cellSize} pressed={!!tile.orangePressed} />}
+      {tile.isOrangeWall && <OrangeWallOverlay size={cellSize} solid={orangeSolid} />}
+      {tile.isHole && <HoleOverlay size={cellSize} />}
+      {tile.isCrack && <CrackOverlay size={cellSize} warm={!!tile.isWarm} armed={!!tile.crackArmed} />}
+      {tile.isPortal && <PortalOverlay size={cellSize} />}
+      {tile.triangle && <TriangleOverlay corner={tile.triangle} size={cellSize} />}
+      {!tile.isVoid && obj && (
+        <div className={`object obj-${obj.type} size-${obj.size} ${highlightPlayer && obj.type === 'player' ? 'player-highlight' : ''} ${obj.isMelting ? 'melting' : ''}`}>
+          {renderObject(obj, cellSize, snowmanFilterId)}
+        </div>
+      )}
+      {isSelected && <div className="cell-selection-overlay" />}
+    </div>
+  );
+}, (prev, next) => (
+  prev.row === next.row &&
+  prev.col === next.col &&
+  prev.cellSize === next.cellSize &&
+  prev.goalActive === next.goalActive &&
+  prev.yellowSolid === next.yellowSolid &&
+  prev.orangeSolid === next.orangeSolid &&
+  prev.highlightPlayer === next.highlightPlayer &&
+  prev.thumbnail === next.thumbnail &&
+  prev.isSelected === next.isSelected &&
+  prev.snowmanFilterId === next.snowmanFilterId &&
+  prev.goalGradientId === next.goalGradientId &&
+  prev.onMouseDown === next.onMouseDown &&
+  prev.onMouseEnter === next.onMouseEnter &&
+  shallowEqualRecord(prev.tile, next.tile) &&
+  shallowEqualRecord(prev.obj, next.obj)
+));
+
 export default function Grid({
   level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgeErase, edgeMode, highlightPlayer,
   thumbnail, selectedCells, previewSelectionCells, moveGhost,
 }: GridProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isRightDragging, setIsRightDragging] = useState(false);
+  const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase });
+  useEffect(() => {
+    interactionRef.current = { onCellClick, onCellDrag, onCellErase };
+  }, [onCellClick, onCellDrag, onCellErase]);
+  const dragButtonRef = useRef<'left' | 'right' | null>(null);
 
   // Reset drag flags if the mouse is released anywhere (even outside the grid).
   useEffect(() => {
-    const onUp = () => { setIsDragging(false); setIsRightDragging(false); };
+    const onUp = () => { dragButtonRef.current = null; };
     window.addEventListener('mouseup', onUp);
     return () => window.removeEventListener('mouseup', onUp);
   }, []);
@@ -61,20 +169,31 @@ export default function Grid({
       ))))
     : (thumbnail ? 10 : 40);
 
-  const handleMouseDown = useCallback((row: number, col: number) => {
-    setIsDragging(true);
-    onCellClick?.(row, col);
-  }, [onCellClick]);
+  const handleMouseDown = useCallback((row: number, col: number, button: number) => {
+    if (button === 2) {
+      dragButtonRef.current = 'right';
+      interactionRef.current.onCellErase?.(row, col);
+    } else if (button === 0) {
+      dragButtonRef.current = 'left';
+      interactionRef.current.onCellClick?.(row, col);
+    }
+  }, []);
 
   const handleMouseEnter = useCallback((row: number, col: number) => {
-    if (isDragging) {
-      (onCellDrag ?? onCellClick)?.(row, col);
+    if (dragButtonRef.current === 'right') {
+      interactionRef.current.onCellErase?.(row, col);
+    } else if (dragButtonRef.current === 'left') {
+      (interactionRef.current.onCellDrag ?? interactionRef.current.onCellClick)?.(row, col);
     }
-  }, [isDragging, onCellDrag, onCellClick]);
+  }, []);
 
   const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
+    if (dragButtonRef.current === 'left') dragButtonRef.current = null;
   }, []);
+
+  const sharedDefsId = useId().replace(/:/g, '');
+  const snowmanFilterId = `${sharedDefsId}-snowman-glow`;
+  const goalGradientId = `${sharedDefsId}-goal-glow`;
 
   if (level.width === 0 || level.height === 0) {
     return <div ref={wrapperRef} className="grid-wrapper" />;
@@ -94,13 +213,17 @@ export default function Grid({
   const horzEdges: { row: number; col: number; level: number }[] = [];
   for (let r = 1; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
-      horzEdges.push({ row: r, col: c, level: level.tiles[r][c].edgeArchTop ?? 0 });
+      if (level.tiles[r][c].isVoid || level.tiles[r - 1][c].isVoid) continue;
+      const archLevel = level.tiles[r][c].edgeArchTop ?? 0;
+      if (edgeMode || archLevel > 0) horzEdges.push({ row: r, col: c, level: archLevel });
     }
   }
   const vertEdges: { row: number; col: number; level: number }[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 1; c < level.width; c++) {
-      vertEdges.push({ row: r, col: c, level: level.tiles[r][c].edgeArchLeft ?? 0 });
+      if (level.tiles[r][c].isVoid || level.tiles[r][c - 1].isVoid) continue;
+      const archLevel = level.tiles[r][c].edgeArchLeft ?? 0;
+      if (edgeMode || archLevel > 0) vertEdges.push({ row: r, col: c, level: archLevel });
     }
   }
 
@@ -123,8 +246,26 @@ export default function Grid({
       <div className="grid-stack"
         style={{ position: 'relative', width: gridW, height: gridH }}
         onContextMenu={(e) => e.preventDefault()}>
+        {/* Shared paint servers avoid duplicating random-ID SVG filters for every
+            snowman/goal and keep their attributes stable between turns. */}
+        <svg width="0" height="0" aria-hidden="true" style={{ position: 'absolute' }}>
+          <defs>
+            <filter id={snowmanFilterId}>
+              <feGaussianBlur stdDeviation="1.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <radialGradient id={goalGradientId} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#50e880" stopOpacity="0.4" />
+              <stop offset="60%" stopColor="#30c060" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="#20a050" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+        </svg>
         <div
-          className={`grid ${edgeMode ? 'edge-mode' : ''} ${thumbnail ? 'thumb' : ''}`}
+          className={`grid ${edgeMode ? 'edge-mode' : ''} ${thumbnail ? 'thumb' : ''} ${onCellClick ? 'editable' : ''} ${level.tiles.some(row => row.some(tile => tile.isVoid)) ? 'non-rect' : ''}`}
           style={{
             gridTemplateColumns: `repeat(${level.width}, ${cellSize}px)`,
             gridTemplateRows: `repeat(${level.height}, ${cellSize}px)`,
@@ -138,65 +279,25 @@ export default function Grid({
               const obj = level.objects[row][col];
               const key = `${row},${col}`;
               const isSelected = !!(previewSelectionCells ?? selectedCells)?.has(key);
-
-              const tileClasses = [
-                'grid-cell',
-                tile.isWarm ? 'warm' : 'cool',
-                tile.isShade ? 'shaded' : '',
-                tile.isFlake ? 'flake' : '',
-                tile.isGoal ? 'goal' : '',
-                tile.isGoal && !goalActive ? 'goal-locked' : '',
-                tile.isRowArch ? 'row-arch' : '',
-                tile.isColumnArch ? 'col-arch' : '',
-                tile.isSoulSwap ? 'soul' : '',
-                tile.isKeyTile ? 'key' : '',
-                tile.isYellowButton ? 'ybutton' : '',
-                tile.isYellowWall ? (yellowSolid ? 'ywall ywall-solid' : 'ywall ywall-open') : '',
-                tile.isHole ? 'hole' : '',
-              ].filter(Boolean).join(' ');
-
               return (
-                <div
+                <GridCell
                   key={`${row}-${col}`}
-                  className={tileClasses}
-                  onMouseDown={thumbnail ? undefined : (e) => {
-                    if (e.button === 2) {
-                      e.preventDefault();
-                      setIsRightDragging(true);
-                      onCellErase?.(row, col);
-                    } else if (e.button === 0) {
-                      handleMouseDown(row, col);
-                    }
-                  }}
-                  onMouseEnter={thumbnail ? undefined : () => {
-                    if (isRightDragging) onCellErase?.(row, col);
-                    else handleMouseEnter(row, col);
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  style={{ width: cellSize, height: cellSize, position: 'relative' }}
-                >
-                  {tile.isGoal && <GoalOverlay size={cellSize} locked={!goalActive} />}
-                  {tile.isFlake && !obj && <FlakeOverlay size={cellSize} />}
-                  {(tile.isRowArch || tile.isColumnArch) && (
-                    <TunnelOverlay size={cellSize} isRow={tile.isRowArch} />
-                  )}
-                  {tile.isSoulSwap && <SoulSwapOverlay size={cellSize} />}
-                  {tile.isKeyTile && <GreenButtonOverlay size={cellSize} />}
-                  {tile.isYellowButton && <YellowButtonOverlay size={cellSize} />}
-                  {tile.isYellowWall && <YellowWallOverlay size={cellSize} solid={yellowSolid} />}
-                  {tile.isOrangeButton && <OrangeButtonOverlay size={cellSize} pressed={!!tile.orangePressed} />}
-                  {tile.isOrangeWall && <OrangeWallOverlay size={cellSize} solid={orangeSolid} />}
-                  {tile.isHole && <HoleOverlay size={cellSize} />}
-                  {tile.isCrack && <CrackOverlay size={cellSize} warm={!!tile.isWarm} armed={!!tile.crackArmed} />}
-                  {tile.isPortal && <PortalOverlay size={cellSize} />}
-                  {tile.triangle && <TriangleOverlay corner={tile.triangle} size={cellSize} />}
-                  {obj && (
-                    <div className={`object obj-${obj.type} size-${obj.size} ${highlightPlayer && obj.type === 'player' ? 'player-highlight' : ''} ${obj.isMelting ? 'melting' : ''}`}>
-                      {renderObject(obj, cellSize)}
-                    </div>
-                  )}
-                  {isSelected && <div className="cell-selection-overlay" />}
-                </div>
+                  row={row}
+                  col={col}
+                  tile={tile}
+                  obj={obj}
+                  cellSize={cellSize}
+                  goalActive={goalActive}
+                  yellowSolid={yellowSolid}
+                  orangeSolid={orangeSolid}
+                  highlightPlayer={highlightPlayer}
+                  thumbnail={thumbnail}
+                  isSelected={isSelected}
+                  snowmanFilterId={snowmanFilterId}
+                  goalGradientId={goalGradientId}
+                  onMouseDown={handleMouseDown}
+                  onMouseEnter={handleMouseEnter}
+                />
               );
             })
           )}
@@ -216,7 +317,7 @@ export default function Grid({
         )}
 
         {/* Laser beam overlay */}
-        <LaserBeamOverlay level={level} cellSize={cellSize} />
+        <LaserBeamOverlay level={level} cellSize={cellSize} yellowSolid={yellowSolid} orangeSolid={orangeSolid} />
 
         {/* Arch visuals overlay (absolute pixel positioning over the grid) */}
         <div className="edge-overlay" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
@@ -341,7 +442,7 @@ function ArchSegment({ left, top, width, height, level, orientation }: {
   );
 }
 
-function GoalOverlay({ size, locked }: { size: number; locked?: boolean }) {
+function GoalOverlay({ size, locked, gradientId }: { size: number; locked?: boolean; gradientId: string }) {
   if (locked) {
     // Goal disabled by uncovered key footplates: muted grey star with a padlock.
     return (
@@ -357,14 +458,7 @@ function GoalOverlay({ size, locked }: { size: number; locked?: boolean }) {
   }
   return (
     <svg className="tile-overlay goal-overlay" width={size} height={size} viewBox="0 0 40 40">
-      <defs>
-        <radialGradient id="goal-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#50e880" stopOpacity="0.4" />
-          <stop offset="60%" stopColor="#30c060" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="#20a050" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <circle cx="20" cy="20" r="18" fill="url(#goal-glow)" />
+      <circle cx="20" cy="20" r="18" fill={`url(#${gradientId})`} />
       <polygon points="20,6 23.5,15 33,15 25.5,21 28,30 20,25 12,30 14.5,21 7,15 16.5,15"
         fill="none" stroke="#3cb868" strokeWidth="1.3" opacity="0.55" />
       <polygon points="20,10 22.5,16 29,16 24,20.5 26,27 20,23 14,27 16,20.5 11,16 17.5,16"
@@ -588,14 +682,15 @@ const BEAM_DIRS: Record<string, [number, number]> = {
   right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1],
 };
 
-function LaserBeamOverlay({ level, cellSize }: { level: Level; cellSize: number }) {
+function LaserBeamOverlay({ level, cellSize, yellowSolid, orangeSolid }: {
+  level: Level;
+  cellSize: number;
+  yellowSolid: boolean;
+  orangeSolid: boolean;
+}) {
   const beams: React.ReactElement[] = [];
   const gw = level.width;
   const gh = level.height;
-  // Match the engine: a solid yellow/orange wall blocks the beam like a real wall.
-  const yellowSolid = yellowWallsSolid(level);
-  const orangeSolid = orangeWallsSolid(level);
-
   for (let row = 0; row < gh; row++) {
     for (let col = 0; col < gw; col++) {
       const obj = level.objects[row]?.[col];
@@ -609,6 +704,7 @@ function LaserBeamOverlay({ level, cellSize }: { level: Level; cellSize: number 
       let endRow = row;
 
       while (cx >= 0 && cy >= 0 && cx < gw && cy < gh) {
+        if (level.tiles[cy]?.[cx]?.isVoid) break;
         const hit = level.objects[cy]?.[cx];
         if (hit && LASER_BLOCKERS.has(hit.type)) break;
         // Solid yellow/orange wall stops the beam BEFORE its cell, like a real wall.
@@ -654,7 +750,11 @@ function LaserBeamOverlay({ level, cellSize }: { level: Level; cellSize: number 
   );
 }
 
-function renderObject(obj: { type: string; size: number; isMelting: boolean; treeHeight?: number; triangleCorner?: string }, cellSize: number) {
+function renderObject(
+  obj: { type: string; size: number; isMelting: boolean; treeHeight?: number; triangleCorner?: string },
+  cellSize: number,
+  snowmanFilterId: string,
+) {
   const s = cellSize * 0.85;
   switch (obj.type) {
     case 'player': {
@@ -691,21 +791,11 @@ function renderObject(obj: { type: string; size: number; isMelting: boolean; tre
     }
     case 'snowman': {
       const scale = obj.size === 1 ? 0.65 : obj.size === 2 ? 0.85 : 1;
-      const filterId = `snowman-glow-${Math.random().toString(36).slice(2, 6)}`;
       return (
         <svg width={s} height={s} viewBox="0 0 40 40">
-          <defs>
-            <filter id={filterId}>
-              <feGaussianBlur stdDeviation="1.5" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
           <g transform={`translate(20,22) scale(${scale}) translate(-20,-22)`}>
-            <circle cx="20" cy="27" r="9" fill="#e0eaff" stroke="#6af" strokeWidth="1.8" filter={`url(#${filterId})`} />
-            <circle cx="20" cy="15" r="6.5" fill="#e0eaff" stroke="#6af" strokeWidth="1.8" filter={`url(#${filterId})`} />
+            <circle cx="20" cy="27" r="9" fill="#e0eaff" stroke="#6af" strokeWidth="1.8" filter={`url(#${snowmanFilterId})`} />
+            <circle cx="20" cy="15" r="6.5" fill="#e0eaff" stroke="#6af" strokeWidth="1.8" filter={`url(#${snowmanFilterId})`} />
           </g>
           <text x="34" y="10" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#46a" opacity="0.8">{obj.size}</text>
         </svg>

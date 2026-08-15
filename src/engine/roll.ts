@@ -290,6 +290,7 @@ function killIfOnBeam(level: Level, group: { pos: Position; obj: GameObject }[])
       let cr = r + dr;
       let cc = c + dc;
       while (cr >= 0 && cc >= 0 && cr < level.height && cc < level.width) {
+        if (level.tiles[cr][cc].isVoid) break;
         const hit = level.objects[cr][cc];
         if (hit) {
           if (BEAM_BLOCKERS_ROLL.has(hit.type)) break;

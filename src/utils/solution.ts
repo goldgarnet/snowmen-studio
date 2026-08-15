@@ -40,29 +40,53 @@ export interface StepState {
   turnCount: number;   // number of turns taken (soul cycles are free, not counted)
 }
 
+/**
+ * Apply one recorded action to an already-derived solution state.
+ *
+ * Keeping this operation separate is important for interactive playback: callers can
+ * advance from the current state in O(one turn), instead of replaying the whole move
+ * list from the beginning after every key press.
+ */
+export function advanceSolutionState(state: StepState, move: SolutionMove): StepState {
+  if (state.status !== 'playing') return state;
+
+  if (move === 'soul') {
+    const next = cycleSoul(state.level);
+    if (!next) return state;
+    return {
+      level: next,
+      status: isLevelCleared(next) ? 'cleared' : state.status,
+      turnCount: state.turnCount,
+    };
+  }
+
+  const result = move === 'wait'
+    ? executeSkipTurn(state.level)
+    : executeTurn(state.level, move as Direction);
+  return {
+    level: result.level,
+    status: result.status,
+    turnCount: state.turnCount + 1,
+  };
+}
+
+export function createSolutionState(startLevel: Level): StepState {
+  return {
+    level: cloneLevel(startLevel),
+    status: 'playing',
+    turnCount: 0,
+  };
+}
+
 // Replay a sequence of moves from a fresh level, returning the resulting state.
 // Used identically by the recorder (derive current state from captured moves) and
 // the player (derive state from moves.slice(0, step)) so the two never disagree.
 // Moves after a clear/gameover are ignored, matching the live simulator.
 export function playMoves(startLevel: Level, moves: SolutionMove[]): StepState {
-  let level = cloneLevel(startLevel);
-  let status: GameStatus = 'playing';
-  let turnCount = 0;
+  let state = createSolutionState(startLevel);
   for (const m of moves) {
-    if (status !== 'playing') break;
-    if (m === 'soul') {
-      // Soul cycle is a free action — no turn, may clear if the soul lands on goal.
-      const next = cycleSoul(level);
-      if (next) {
-        level = next;
-        if (isLevelCleared(level)) status = 'cleared';
-      }
-      continue;
-    }
-    const res = m === 'wait' ? executeSkipTurn(level) : executeTurn(level, m as Direction);
-    level = res.level;
-    status = res.status;
-    turnCount += 1;
+    if (state.status !== 'playing') break;
+    state = advanceSolutionState(state, m);
   }
-  return { level, status, turnCount };
+  return state;
 }

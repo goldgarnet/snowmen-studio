@@ -32,6 +32,9 @@ const EXT_FLAG_BITS = 5;      // orangeButton, orangeWall, isHole, isCrack, isPo
 // so v5 codes written before triangle blocks existed (which have no such section) still
 // decode: after the tile-flag list `pos === bits.length`, so the magic check is skipped.
 const TRIBLOCK_MAGIC = 0b1011; // 4 bits
+// Optional board-mask sub-section. Kept separate from the original five v5 flags
+// so every previously generated code keeps the same layout.
+const VOID_MAGIC = 0b0110; // 4 bits
 
 const TRI_CORNERS: TriangleCorner[] = ['tl', 'tr', 'bl', 'br'];
 
@@ -189,8 +192,10 @@ export function encodeLevelCode(level: Level): string {
   // Triangle blocks: blocks that carry a mirror corner (stored separately since the
   // base object pass encodes them as ordinary blocks).
   const triBlocks: { idx: number; corner: number }[] = [];
+  const voidTiles: number[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isVoid) voidTiles.push(r * level.width + c);
       const obj = level.objects[r][c];
       if (obj && obj.type === 'block' && obj.triangleCorner) {
         triBlocks.push({ idx: r * level.width + c, corner: Math.max(0, TRI_CORNERS.indexOf(obj.triangleCorner)) });
@@ -198,7 +203,7 @@ export function encodeLevelCode(level: Level): string {
     }
   }
 
-  if (special.length > 0 || triBlocks.length > 0) {
+  if (special.length > 0 || triBlocks.length > 0 || voidTiles.length > 0) {
     pushBits(bits, EXT_MAGIC, 8);
     pushBits(bits, special.length, EXT_COUNT_BITS);
     for (const s of special) {
@@ -212,6 +217,11 @@ export function encodeLevelCode(level: Level): string {
         pushBits(bits, t.idx, EXT_INDEX_BITS);
         pushBits(bits, t.corner, 2);
       }
+    }
+    if (voidTiles.length > 0) {
+      pushBits(bits, VOID_MAGIC, 4);
+      pushBits(bits, voidTiles.length, EXT_COUNT_BITS);
+      for (const idx of voidTiles) pushBits(bits, idx, EXT_INDEX_BITS);
     }
   }
 
@@ -382,10 +392,37 @@ export function decodeLevelCode(code: string): Level | null {
           if (obj && obj.type === 'block') obj.triangleCorner = TRI_CORNERS[cornerIdx] ?? 'tl';
         }
       }
+
+      if (pos + 4 <= bits.length && readBits(bits, pos, 4) === VOID_MAGIC) {
+        pos += 4;
+        const voidCount = readBits(bits, pos, EXT_COUNT_BITS); pos += EXT_COUNT_BITS;
+        for (let i = 0; i < voidCount; i++) {
+          const idx = readBits(bits, pos, EXT_INDEX_BITS); pos += EXT_INDEX_BITS;
+          const r = Math.floor(idx / width);
+          const c = idx % width;
+          if (r < 0 || r >= height || c < 0 || c >= width) continue;
+          tiles[r][c] = { ...createVoidDecodeTile() };
+          objects[r][c] = null;
+        }
+      }
     }
 
     return { width, height, sunDirection, hasShadow, soulSwapEnabled, tiles, objects };
   } catch {
     return null;
   }
+}
+
+function createVoidDecodeTile(): Tile {
+  return {
+    isVoid: true,
+    isWarm: false,
+    isShade: false,
+    isFlake: false,
+    isRowArch: false,
+    isColumnArch: false,
+    isGoal: false,
+    edgeArchTop: 0,
+    edgeArchLeft: 0,
+  };
 }

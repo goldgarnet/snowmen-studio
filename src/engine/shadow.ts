@@ -12,6 +12,10 @@ export function recalcShadows(level: Level): void {
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const tile = level.tiles[r][c];
+      if (tile.isVoid) {
+        tile.isShade = false;
+        continue;
+      }
       let shade = tile.isRowArch || tile.isColumnArch;
       if (tile.isYellowWall && ySolid) shade = true;
       if (tile.isOrangeWall && oSolid) shade = true;
@@ -41,6 +45,8 @@ export function recalcShadows(level: Level): void {
         const sc = c + delta.col * i;
         if (isInBounds(level, { row: sr, col: sc })) {
           level.tiles[sr][sc].isShade = true;
+        } else {
+          break;
         }
       }
     }

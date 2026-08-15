@@ -1,6 +1,13 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { gameStateFromCode } from '../../utils/game';
-import { playMoves, encodeSolution, decodeSolution, SolutionMove } from '../../utils/solution';
+import {
+  advanceSolutionState,
+  createSolutionState,
+  encodeSolution,
+  decodeSolution,
+  SolutionMove,
+  StepState,
+} from '../../utils/solution';
 import Grid from '../editor/Grid';
 import '../editor/Simulator.css';
 import '../editor/PlayView.css';
@@ -16,26 +23,42 @@ interface SolutionRecorderProps {
   title?: string;
 }
 
+interface RecordingState {
+  moves: SolutionMove[];
+  // states[n] is the derived state after moves.slice(0, n). Keeping this timeline
+  // makes both a new move and undo O(1) turns instead of replaying from move zero.
+  states: StepState[];
+}
+
+function createRecordingState(startLevel: NonNullable<ReturnType<typeof gameStateFromCode>>['level'], moves: SolutionMove[]): RecordingState {
+  const states: StepState[] = [createSolutionState(startLevel)];
+  for (const move of moves) {
+    states.push(advanceSolutionState(states[states.length - 1], move));
+  }
+  return { moves, states };
+}
+
 // Records a 풀이 by letting the owner play the map. Every action is captured into a
-// move list; state is always re-derived from that list via playMoves so undo (pop)
-// and reset (clear) stay perfectly in sync. Saving is only allowed once the played
-// sequence actually clears the map, guaranteeing viewers see a real solution.
+// move list; each derived state is retained alongside it so undo/reset stay perfectly
+// in sync without replaying the entire solution on every input. Saving is only allowed
+// once the played sequence actually clears the map.
 export default function SolutionRecorder({
   code, initial, onSave, onCancel, variant = 'record', title,
 }: SolutionRecorderProps) {
   const isPlay = variant === 'play';
   const heading = title ?? (isPlay ? '바로 플레이' : '풀이 녹화');
   const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
-  const [moves, setMoves] = useState<SolutionMove[]>(() =>
-    (initial ? decodeSolution(initial) : null) ?? [],
-  );
+  const [recording, setRecording] = useState<RecordingState>(() => {
+    const initialMoves = (initial ? decodeSolution(initial) : null) ?? [];
+    return startLevel
+      ? createRecordingState(startLevel, initialMoves)
+      : { moves: initialMoves, states: [] };
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const state = useMemo(
-    () => (startLevel ? playMoves(startLevel, moves) : null),
-    [startLevel, moves],
-  );
+  const moves = recording.moves;
+  const state = recording.states[recording.states.length - 1] ?? null;
 
   const playing = state?.status === 'playing';
   const cleared = state?.status === 'cleared';
@@ -43,15 +66,28 @@ export default function SolutionRecorder({
 
   const push = useCallback((m: SolutionMove) => {
     setError(null);
-    setMoves((prev) => {
-      const s = playMoves(startLevel!, prev);
-      if (s.status !== 'playing') return prev;      // no input once cleared / game over
-      return [...prev, m];
+    setRecording((prev) => {
+      const current = prev.states[prev.states.length - 1];
+      if (!current || current.status !== 'playing') return prev;
+      return {
+        moves: [...prev.moves, m],
+        states: [...prev.states, advanceSolutionState(current, m)],
+      };
     });
-  }, [startLevel]);
+  }, []);
 
-  const undo = useCallback(() => { setMoves((prev) => prev.slice(0, -1)); }, []);
-  const reset = useCallback(() => { setMoves([]); }, []);
+  const undo = useCallback(() => {
+    setRecording((prev) => prev.moves.length === 0 ? prev : {
+      moves: prev.moves.slice(0, -1),
+      states: prev.states.slice(0, -1),
+    });
+  }, []);
+  const reset = useCallback(() => {
+    setRecording((prev) => prev.moves.length === 0 ? prev : {
+      moves: [],
+      states: prev.states.slice(0, 1),
+    });
+  }, []);
 
   useEffect(() => {
     if (!startLevel) return;

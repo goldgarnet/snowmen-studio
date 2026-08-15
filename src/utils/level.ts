@@ -2,6 +2,7 @@ import { Level, Tile, GameObject, Position, SunDirection } from '../types';
 
 export function createDefaultTile(): Tile {
   return {
+    isVoid: false,
     isWarm: false,
     isShade: false,
     isFlake: false,
@@ -54,7 +55,8 @@ export function getObjectHeight(obj: GameObject): number {
 }
 
 export function isInBounds(level: Level, pos: Position): boolean {
-  return pos.row >= 0 && pos.row < level.height && pos.col >= 0 && pos.col < level.width;
+  return pos.row >= 0 && pos.row < level.height && pos.col >= 0 && pos.col < level.width
+    && !level.tiles[pos.row]?.[pos.col]?.isVoid;
 }
 
 export function getDirectionDelta(dir: SunDirection): Position {
@@ -118,6 +120,14 @@ export function deserializeLevel(json: string): Level | null {
       // Fill in missing hasShadow with default true
       if (typeof parsed.hasShadow !== 'boolean') parsed.hasShadow = true;
       if (typeof parsed.soulSwapEnabled !== 'boolean') parsed.soulSwapEnabled = false;
+      for (let r = 0; r < parsed.height; r++) {
+        for (let c = 0; c < parsed.width; c++) {
+          if (parsed.tiles[r]?.[c]?.isVoid) {
+            parsed.tiles[r][c] = { ...createDefaultTile(), isVoid: true };
+            if (parsed.objects[r]) parsed.objects[r][c] = null;
+          }
+        }
+      }
       return parsed as Level;
     }
     return null;

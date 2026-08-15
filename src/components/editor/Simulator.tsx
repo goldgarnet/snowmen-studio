@@ -1,6 +1,5 @@
 import { useEffect, useCallback } from 'react';
 import { GameState, Direction } from '../../types';
-import { cloneLevel } from '../../utils/level';
 import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared } from '../../engine/turn';
 import Grid from './Grid';
 import './Simulator.css';
@@ -17,28 +16,28 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
   const handleMove = useCallback((dir: Direction) => {
     if (gameState.status !== 'playing') return;
 
-    const prevLevel = cloneLevel(gameState.level);
     const result = executeTurn(gameState.level, dir);
 
     setGameState({
       level: result.level,
       status: result.status,
       turnCount: gameState.turnCount + 1,
-      history: [...gameState.history, prevLevel],
+      // executeTurn clones before mutating, so the current level is already a safe,
+      // immutable undo snapshot. Avoid cloning the whole board a second time.
+      history: [...gameState.history, gameState.level],
     });
   }, [gameState, setGameState]);
 
   const handleSkip = useCallback(() => {
     if (gameState.status !== 'playing') return;
 
-    const prevLevel = cloneLevel(gameState.level);
     const result = executeSkipTurn(gameState.level);
 
     setGameState({
       level: result.level,
       status: result.status,
       turnCount: gameState.turnCount + 1,
-      history: [...gameState.history, prevLevel],
+      history: [...gameState.history, gameState.level],
     });
   }, [gameState, setGameState]);
 
@@ -57,7 +56,7 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
   const handleReset = useCallback(() => {
     if (gameState.history.length === 0) return;
     setGameState({
-      level: cloneLevel(gameState.history[0]),
+      level: gameState.history[0],
       status: 'playing',
       turnCount: 0,
       history: [],

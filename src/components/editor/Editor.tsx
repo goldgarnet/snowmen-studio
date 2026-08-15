@@ -10,6 +10,8 @@ type EditorTool =
   | 'select'
   | 'warm'
   | 'cool'
+  | 'removeGround'
+  | 'restoreGround'
   | 'flake'
   | 'goal'
   | 'rowTunnel'
@@ -40,7 +42,7 @@ type EditorTool =
   | 'triangleBlock'
   | 'eraser';
 
-const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'orangeButton', 'orangeWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
+const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'removeGround', 'restoreGround', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'orangeButton', 'orangeWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
 
 // Object tools place an object in the cell; they clear any hole there first (an object
 // can't sit on a hole), matching the "no objects on holes" rule.
@@ -400,10 +402,28 @@ export default function Editor({ level, setLevel }: EditorProps) {
   const applyTool = (lv: Level, row: number, col: number, tool: EditorTool) => {
     const tile = lv.tiles[row][col];
 
+    // Removed ground is deliberately inert. Restore it (or right-click it) before
+    // painting terrain or placing an object, so invisible authored data cannot hide
+    // inside the board mask.
+    if (tile.isVoid && tool !== 'removeGround' && tool !== 'restoreGround') return;
+
     // Placing an object clears a hole in that cell (no objects on holes).
     if (OBJECT_TOOLS.includes(tool)) tile.isHole = false;
 
     switch (tool) {
+      case 'removeGround': {
+        lv.tiles[row][col] = { ...createDefaultTile(), isVoid: true };
+        lv.objects[row][col] = null;
+        // Edge arches belong to their lower/right cell. Clear every edge touching
+        // the removed cell so restoring ground cannot reveal a dangling arch.
+        if (row + 1 < lv.height) lv.tiles[row + 1][col].edgeArchTop = 0;
+        if (col + 1 < lv.width) lv.tiles[row][col + 1].edgeArchLeft = 0;
+        break;
+      }
+      case 'restoreGround':
+        lv.tiles[row][col] = createDefaultTile();
+        lv.objects[row][col] = null;
+        break;
       case 'warm':
         tile.isWarm = true;
         tile.isFlake = false;
@@ -581,6 +601,7 @@ export default function Editor({ level, setLevel }: EditorProps) {
     const newLevel = cloneLevel(level);
     for (let r = 0; r < newLevel.height; r++)
       for (let c = 0; c < newLevel.width; c++) {
+        if (newLevel.tiles[r][c].isVoid) continue;
         newLevel.tiles[r][c].isWarm = warm;
         if (warm) newLevel.tiles[r][c].isFlake = false;
       }
@@ -669,11 +690,14 @@ export default function Editor({ level, setLevel }: EditorProps) {
     crackWarm: { label: '쪼개진(따뜻)', emoji: '♨️' },
     crackCool: { label: '쪼개진(차가움)', emoji: '🧊' },
     portal: { label: '포탈', emoji: '🟣' },
+    removeGround: { label: '땅 제거', emoji: '⬛' },
+    restoreGround: { label: '땅 복원', emoji: '⬜' },
   };
 
   // "타일" section: only terrain. Arch tools live here too (they're placed by
   // clicking cell edges). Laid out in 3 rows.
   const tileRows: EditorTool[][] = [
+    ['removeGround', 'restoreGround'],
     ['warm', 'cool'],
     ['crackWarm', 'crackCool'],
     ['edgeArch1', 'edgeArch2'],

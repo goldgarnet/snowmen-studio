@@ -62,6 +62,7 @@ function applyLaserCheck(level: Level): void {
       let cr = r + dr;
       let cc = c + dc;
       while (cr >= 0 && cc >= 0 && cr < level.height && cc < level.width) {
+        if (level.tiles[cr][cc].isVoid) break;
         const hit = level.objects[cr][cc];
         if (hit && LASER_BLOCKERS.has(hit.type)) break;
         // A solid yellow/orange wall blocks the beam BEFORE its cell, like a real wall
