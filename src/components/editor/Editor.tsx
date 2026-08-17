@@ -67,7 +67,7 @@ const TOOL_HOTKEYS: Partial<Record<EditorTool, Hotkey>> = {
   crackCool: { code: 'KeyD', label: 'D', shiftKey: true },
   edgeArch1: { code: 'BracketLeft', label: '[' },
   edgeArch2: { code: 'BracketRight', label: ']' },
-  hole: { code: 'KeyO', label: 'O' },
+  hole: { code: 'Digit0', label: '0' },
   goal: { code: 'KeyG', label: 'G' },
   player: { code: 'KeyP', label: 'P' },
   wall: { code: 'KeyW', label: 'W' },
@@ -85,8 +85,8 @@ const TOOL_HOTKEYS: Partial<Record<EditorTool, Hotkey>> = {
   keyTile: { code: 'KeyK', label: 'K' },
   yellowWall: { code: 'KeyY', label: 'Y' },
   yellowButton: { code: 'KeyY', label: 'Y', shiftKey: true },
-  orangeWall: { code: 'KeyN', label: 'N' },
-  orangeButton: { code: 'KeyN', label: 'N', shiftKey: true },
+  orangeWall: { code: 'KeyO', label: 'O' },
+  orangeButton: { code: 'KeyO', label: 'O', shiftKey: true },
   laser: { code: 'KeyL', label: 'L' },
   soulSwap: { code: 'KeyS', label: 'S' },
   portal: { code: 'KeyR', label: 'R' },
@@ -1123,8 +1123,11 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
             <div className="tree-height-input">
               <label>
                 높이:
-                <input type="number" min={0.5} step={0.5} value={treeHeight}
-                  onChange={(e) => setTreeHeight(Number(e.target.value))} />
+                <input type="number" min={1} max={31} step={1} value={treeHeight}
+                  onChange={(e) => {
+                    const nextHeight = Number(e.target.value);
+                    if (Number.isFinite(nextHeight)) setTreeHeight(Math.min(31, Math.max(1, Math.round(nextHeight))));
+                  }} />
               </label>
             </div>
           )}

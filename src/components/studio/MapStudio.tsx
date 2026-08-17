@@ -27,7 +27,22 @@ import Pagination from '../common/Pagination';
 import './MapStudio.css';
 
 type View = 'list' | 'folder' | 'editor' | 'play' | 'record';
+type ToolbarIconName = 'play' | 'record' | 'undo' | 'redo' | 'reset' | 'export' | 'import' | 'save';
 const PAGE_SIZE = 8; // 4 columns × 2 rows
+
+function ToolbarIcon({ name }: { name: ToolbarIconName }) {
+  const svgProps = { className: 'studio-toolbar-icon', viewBox: '0 0 24 24', 'aria-hidden': true };
+  switch (name) {
+    case 'play': return <svg {...svgProps}><path d="m9 5 10 7-10 7Z" fill="currentColor" stroke="none" /></svg>;
+    case 'record': return <svg {...svgProps}><circle cx="12" cy="12" r="5.5" fill="currentColor" stroke="none" /></svg>;
+    case 'undo': return <svg {...svgProps}><path d="M9 7 4 12l5 5M5 12h8a6 6 0 0 1 6 6" /></svg>;
+    case 'redo': return <svg {...svgProps}><path d="m15 7 5 5-5 5m4-5h-8a6 6 0 0 0-6 6" /></svg>;
+    case 'reset': return <svg {...svgProps}><path d="M5 7h14M10 11v6m4-6v6M9 7l1-3h4l1 3M7 7l1 14h8l1-14" /></svg>;
+    case 'export': return <svg {...svgProps}><path d="M12 15V3m0 0L8 7m4-4 4 4M5 13v7h14v-7" /></svg>;
+    case 'import': return <svg {...svgProps}><path d="M12 3v12m0 0-4-4m4 4 4-4M5 13v7h14v-7" /></svg>;
+    case 'save': return <svg {...svgProps}><path d="M5 3h11l3 3v15H5V3Zm3 0v6h8V3m-7 12h6" /></svg>;
+  }
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -481,25 +496,24 @@ export default function MapStudio() {
             title="snowmen-adventure 의 levels/L<번호>.json 에 그대로 붙여넣을 JSON 을 보여줍니다">
             📋 게임에 넣기
           </button>
-          <button className="btn" onClick={testPlay}>▶ 시뮬레이터</button>
+          <button className="btn studio-toolbar-icon-btn" onClick={testPlay} title="시뮬레이터" aria-label="시뮬레이터"><ToolbarIcon name="play" /></button>
           {published && editId && (
             <button
-              className="btn"
+              className="btn studio-toolbar-icon-btn"
               onClick={() => setView('record')}
               disabled={isDirty}
               title={isDirty ? '먼저 저장한 뒤 풀이를 녹화할 수 있어요' : '맵을 플레이해 풀이를 등록합니다'}
-            >
-              ● 풀이 등록
-            </button>
+              aria-label="풀이 등록"
+            ><ToolbarIcon name="record" /></button>
           )}
           <div className="studio-toolbar-editor-actions" aria-label="에디터 동작">
-            <button className="btn btn-sm" onClick={() => editorRef.current?.undo()} disabled={!editorHistory.canUndo}>↩ 실행취소</button>
-            <button className="btn btn-sm" onClick={() => editorRef.current?.redo()} disabled={!editorHistory.canRedo}>↪ 다시실행</button>
-            <button className="btn btn-sm" onClick={() => editorRef.current?.reset()}>🗑️ 초기화</button>
-            <button className="btn btn-sm studio-toolbar-divider-before" onClick={() => editorRef.current?.exportCode()}>📤 내보내기</button>
-            <button className="btn btn-sm" onClick={() => editorRef.current?.openImport()}>📥 불러오기</button>
+            <button className="btn btn-sm studio-toolbar-icon-btn" onClick={() => editorRef.current?.undo()} disabled={!editorHistory.canUndo} title="실행취소" aria-label="실행취소"><ToolbarIcon name="undo" /></button>
+            <button className="btn btn-sm studio-toolbar-icon-btn" onClick={() => editorRef.current?.redo()} disabled={!editorHistory.canRedo} title="다시 실행" aria-label="다시 실행"><ToolbarIcon name="redo" /></button>
+            <button className="btn btn-sm studio-toolbar-icon-btn" onClick={() => editorRef.current?.reset()} title="초기화" aria-label="초기화"><ToolbarIcon name="reset" /></button>
+            <button className="btn btn-sm studio-toolbar-icon-btn studio-toolbar-divider-before" onClick={() => editorRef.current?.exportCode()} title="레벨 코드 내보내기" aria-label="레벨 코드 내보내기"><ToolbarIcon name="export" /></button>
+            <button className="btn btn-sm studio-toolbar-icon-btn" onClick={() => editorRef.current?.openImport()} title="레벨 코드 불러오기" aria-label="레벨 코드 불러오기"><ToolbarIcon name="import" /></button>
           </div>
-          <button className="btn btn-primary studio-toolbar-divider-before" onClick={save}>💾 저장</button>
+          <button className="btn btn-primary studio-toolbar-icon-btn studio-toolbar-divider-before" onClick={save} title="저장" aria-label="저장"><ToolbarIcon name="save" /></button>
           {/* Folder maps are published together with their folder, not individually. */}
           {!editFolderId && (
             <button className="btn btn-primary" onClick={() => setShowPublish(true)}>🚀 허브에 올리기</button>
