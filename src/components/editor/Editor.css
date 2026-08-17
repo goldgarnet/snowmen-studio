@@ -112,6 +112,30 @@
   transition: all 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 3px;
 }
 .tool-emoji { font-size: 14px; line-height: 1; }
+.arch-tool-icon { position: relative; }
+.arch-tool-icon-tall {
+  display: inline-block;
+  width: 16px;
+  height: 17px;
+}
+.arch-tool-icon-tall > span {
+  position: absolute;
+  top: -4px;
+  left: 4px;
+  font-size: 8px;
+}
+.ground-remove-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 2px;
+  background: #d94747;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
 .tool-btn:hover:not(.active) { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
 .tool-btn.active {
   background: var(--accent); color: #fff; border-color: transparent;

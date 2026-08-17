@@ -128,6 +128,10 @@
   outline-offset: -2px;
   z-index: 1;
 }
+.grid.move-dragging .grid-cell:hover {
+  outline: none;
+  z-index: auto;
+}
 
 .tile-overlay {
   position: absolute;
@@ -206,11 +210,28 @@
   z-index: 5;
 }
 
-/* Move-drag ghost: dashed outline at the destination bbox */
+/* Move-drag ghost: adjacent selected destination cells share one outline. */
 .move-ghost {
   border: 2px dashed rgba(255, 220, 100, 0.95);
   border-radius: 4px;
   background: rgba(255, 220, 100, 0.10);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
   box-sizing: border-box;
+}
+.copy-move-badge {
+  position: absolute;
+  z-index: 8;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #b88413;
+  border-radius: 50%;
+  background: #fff5bb;
+  color: #8d6410;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
 }

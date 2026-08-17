@@ -7,6 +7,7 @@ interface GridProps {
   level: Level;
   onCellClick?: (row: number, col: number, toggleSelection?: boolean) => void;
   onCellDrag?: (row: number, col: number) => void;
+  onBackgroundClick?: () => void;
   onCellErase?: (row: number, col: number) => void;
   onEdgeClick?: (row: number, col: number, side: 'top' | 'left') => void;
   onEdgeErase?: (row: number, col: number, side: 'top' | 'left') => void;
@@ -18,8 +19,10 @@ interface GridProps {
   selectedCells?: Set<string>;
   previewSelectionCells?: Set<string> | null;
   moveGhost?: {
-    srcBBox: { minR: number; maxR: number; minC: number; maxC: number };
+    sourceCells: { row: number; col: number }[];
     delta: { dr: number; dc: number };
+    copy: boolean;
+    copyMarker: { row: number; col: number };
   } | null;
 }
 
@@ -129,7 +132,7 @@ const GridCell = memo(function GridCell({
 ));
 
 export default function Grid({
-  level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgeErase, edgeMode, highlightPlayer,
+  level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgeErase, onBackgroundClick, edgeMode, highlightPlayer,
   thumbnail, selectedCells, previewSelectionCells, moveGhost,
 }: GridProps) {
   const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase, onEdgeErase });
@@ -240,9 +243,16 @@ export default function Grid({
   const yellowSolid = yellowWallsSolid(level);
   // Orange walls are solid until every orange button has latched (persisted state).
   const orangeSolid = orangeWallsSolid(level);
+  const moveGhostDestinationKeys = new Set(
+    moveGhost?.sourceCells.map(({ row, col }) => (
+      `${row + moveGhost.delta.dr},${col + moveGhost.delta.dc}`
+    )) ?? []
+  );
 
   return (
-    <div ref={wrapperRef} className="grid-wrapper">
+    <div ref={wrapperRef} className="grid-wrapper" onMouseDown={(event) => {
+      if (event.button === 0 && event.target === event.currentTarget) onBackgroundClick?.();
+    }}>
       <div className="grid-stack"
         style={{ position: 'relative', width: gridW, height: gridH }}
         onContextMenu={(e) => e.preventDefault()}>
@@ -265,7 +275,7 @@ export default function Grid({
           </defs>
         </svg>
         <div
-          className={`grid ${edgeMode ? 'edge-mode' : ''} ${thumbnail ? 'thumb' : ''} ${onCellClick ? 'editable' : ''} ${level.tiles.some(row => row.some(tile => tile.isVoid)) ? 'non-rect' : ''}`}
+          className={`grid ${edgeMode ? 'edge-mode' : ''} ${thumbnail ? 'thumb' : ''} ${onCellClick ? 'editable' : ''} ${moveGhost ? 'move-dragging' : ''} ${level.tiles.some(row => row.some(tile => tile.isVoid)) ? 'non-rect' : ''}`}
           style={{
             gridTemplateColumns: `repeat(${level.width}, ${cellSize}px)`,
             gridTemplateRows: `repeat(${level.height}, ${cellSize}px)`,
@@ -303,17 +313,32 @@ export default function Grid({
           )}
         </div>
 
-        {/* Move ghost: dashed rectangle at the destination bbox while dragging a selection */}
-        {moveGhost && (
-          <div className="move-ghost" style={{
-            position: 'absolute',
-            left: (moveGhost.srcBBox.minC + moveGhost.delta.dc) * cellSize,
-            top: (moveGhost.srcBBox.minR + moveGhost.delta.dr) * cellSize,
-            width: (moveGhost.srcBBox.maxC - moveGhost.srcBBox.minC + 1) * cellSize,
-            height: (moveGhost.srcBBox.maxR - moveGhost.srcBBox.minR + 1) * cellSize,
-            pointerEvents: 'none',
-            zIndex: 7,
-          }} />
+        {/* Move ghost: adjacent selected destination cells share one outline. */}
+        {moveGhost?.sourceCells.map(({ row, col }) => {
+          const targetRow = row + moveGhost.delta.dr;
+          const targetCol = col + moveGhost.delta.dc;
+          const hasNeighbor = (r: number, c: number) => moveGhostDestinationKeys.has(`${r},${c}`);
+          return (
+            <div key={`move-ghost-${row}-${col}`} className="move-ghost" style={{
+              position: 'absolute',
+              left: targetCol * cellSize,
+              top: targetRow * cellSize,
+              width: cellSize,
+              height: cellSize,
+              borderTopColor: hasNeighbor(targetRow - 1, targetCol) ? 'transparent' : undefined,
+              borderRightColor: hasNeighbor(targetRow, targetCol + 1) ? 'transparent' : undefined,
+              borderBottomColor: hasNeighbor(targetRow + 1, targetCol) ? 'transparent' : undefined,
+              borderLeftColor: hasNeighbor(targetRow, targetCol - 1) ? 'transparent' : undefined,
+              pointerEvents: 'none',
+              zIndex: 7,
+            }} />
+          );
+        })}
+        {moveGhost?.copy && (
+          <div className="copy-move-badge" aria-label="복사 이동" style={{
+            left: (moveGhost.copyMarker.col + 1) * cellSize - 12,
+            top: moveGhost.copyMarker.row * cellSize - 4,
+          }}>+</div>
         )}
 
         {/* Laser beam overlay */}

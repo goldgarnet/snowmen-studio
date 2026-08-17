@@ -122,10 +122,19 @@ interface Pos { r: number; c: number; }
 interface BBox { minR: number; maxR: number; minC: number; maxC: number; }
 
 interface SnapshotCell { r: number; c: number; tile: Tile; obj: GameObject | null; }
+interface EdgeArchSnapshot {
+  row: number;
+  col: number;
+  field: 'edgeArchTop' | 'edgeArchLeft';
+  value: number;
+}
 
 type DragState =
   | { kind: 'select'; anchor: Pos; current: Pos }
-  | { kind: 'move'; anchor: Pos; current: Pos; snapshot: SnapshotCell[]; bbox: BBox };
+  | {
+      kind: 'move'; anchor: Pos; current: Pos; snapshot: SnapshotCell[];
+      edges: EdgeArchSnapshot[]; bbox: BBox; copy: boolean;
+    };
 
 const cellKey = (r: number, c: number) => `${r},${c}`;
 
@@ -217,6 +226,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   // === Selection / move state (used by the 'select' tool) ===
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<DragState | null>(null);
+  const pendingToggleRef = useRef<Pos | null>(null);
 
   const selectTool = useCallback((tool: EditorTool) => {
     // Selection/movement is the resting state. Choosing an already-active tool
@@ -242,6 +252,12 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     });
   }, []);
 
+  const clearSelection = useCallback(() => {
+    pendingToggleRef.current = null;
+    setSelection(new Set());
+    setDrag(null);
+  }, []);
+
   const previewSelection = drag?.kind === 'select'
     ? rectKeys(drag.anchor, drag.current)
     : null;
@@ -255,47 +271,78 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     : null;
 
   const moveGhost = drag?.kind === 'move' && moveDelta
-    ? { srcBBox: drag.bbox, delta: moveDelta }
+    ? {
+        sourceCells: drag.snapshot.map(({ r, c }) => ({ row: r, col: c })),
+        delta: moveDelta,
+        copy: drag.copy,
+        copyMarker: {
+          row: drag.anchor.r + moveDelta.dr,
+          col: drag.anchor.c + moveDelta.dc,
+        },
+      }
     : null;
 
   const handleSelectStart = (r: number, c: number, toggleCell = false) => {
     const key = cellKey(r, c);
-    if (toggleCell) {
-      // Ctrl/Cmd-click independently adds or removes a cell without starting a
-      // move gesture, matching presentation-editor selection behavior.
-      setSelection((current) => {
-        const next = new Set(current);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
-      setDrag(null);
-      return;
-    }
+    pendingToggleRef.current = null;
     if (selection.has(key)) {
-      // Start a move drag of the existing selection.
+      // Ctrl/Cmd-dragging an existing selection duplicates it. A modifier click
+      // without movement still removes that cell from the multi-selection.
       const cells: SnapshotCell[] = [];
-      for (const k of selection) {
-        const [rs, cs] = k.split(',').map(Number);
+      for (const selectedKey of selection) {
+        const [rs, cs] = selectedKey.split(',').map(Number);
         cells.push({
           r: rs, c: cs,
-          tile: { ...level.tiles[rs][cs] },
+          // Edge arches are moved separately because an edge can be stored in
+          // an adjacent, unselected cell (for example a selected cell's bottom
+          // or right boundary).
+          tile: { ...level.tiles[rs][cs], edgeArchTop: 0, edgeArchLeft: 0 },
           obj: level.objects[rs][cs] ? { ...level.objects[rs][cs]! } : null,
         });
+      }
+      const edgeMap = new Map<string, EdgeArchSnapshot>();
+      const addEdge = (edgeRow: number, edgeCol: number, field: EdgeArchSnapshot['field']) => {
+        const value = level.tiles[edgeRow][edgeCol][field] ?? 0;
+        if (value > 0) edgeMap.set(`${edgeRow},${edgeCol},${field}`, { row: edgeRow, col: edgeCol, field, value });
+      };
+      for (const selectedKey of selection) {
+        const [rs, cs] = selectedKey.split(',').map(Number);
+        if (rs > 0) addEdge(rs, cs, 'edgeArchTop');
+        if (cs > 0) addEdge(rs, cs, 'edgeArchLeft');
+        if (rs + 1 < level.height) addEdge(rs + 1, cs, 'edgeArchTop');
+        if (cs + 1 < level.width) addEdge(rs, cs + 1, 'edgeArchLeft');
+      }
+      const edges = [...edgeMap.values()];
+      const bbox = bboxFromKeys(selection);
+      for (const edge of edges) {
+        bbox.minR = Math.min(bbox.minR, edge.row);
+        bbox.maxR = Math.max(bbox.maxR, edge.row);
+        bbox.minC = Math.min(bbox.minC, edge.col);
+        bbox.maxC = Math.max(bbox.maxC, edge.col);
       }
       setDrag({
         kind: 'move',
         anchor: { r, c },
         current: { r, c },
         snapshot: cells,
-        bbox: bboxFromKeys(selection),
+        edges,
+        bbox,
+        copy: toggleCell,
       });
-    } else {
-      // Start a fresh rubber-band selection. Clear the current selection so the
-      // preview doesn't overlap stale highlights.
-      setSelection(new Set());
-      setDrag({ kind: 'select', anchor: { r, c }, current: { r, c } });
+      return;
     }
+    if (toggleCell) {
+      // Defer Ctrl/Cmd individual selection until mouseup. This keeps a held
+      // modifier available to begin a copy drag without changing selection on
+      // mousedown first.
+      pendingToggleRef.current = { r, c };
+      setDrag(null);
+      return;
+    }
+    // Start a fresh rubber-band selection. Clear the current selection so the
+    // preview doesn't overlap stale highlights.
+    setSelection(new Set());
+    setDrag({ kind: 'select', anchor: { r, c }, current: { r, c } });
   };
 
   const handleSelectMove = (r: number, c: number) => {
@@ -307,7 +354,21 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   };
 
   const finalizeDrag = useCallback(() => {
-    if (!drag) return;
+    if (!drag) {
+      const pendingToggle = pendingToggleRef.current;
+      if (pendingToggle) {
+        const key = cellKey(pendingToggle.r, pendingToggle.c);
+        setSelection((current) => {
+          const next = new Set(current);
+          if (next.has(key)) next.delete(key);
+          else next.add(key);
+          return next;
+        });
+        pendingToggleRef.current = null;
+      }
+      return;
+    }
+    pendingToggleRef.current = null;
     if (drag.kind === 'select') {
       setSelection(rectKeys(drag.anchor, drag.current));
     } else {
@@ -317,10 +378,14 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         setUndoStack((s) => [...s, cloneLevel(level)]);
         setRedoStack([]);
         const newLevel = cloneLevel(level);
-        // Clear source cells first (in case source and destination overlap).
-        for (const cell of drag.snapshot) {
-          newLevel.tiles[cell.r][cell.c] = createDefaultTile();
-          newLevel.objects[cell.r][cell.c] = null;
+        // A regular move clears sources first (including overlapping moves).
+        // Copy-move deliberately keeps every source cell intact.
+        if (!drag.copy) {
+          for (const cell of drag.snapshot) {
+            newLevel.tiles[cell.r][cell.c] = createDefaultTile();
+            newLevel.objects[cell.r][cell.c] = null;
+          }
+          for (const edge of drag.edges) newLevel.tiles[edge.row][edge.col][edge.field] = 0;
         }
         // Apply moved cells at destination.
         const newSel = new Set<string>();
@@ -331,8 +396,20 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
           newLevel.objects[nr][nc] = cell.obj;
           newSel.add(cellKey(nr, nc));
         }
+        for (const edge of drag.edges) {
+          const edgeRow = edge.row + delta.dr;
+          const edgeCol = edge.col + delta.dc;
+          newLevel.tiles[edgeRow][edgeCol][edge.field] = edge.value;
+        }
         setLevel(newLevel);
         setSelection(newSel);
+      } else if (drag.copy) {
+        // Preserve Ctrl/Cmd-click deselection when no drag movement occurred.
+        setSelection((current) => {
+          const next = new Set(current);
+          next.delete(cellKey(drag.anchor.r, drag.anchor.c));
+          return next;
+        });
       }
     }
     setDrag(null);
@@ -847,7 +924,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     crackWarm: { label: '따뜻함', emoji: '♨️' },
     crackCool: { label: '차가움', emoji: '🧊' },
     portal: { label: '포탈', emoji: '🟣' },
-    removeGround: { label: '땅 제거', emoji: '⬛' },
+    removeGround: { label: '땅 제거', emoji: '×' },
     restoreGround: { label: '땅 복원', emoji: '⬜' },
   };
 
@@ -907,7 +984,10 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
               className={`tool-btn ${selectedTool === id ? 'active' : ''}`}
               onClick={() => selectTool(id)}
               title={`단축키: ${hotkeyTitle(TOOL_HOTKEYS[id]!)}`}>
-              <span className="tool-emoji">🏛️</span>{id === 'edgeArch1' ? '높이 1' : '높이 2'}{hotkeyBadge(id)}
+              <span className={`tool-emoji arch-tool-icon ${id === 'edgeArch2' ? 'arch-tool-icon-tall' : ''}`}>
+                🏛️{id === 'edgeArch2' && <span>🏛️</span>}
+              </span>
+              {id === 'edgeArch1' ? '높이 1' : '높이 2'}{hotkeyBadge(id)}
             </button>
           );
         }
@@ -917,7 +997,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
             className={`tool-btn ${selectedTool === id ? 'active' : ''}`}
             onClick={() => selectTool(id)}
             title={`단축키: ${hotkeyTitle(TOOL_HOTKEYS[id]!)}`}>
-            <span className="tool-emoji">{m.emoji}</span>{m.label}{hotkeyBadge(id)}
+            <span className={`tool-emoji ${id === 'removeGround' ? 'ground-remove-icon' : ''}`}>{m.emoji}</span>{m.label}{hotkeyBadge(id)}
           </button>
         );
       })}
@@ -1078,6 +1158,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         <Grid level={level}
           onCellClick={handleCellClick}
           onCellDrag={handleCellDrag}
+          onBackgroundClick={clearSelection}
           onEdgeClick={handleEdgeClick}
           onCellErase={eraseCell}
           onEdgeErase={eraseEdge}
