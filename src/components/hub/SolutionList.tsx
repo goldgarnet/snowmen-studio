@@ -43,7 +43,7 @@ export default function SolutionList({ mapId, mapOwnerId, reloadToken, onView, o
     finally { setLoading(false); }
   }, [mapId, mapOwnerId]);
 
-  useEffect(() => { load(); }, [load, reloadToken]);
+  useEffect(() => { queueMicrotask(() => { void load(); }); }, [load, reloadToken]);
 
   const remove = async (id: string) => {
     if (!confirm('이 풀이를 삭제할까요?')) return;

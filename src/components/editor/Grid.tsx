@@ -5,7 +5,7 @@ import './Grid.css';
 
 interface GridProps {
   level: Level;
-  onCellClick?: (row: number, col: number) => void;
+  onCellClick?: (row: number, col: number, toggleSelection?: boolean) => void;
   onCellDrag?: (row: number, col: number) => void;
   onCellErase?: (row: number, col: number) => void;
   onEdgeClick?: (row: number, col: number, side: 'top' | 'left') => void;
@@ -37,7 +37,7 @@ interface GridCellProps {
   isSelected: boolean;
   snowmanFilterId: string;
   goalGradientId: string;
-  onMouseDown: (row: number, col: number, button: number) => void;
+  onMouseDown: (row: number, col: number, button: number, toggleSelection: boolean) => void;
   onMouseEnter: (row: number, col: number) => void;
 }
 
@@ -81,7 +81,7 @@ const GridCell = memo(function GridCell({
       className={tileClasses}
       onMouseDown={thumbnail ? undefined : (event) => {
         if (event.button === 2) event.preventDefault();
-        onMouseDown(row, col, event.button);
+        onMouseDown(row, col, event.button, event.ctrlKey || event.metaKey);
       }}
       onMouseEnter={thumbnail ? undefined : () => onMouseEnter(row, col)}
       onContextMenu={(event) => event.preventDefault()}
@@ -132,11 +132,11 @@ export default function Grid({
   level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgeErase, edgeMode, highlightPlayer,
   thumbnail, selectedCells, previewSelectionCells, moveGhost,
 }: GridProps) {
-  const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase });
+  const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase, onEdgeErase });
   useEffect(() => {
-    interactionRef.current = { onCellClick, onCellDrag, onCellErase };
-  }, [onCellClick, onCellDrag, onCellErase]);
-  const dragButtonRef = useRef<'left' | 'right' | null>(null);
+    interactionRef.current = { onCellClick, onCellDrag, onCellErase, onEdgeErase };
+  }, [onCellClick, onCellDrag, onCellErase, onEdgeErase]);
+  const dragButtonRef = useRef<'left-cell' | 'right-cell' | 'right-edge' | null>(null);
 
   // Reset drag flags if the mouse is released anywhere (even outside the grid).
   useEffect(() => {
@@ -169,26 +169,26 @@ export default function Grid({
       ))))
     : (thumbnail ? 10 : 40);
 
-  const handleMouseDown = useCallback((row: number, col: number, button: number) => {
+  const handleMouseDown = useCallback((row: number, col: number, button: number, toggleSelection: boolean) => {
     if (button === 2) {
-      dragButtonRef.current = 'right';
+      dragButtonRef.current = 'right-cell';
       interactionRef.current.onCellErase?.(row, col);
     } else if (button === 0) {
-      dragButtonRef.current = 'left';
-      interactionRef.current.onCellClick?.(row, col);
+      dragButtonRef.current = 'left-cell';
+      interactionRef.current.onCellClick?.(row, col, toggleSelection);
     }
   }, []);
 
   const handleMouseEnter = useCallback((row: number, col: number) => {
-    if (dragButtonRef.current === 'right') {
+    if (dragButtonRef.current === 'right-cell') {
       interactionRef.current.onCellErase?.(row, col);
-    } else if (dragButtonRef.current === 'left') {
+    } else if (dragButtonRef.current === 'left-cell') {
       (interactionRef.current.onCellDrag ?? interactionRef.current.onCellClick)?.(row, col);
     }
   }, []);
 
   const handleMouseUp = useCallback(() => {
-    if (dragButtonRef.current === 'left') dragButtonRef.current = null;
+    dragButtonRef.current = null;
   }, []);
 
   const sharedDefsId = useId().replace(/:/g, '');
@@ -320,7 +320,7 @@ export default function Grid({
         <LaserBeamOverlay level={level} cellSize={cellSize} yellowSolid={yellowSolid} orangeSolid={orangeSolid} />
 
         {/* Arch visuals overlay (absolute pixel positioning over the grid) */}
-        <div className="edge-overlay" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        <div className="edge-overlay" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3 }}>
           {horzEdges.filter(e => e.level > 0).map(e => (
             <ArchSegment key={`ah-${e.row}-${e.col}`}
               left={e.col * cellSize}
@@ -356,7 +356,14 @@ export default function Grid({
                 onMouseDown={(ev) => {
                   ev.stopPropagation();
                   if (ev.button === 0) onEdgeClick?.(e.row, e.col, 'top');
-                  else if (ev.button === 2) { ev.preventDefault(); onEdgeErase?.(e.row, e.col, 'top'); }
+                  else if (ev.button === 2) {
+                    ev.preventDefault();
+                    dragButtonRef.current = 'right-edge';
+                    interactionRef.current.onEdgeErase?.(e.row, e.col, 'top');
+                  }
+                }}
+                onMouseEnter={() => {
+                  if (dragButtonRef.current === 'right-edge') interactionRef.current.onEdgeErase?.(e.row, e.col, 'top');
                 }}
                 onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); }} />
             ))}
@@ -372,7 +379,14 @@ export default function Grid({
                 onMouseDown={(ev) => {
                   ev.stopPropagation();
                   if (ev.button === 0) onEdgeClick?.(e.row, e.col, 'left');
-                  else if (ev.button === 2) { ev.preventDefault(); onEdgeErase?.(e.row, e.col, 'left'); }
+                  else if (ev.button === 2) {
+                    ev.preventDefault();
+                    dragButtonRef.current = 'right-edge';
+                    interactionRef.current.onEdgeErase?.(e.row, e.col, 'left');
+                  }
+                }}
+                onMouseEnter={() => {
+                  if (dragButtonRef.current === 'right-edge') interactionRef.current.onEdgeErase?.(e.row, e.col, 'left');
                 }}
                 onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); }} />
             ))}
@@ -553,22 +567,28 @@ function YellowButtonOverlay({ size }: { size: number }) {
 // faint dashed outline of where it will reappear.
 function YellowWallOverlay({ size, solid }: { size: number; solid: boolean }) {
   if (solid) {
-    // zIndex 3 (above objects at z2) so an object trapped inside the partition is
-    // hidden behind the wall — it reads as sealed inside, not sitting on top.
+    // Keep the wall above objects, while the central block-sized cutout lets the
+    // underlying tile show through.
     return (
       <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
-        <rect x="1" y="1" width="38" height="38" rx="3" fill="#e6b422" stroke="#b5860f" strokeWidth="2" />
-        <line x1="0" y1="20" x2="40" y2="20" stroke="#c99320" strokeWidth="1.5" />
-        <line x1="20" y1="0" x2="20" y2="20" stroke="#c99320" strokeWidth="1.5" />
-        <line x1="10" y1="20" x2="10" y2="40" stroke="#c99320" strokeWidth="1.5" />
-        <line x1="30" y1="20" x2="30" y2="40" stroke="#c99320" strokeWidth="1.5" />
+        <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="#e6b422" fillRule="evenodd" />
+        <g stroke="#c99320" strokeWidth="1">
+          <line x1="1" y1="20" x2="8" y2="20" />
+          <line x1="32" y1="20" x2="39" y2="20" />
+          <line x1="20" y1="1" x2="20" y2="8" />
+          <line x1="10" y1="32" x2="10" y2="39" />
+          <line x1="30" y1="32" x2="30" y2="39" />
+        </g>
+        <rect x="1" y="1" width="38" height="38" fill="none" stroke="#b5860f" strokeWidth="2" />
+        <rect x="8" y="8" width="24" height="24" fill="none" stroke="#c99320" strokeWidth="1.5" />
       </svg>
     );
   }
   return (
     <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
-      <rect x="3" y="3" width="34" height="34" rx="3" fill="rgba(230,180,34,0.10)"
-        stroke="#e6b422" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
+      <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="rgba(230,180,34,0.10)" fillRule="evenodd" />
+      <rect x="1" y="1" width="38" height="38" fill="none" stroke="#e6b422" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
+      <rect x="8" y="8" width="24" height="24" fill="none" stroke="#e6b422" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
     </svg>
   );
 }
@@ -588,21 +608,27 @@ function OrangeButtonOverlay({ size, pressed }: { size: number; pressed: boolean
 // outline of where it will (permanently) stay gone.
 function OrangeWallOverlay({ size, solid }: { size: number; solid: boolean }) {
   if (solid) {
-    // zIndex 3 (above objects) so a trapped object is hidden inside — see YellowWallOverlay.
+    // See YellowWallOverlay for the shared full-cell frame and central cutout treatment.
     return (
       <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
-        <rect x="1" y="1" width="38" height="38" rx="3" fill="#e07b22" stroke="#a85410" strokeWidth="2" />
-        <line x1="0" y1="20" x2="40" y2="20" stroke="#c56320" strokeWidth="1.5" />
-        <line x1="20" y1="0" x2="20" y2="20" stroke="#c56320" strokeWidth="1.5" />
-        <line x1="10" y1="20" x2="10" y2="40" stroke="#c56320" strokeWidth="1.5" />
-        <line x1="30" y1="20" x2="30" y2="40" stroke="#c56320" strokeWidth="1.5" />
+        <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="#e07b22" fillRule="evenodd" />
+        <g stroke="#c56320" strokeWidth="1">
+          <line x1="1" y1="20" x2="8" y2="20" />
+          <line x1="32" y1="20" x2="39" y2="20" />
+          <line x1="20" y1="1" x2="20" y2="8" />
+          <line x1="10" y1="32" x2="10" y2="39" />
+          <line x1="30" y1="32" x2="30" y2="39" />
+        </g>
+        <rect x="1" y="1" width="38" height="38" fill="none" stroke="#a85410" strokeWidth="2" />
+        <rect x="8" y="8" width="24" height="24" fill="none" stroke="#c56320" strokeWidth="1.5" />
       </svg>
     );
   }
   return (
     <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
-      <rect x="3" y="3" width="34" height="34" rx="3" fill="rgba(224,123,34,0.08)"
-        stroke="#e07b22" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.55" />
+      <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="rgba(224,123,34,0.08)" fillRule="evenodd" />
+      <rect x="1" y="1" width="38" height="38" fill="none" stroke="#e07b22" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.55" />
+      <rect x="8" y="8" width="24" height="24" fill="none" stroke="#e07b22" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.55" />
     </svg>
   );
 }
@@ -860,7 +886,6 @@ function renderObject(
         <svg width={s} height={s} viewBox="0 0 40 40">
           <rect x="4" y="4" width="32" height="32" fill="#3a2845" stroke="#5a3060" strokeWidth="1.5" rx="3" />
           <polygon points={arrowPts[dir] ?? arrowPts.right} fill="#ff4422" opacity="0.9" />
-          <circle cx="20" cy="20" r="4" fill="none" stroke="#ff6644" strokeWidth="1.5" opacity="0.6" />
         </svg>
       );
     }

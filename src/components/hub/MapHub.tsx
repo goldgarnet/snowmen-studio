@@ -70,7 +70,7 @@ export default function MapHub() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
 
   // Split the published maps: standalone go in the main grid; folder members are
   // grouped under their folder card (for its cover thumbnail + count).
@@ -118,12 +118,11 @@ export default function MapHub() {
     review: standaloneMaps.filter((m) => m.status === 'pending').length,
   }), [standaloneMaps]);
 
-  // Pagination over the filtered list. Reset to page 1 whenever the filter/search
-  // changes; clamp if the visible count shrinks below the current page.
+  // Pagination over the filtered list. Filter/search handlers reset to page 1;
+  // derive a clamped value if a refresh reduces the number of visible pages.
   const pageCount = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
-  useEffect(() => { setPage(1); }, [filter, query]);
-  useEffect(() => { setPage((p) => Math.min(p, pageCount)); }, [pageCount]);
-  const paged = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const visiblePage = Math.min(page, pageCount);
+  const paged = entries.slice((visiblePage - 1) * PAGE_SIZE, visiblePage * PAGE_SIZE);
 
   const doUpload = async (p: UploadPayload) => {
     if (!profile) return;
@@ -233,7 +232,7 @@ export default function MapHub() {
             <button
               key={f.key}
               className={`chip${filter === f.key ? ' active' : ''}`}
-              onClick={() => setFilter(f.key)}
+              onClick={() => { setFilter(f.key); setPage(1); }}
             >
               {f.label}
             </button>
@@ -242,7 +241,7 @@ export default function MapHub() {
         <input
           className="field-input hub-search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setPage(1); }}
           placeholder="제목 · 제작자 검색"
         />
       </div>
@@ -260,7 +259,7 @@ export default function MapHub() {
               ? <FolderCard key={`f-${e.folder.id}`} folder={e.folder} maps={mapsByFolder.get(e.folder.id) ?? []} onOpen={setSelectedFolder} />
               : <MapCard key={`m-${e.map.id}`} map={e.map} onOpen={setSelected} />)}
           </div>
-          <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+          <Pagination page={visiblePage} pageCount={pageCount} onChange={setPage} />
         </>
       )}
 

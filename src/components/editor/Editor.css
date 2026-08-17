@@ -15,7 +15,16 @@
   flex-shrink: 0;
 }
 
-.editor-section { margin-bottom: 18px; }
+.editor-section {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.editor-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
 
 .editor-section h3 {
   font-size: 11px;
@@ -28,11 +37,11 @@
 
 .size-controls { display: flex; gap: 11px; margin-bottom: 9px; }
 .size-controls label {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; flex: 1 1 0; min-width: 0; align-items: center; gap: 5px;
   font-size: 13px; color: var(--text-dim); font-weight: 600;
 }
 .size-controls input {
-  width: 48px; padding: 5px 7px;
+  width: auto; min-width: 0; flex: 1; padding: 5px 7px;
   background: var(--surface); border: 1px solid var(--line);
   color: var(--text); border-radius: 7px; font-size: 13px; text-align: center;
 }
@@ -54,24 +63,46 @@
 .shadow-toggle.off { background: var(--surface); color: var(--text-faint); }
 .shadow-toggle:hover { filter: brightness(0.99); }
 
-.sun-section { display: flex; align-items: center; gap: 8px; }
-.sun-label { font-size: 12px; color: var(--text-dim); font-weight: 600; letter-spacing: 0.4px; }
-.sun-controls { display: flex; gap: 4px; }
-.sun-controls button {
-  width: 36px; height: 32px;
-  border: 1px solid var(--line); background: var(--surface); color: var(--text-faint);
-  border-radius: 7px; cursor: pointer; font-size: 16px; transition: all 0.12s ease;
+.shadow-control {
+  position: relative;
+  margin-bottom: 9px;
 }
-.sun-controls button:hover:not(.active) { background: var(--surface-2); color: var(--text-dim); }
-.sun-controls button.active {
-  background: linear-gradient(135deg, #f0b429, #e0a017);
-  color: #6a4b06; border-color: transparent;
-  box-shadow: 0 2px 6px -2px rgba(240, 180, 41, 0.6); font-weight: bold;
+.shadow-control .shadow-toggle {
+  margin-bottom: 0;
 }
+.shadow-direction-cycle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  transition: all 0.12s ease;
+  transform: translateY(-50%);
+}
+.shadow-direction-cycle:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
 
 .tool-group-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .tool-group-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
 .tool-rows { display: flex; flex-direction: column; gap: 6px; }
+.tool-groups { display: flex; flex-direction: column; gap: 9px; }
+.tool-group { display: flex; flex-direction: column; gap: 4px; }
+.tool-subgroups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tool-subgroup { display: flex; flex-direction: column; gap: 4px; }
+.tool-subgroup:first-child { grid-column: span 2; }
+.tool-group-label {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 
 .tool-btn {
   padding: 9px 7px;
@@ -86,17 +117,29 @@
   background: var(--accent); color: #fff; border-color: transparent;
   box-shadow: 0 3px 10px -5px var(--accent); font-weight: 700;
 }
-
-.select-btn-full {
-  width: 100%; padding: 10px 8px;
-  border: 1px solid var(--border-strong); background: var(--accent-soft); color: var(--accent);
-  border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.12s ease;
+.terrain-fill-button.active {
+  background: var(--surface);
+  color: var(--text-dim);
+  border-color: var(--accent);
+  box-shadow: none;
+  font-weight: 600;
 }
-.select-btn-full:hover:not(.active) { filter: brightness(0.97); }
-.select-btn-full.active {
-  background: var(--accent); color: #fff; border-color: transparent;
-  box-shadow: 0 3px 10px -5px var(--accent);
+
+.tool-hotkey {
+  margin-left: auto;
+  min-width: 16px;
+  padding: 1px 3px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.65;
 }
 .select-hint {
   margin-top: 6px; font-size: 10.5px; line-height: 1.45; color: var(--text-dim);
@@ -132,18 +175,30 @@
 }
 .tree-height-input input:focus { outline: none; border-color: var(--accent); }
 
-.action-col { display: flex; flex-direction: column; gap: 5px; }
-.action-col button,
-.action-row button {
-  width: 100%; padding: 8px 9px;
-  border: 1px solid var(--line); background: var(--surface); color: var(--text-dim);
-  border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; text-align: center;
-  transition: all 0.12s ease;
+.triangle-direction-control { margin-top: 2px; }
+.triangle-direction-control > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
 }
-.action-col button:hover,
-.action-row button:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
-.action-row { display: flex; gap: 5px; }
-.action-row button { flex: 1; padding: 8px 5px; }
+.triangle-direction-control > div { display: flex; gap: 4px; }
+.triangle-direction-control button {
+  flex: 1;
+  padding: 3px 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 16px;
+}
+.triangle-direction-control button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
 
 .danger-btn {
   border-color: #f0d5d3 !important; color: var(--danger) !important; background: #fdf1f0 !important;
@@ -210,6 +265,7 @@
   .tool-group-3col { grid-template-columns: repeat(6, 1fr); }
   .editor-section { margin-bottom: 12px; }
   .editor-grid-area { padding: 10px; }
+  .tool-hotkey { display: none; }
 }
 
 @media (max-width: 440px) {

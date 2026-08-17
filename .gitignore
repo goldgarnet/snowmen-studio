@@ -24,3 +24,7 @@ npm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 node_modules/.tmp
+
+# local agent workflow artifacts
+.harness/
+AGENTS.md

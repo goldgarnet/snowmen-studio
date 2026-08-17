@@ -204,7 +204,7 @@ export function executeSkipTurn(level: Level): TurnResult {
   // Waiting on an armed soul footplate fires the delayed transfer.
   resolveSoulFootplate(newLevel, playerPos, turnCount);
   applyLaserCheck(newLevel);
-  endOfTurn(newLevel, turnCount);
+  endOfTurn(newLevel);
 
   const finalPlayerPos = findPlayer(newLevel);
   if (!finalPlayerPos) return { level: newLevel, status: 'gameover' };
@@ -235,11 +235,11 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     return { level: newLevel, status: 'playing' };
   }
 
-  let newPlayerPos = findPlayer(newLevel);
+  const newPlayerPos = findPlayer(newLevel);
 
   // Soul-swap footplate (delayed one turn — see resolveSoulFootplate).
   if (newPlayerPos) {
-    newPlayerPos = resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
+    resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
   }
 
   // Portal relocation, then holes swallow anything that landed on one.
@@ -262,7 +262,7 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     return { level: newLevel, status: 'cleared' };
   }
 
-  endOfTurn(newLevel, turnCount);
+  endOfTurn(newLevel);
 
   const finalPlayerPos = findPlayer(newLevel);
   if (!finalPlayerPos) {
@@ -277,7 +277,7 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
   return { level: newLevel, status: 'playing' };
 }
 
-function endOfTurn(level: Level, _turnCount: number): void {
+function endOfTurn(level: Level): void {
   // 0. Cracked tiles armed on a previous turn crumble into holes now; anything still
   //    sitting on them falls in (a player there dies → soul transfer).
   convertArmedCracks(level);

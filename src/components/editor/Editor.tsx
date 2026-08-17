@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Level, SunDirection, Tile, GameObject, TriangleCorner } from '../../types';
 import { createDefaultTile, createLevel, cloneLevel, deserializeLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
@@ -6,7 +6,6 @@ import Grid from './Grid';
 import './Editor.css';
 
 type EditorTool =
-  | 'none'
   | 'select'
   | 'warm'
   | 'cool'
@@ -39,20 +38,83 @@ type EditorTool =
   | 'tree'
   | 'laser'
   | 'triangle'
-  | 'triangleBlock'
   | 'eraser';
+
+type TerrainFillMode = 'warm' | 'cool';
+type Hotkey = { code: string; label: string; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean };
 
 const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'removeGround', 'restoreGround', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'orangeButton', 'orangeWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
 
 // Object tools place an object in the cell; they clear any hole there first (an object
 // can't sit on a hole), matching the "no objects on holes" rule.
-const OBJECT_TOOLS: EditorTool[] = ['player', 'snowballLarge', 'snowballSmall', 'snowman1', 'snowman2', 'snowman3', 'wall', 'block', 'triangleBlock', 'tree', 'laser'];
+const OBJECT_TOOLS: EditorTool[] = ['player', 'snowballLarge', 'snowballSmall', 'snowman1', 'snowman2', 'snowman3', 'wall', 'block', 'tree', 'laser'];
 // NOTE: 'eraser' is intentionally NOT an edge tool. If it were, selecting the
 // eraser would put the grid in edge-mode, whose edge-hit strips intercept clicks
 // near cell borders — making it hard to erase tile flags (flake/goal/tunnel/
 // footplate). Edge arches are cleared by right-clicking a cell (or by right-
 // clicking the edge while an edge-arch tool is active).
 const EDGE_TOOLS: EditorTool[] = ['edgeArch1', 'edgeArch2'];
+
+// Tool shortcuts follow the editor's top-to-bottom, left-to-right layout. Use
+// KeyboardEvent.code below so they work even while a Korean IME is active.
+const TOOL_HOTKEYS: Partial<Record<EditorTool, Hotkey>> = {
+  select: { code: 'Backquote', label: '`' },
+  removeGround: { code: 'KeyX', label: 'X' },
+  restoreGround: { code: 'KeyX', label: 'X', shiftKey: true },
+  warm: { code: 'KeyH', label: 'H' },
+  cool: { code: 'KeyC', label: 'C' },
+  crackWarm: { code: 'KeyD', label: 'D' },
+  crackCool: { code: 'KeyD', label: 'D', shiftKey: true },
+  edgeArch1: { code: 'BracketLeft', label: '[' },
+  edgeArch2: { code: 'BracketRight', label: ']' },
+  hole: { code: 'KeyO', label: 'O' },
+  goal: { code: 'KeyG', label: 'G' },
+  player: { code: 'KeyP', label: 'P' },
+  wall: { code: 'KeyW', label: 'W' },
+  tree: { code: 'KeyT', label: 'T' },
+  snowballLarge: { code: 'Digit2', label: '2', shiftKey: true },
+  snowballSmall: { code: 'Digit1', label: '1', shiftKey: true },
+  block: { code: 'KeyB', label: 'B' },
+  flake: { code: 'KeyF', label: 'F' },
+  columnTunnel: { code: 'KeyG', label: 'G', shiftKey: true },
+  rowTunnel: { code: 'KeyV', label: 'V', shiftKey: true },
+  snowman1: { code: 'Digit1', label: '1' },
+  snowman2: { code: 'Digit2', label: '2' },
+  snowman3: { code: 'Digit3', label: '3' },
+  triangle: { code: 'KeyV', label: 'V' },
+  keyTile: { code: 'KeyK', label: 'K' },
+  yellowWall: { code: 'KeyY', label: 'Y' },
+  yellowButton: { code: 'KeyY', label: 'Y', shiftKey: true },
+  orangeWall: { code: 'KeyN', label: 'N' },
+  orangeButton: { code: 'KeyN', label: 'N', shiftKey: true },
+  laser: { code: 'KeyL', label: 'L' },
+  soulSwap: { code: 'KeyS', label: 'S' },
+  portal: { code: 'KeyR', label: 'R' },
+  eraser: { code: 'KeyE', label: 'E' },
+};
+
+const TERRAIN_FILL_HOTKEYS: Record<TerrainFillMode, Hotkey> = {
+  warm: { code: 'KeyH', label: 'H', shiftKey: true },
+  cool: { code: 'KeyC', label: 'C', shiftKey: true },
+};
+
+function matchesHotkey(event: KeyboardEvent, hotkey: Hotkey) {
+  const hasControl = event.ctrlKey || event.metaKey;
+  return hotkey.code === event.code
+    && Boolean(hotkey.shiftKey) === event.shiftKey
+    && Boolean(hotkey.ctrlKey) === hasControl
+    && Boolean(hotkey.altKey) === event.altKey;
+}
+
+function hotkeyLabel(hotkey: Hotkey) {
+  const prefix = hotkey.ctrlKey ? 'C' : hotkey.altKey ? 'A' : hotkey.shiftKey ? '⬆' : '';
+  return `${prefix}${hotkey.label}`;
+}
+
+function hotkeyTitle(hotkey: Hotkey) {
+  const prefix = hotkey.ctrlKey ? 'Ctrl+' : hotkey.altKey ? 'Option+' : hotkey.shiftKey ? 'Shift+' : '';
+  return `${prefix}${hotkey.label}`;
+}
 
 const TRI_LABEL: Record<TriangleCorner, string> = { tl: '◤', tr: '◥', bl: '◣', br: '◢' };
 
@@ -97,10 +159,25 @@ function clampDelta(bbox: BBox, raw: { dr: number; dc: number }, w: number, h: n
 interface EditorProps {
   level: Level;
   setLevel: (level: Level) => void;
+  onHistoryChange?: (history: EditorHistoryState) => void;
 }
 
-export default function Editor({ level, setLevel }: EditorProps) {
-  const [selectedTool, setSelectedTool] = useState<EditorTool>('warm');
+export interface EditorHistoryState {
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+export interface EditorToolbarApi {
+  undo: () => void;
+  redo: () => void;
+  reset: () => void;
+  exportCode: () => void;
+  openImport: () => void;
+}
+
+const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level, setLevel, onHistoryChange }, ref) {
+  const [selectedTool, setSelectedTool] = useState<EditorTool>('select');
+  const [terrainFillMode, setTerrainFillMode] = useState<TerrainFillMode | null>(null);
   const [treeHeight, setTreeHeight] = useState<number>(2);
   const [laserDir, setLaserDir] = useState<'right'|'left'|'up'|'down'>('right');
   const [triCorner, setTriCorner] = useState<TriangleCorner>('tl');
@@ -114,28 +191,56 @@ export default function Editor({ level, setLevel }: EditorProps) {
   const [redoStack, setRedoStack] = useState<Level[]>([]);
   // Snapshot the current level as one undo step. Call at the start of each discrete
   // edit gesture (e.g. mousedown), not on every drag frame.
-  const pushUndo = () => {
+  const pushUndo = useCallback(() => {
     setUndoStack((s) => [...s, cloneLevel(level)]);
     setRedoStack([]);
-  };
-  const undo = () => {
+  }, [level]);
+  const undo = useCallback(() => {
     if (undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
     setUndoStack((s) => s.slice(0, -1));
     setRedoStack((r) => [...r, cloneLevel(level)]);
     setLevel(prev);
-  };
-  const redo = () => {
+  }, [level, setLevel, undoStack]);
+  const redo = useCallback(() => {
     if (redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
     setRedoStack((r) => r.slice(0, -1));
     setUndoStack((s) => [...s, cloneLevel(level)]);
     setLevel(next);
-  };
+  }, [level, redoStack, setLevel]);
+
+  useEffect(() => {
+    onHistoryChange?.({ canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 });
+  }, [onHistoryChange, redoStack.length, undoStack.length]);
 
   // === Selection / move state (used by the 'select' tool) ===
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<DragState | null>(null);
+
+  const selectTool = useCallback((tool: EditorTool) => {
+    // Selection/movement is the resting state. Choosing an already-active tool
+    // therefore returns to it instead of leaving the grid without an interaction.
+    const nextTool = tool === 'select' || selectedTool === tool ? 'select' : tool;
+    setSelectedTool(nextTool);
+    if (nextTool !== 'select') {
+      setSelection(new Set());
+    }
+    setDrag(null);
+  }, [selectedTool]);
+
+  const clampSelectionToBounds = useCallback((width: number, height: number) => {
+    setSelection((sel) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const k of sel) {
+        const [r, c] = k.split(',').map(Number);
+        if (r < height && c < width) next.add(k);
+        else changed = true;
+      }
+      return changed ? next : sel;
+    });
+  }, []);
 
   const previewSelection = drag?.kind === 'select'
     ? rectKeys(drag.anchor, drag.current)
@@ -153,8 +258,20 @@ export default function Editor({ level, setLevel }: EditorProps) {
     ? { srcBBox: drag.bbox, delta: moveDelta }
     : null;
 
-  const handleSelectStart = (r: number, c: number) => {
+  const handleSelectStart = (r: number, c: number, toggleCell = false) => {
     const key = cellKey(r, c);
+    if (toggleCell) {
+      // Ctrl/Cmd-click independently adds or removes a cell without starting a
+      // move gesture, matching presentation-editor selection behavior.
+      setSelection((current) => {
+        const next = new Set(current);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      setDrag(null);
+      return;
+    }
     if (selection.has(key)) {
       // Start a move drag of the existing selection.
       const cells: SnapshotCell[] = [];
@@ -233,7 +350,8 @@ export default function Editor({ level, setLevel }: EditorProps) {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
       if (e.key === 'Escape') {
-        setSelection(new Set());
+        if (selectedTool !== 'select') setSelectedTool('select');
+        else setSelection(new Set());
         setDrag(null);
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selection.size > 0 && selectedTool === 'select') {
         setUndoStack((s) => [...s, cloneLevel(level)]);
@@ -271,33 +389,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [undoStack, redoStack, level]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clear selection when switching away from select tool.
-  useEffect(() => {
-    if (selectedTool !== 'select') {
-      setSelection(new Set());
-      setDrag(null);
-    }
-  }, [selectedTool]);
-
-  // Drop selection keys that are now out of bounds after a map resize.
-  useEffect(() => {
-    setSelection((sel) => {
-      let changed = false;
-      const next = new Set<string>();
-      for (const k of sel) {
-        const [r, c] = k.split(',').map(Number);
-        if (r < level.height && c < level.width) next.add(k);
-        else changed = true;
-      }
-      return changed ? next : sel;
-    });
-  }, [level.width, level.height]);
-
   // Local string state for width/height inputs so users can clear them.
   const [widthInput, setWidthInput] = useState<string>(level.width.toString());
   const [heightInput, setHeightInput] = useState<string>(level.height.toString());
-  useEffect(() => { setWidthInput(level.width.toString()); }, [level.width]);
-  useEffect(() => { setHeightInput(level.height.toString()); }, [level.height]);
 
   // A map dimension may be 1..30 (1-wide/1-tall maps are allowed; the map code stores a
   // dimension of 1 via a reserved 5-bit pattern — see levelCode). Keep the raw text in
@@ -323,12 +417,11 @@ export default function Editor({ level, setLevel }: EditorProps) {
     if (isNaN(n) || n < DIM_MIN || n > DIM_MAX) setHeightInput(level.height.toString());
   };
 
-  const handleCellClick = (row: number, col: number) => {
+  const handleCellClick = (row: number, col: number, toggleSelection = false) => {
     if (selectedTool === 'select') {
-      handleSelectStart(row, col);
+      handleSelectStart(row, col, toggleSelection);
       return;
     }
-    if (selectedTool === 'none') return; // no active tool — clicks do nothing
     pushUndo();
     const newLevel = cloneLevel(level);
     applyTool(newLevel, row, col, selectedTool);
@@ -351,33 +444,40 @@ export default function Editor({ level, setLevel }: EditorProps) {
     setLevel(newLevel);
   };
 
-  // Right-click: erase a cell back to the default state (cool, empty, no flags).
-  // This intentionally clears edgeArchTop/Left too because createDefaultTile()
-  // returns a fully-default tile.
+  // Right-click uses the eraser tool's exact rules, which deliberately preserve
+  // edge arches. Edge arches have their own precise right-click action when an
+  // edge-arch tool is active.
   const eraseDragRef = useRef<Level | null>(null);
   const eraseCell = (row: number, col: number) => {
     if (eraseDragRef.current === null) pushUndo(); // one undo step per right-drag
     const base = eraseDragRef.current ?? level;
     const newLevel = cloneLevel(base);
-    newLevel.tiles[row][col] = createDefaultTile();
-    newLevel.objects[row][col] = null;
+    applyTool(newLevel, row, col, 'eraser');
     eraseDragRef.current = newLevel;
     setLevel(newLevel);
   };
 
-  // Right-click on an edge strip: clear just that edge arch.
+  // Right-clicking an edge arch can continue across other edge strips. Keep the
+  // in-progress level locally so that the whole gesture is one undo step.
+  const eraseEdgeDragRef = useRef<Level | null>(null);
   const eraseEdge = (row: number, col: number, side: 'top' | 'left') => {
-    pushUndo();
-    const newLevel = cloneLevel(level);
+    const base = eraseEdgeDragRef.current ?? level;
+    const field: 'edgeArchTop' | 'edgeArchLeft' = side === 'top' ? 'edgeArchTop' : 'edgeArchLeft';
+    if (!base.tiles[row][col][field]) return;
+    if (eraseEdgeDragRef.current === null) pushUndo();
+    const newLevel = cloneLevel(base);
     const tile = newLevel.tiles[row][col];
-    if (side === 'top') tile.edgeArchTop = 0;
-    else tile.edgeArchLeft = 0;
+    tile[field] = 0;
+    eraseEdgeDragRef.current = newLevel;
     setLevel(newLevel);
   };
 
-  // Reset the right-drag accumulator whenever the global mouseup fires.
+  // Reset right-drag accumulators whenever the global mouseup fires.
   useEffect(() => {
-    const onUp = () => { eraseDragRef.current = null; };
+    const onUp = () => {
+      eraseDragRef.current = null;
+      eraseEdgeDragRef.current = null;
+    };
     window.addEventListener('mouseup', onUp);
     return () => window.removeEventListener('mouseup', onUp);
   }, []);
@@ -399,6 +499,15 @@ export default function Editor({ level, setLevel }: EditorProps) {
     setLevel(newLevel);
   };
 
+  const removeGround = (lv: Level, row: number, col: number) => {
+    lv.tiles[row][col] = { ...createDefaultTile(), isVoid: true };
+    lv.objects[row][col] = null;
+    // Edge arches belong to their lower/right cell. Clear every edge touching
+    // the removed cell so restoring ground cannot reveal a dangling arch.
+    if (row + 1 < lv.height) lv.tiles[row + 1][col].edgeArchTop = 0;
+    if (col + 1 < lv.width) lv.tiles[row][col + 1].edgeArchLeft = 0;
+  };
+
   const applyTool = (lv: Level, row: number, col: number, tool: EditorTool) => {
     const tile = lv.tiles[row][col];
 
@@ -412,12 +521,7 @@ export default function Editor({ level, setLevel }: EditorProps) {
 
     switch (tool) {
       case 'removeGround': {
-        lv.tiles[row][col] = { ...createDefaultTile(), isVoid: true };
-        lv.objects[row][col] = null;
-        // Edge arches belong to their lower/right cell. Clear every edge touching
-        // the removed cell so restoring ground cannot reveal a dangling arch.
-        if (row + 1 < lv.height) lv.tiles[row + 1][col].edgeArchTop = 0;
-        if (col + 1 < lv.width) lv.tiles[row][col + 1].edgeArchLeft = 0;
+        removeGround(lv, row, col);
         break;
       }
       case 'restoreGround':
@@ -534,10 +638,14 @@ export default function Editor({ level, setLevel }: EditorProps) {
       case 'triangle':
         tile.triangle = triCorner;
         break;
-      case 'triangleBlock':
-        lv.objects[row][col] = { type: 'block', size: 1, isMelting: false, triangleCorner: triCorner, createdAt: 0 };
-        break;
       case 'eraser':
+        if (terrainFillMode && tile.isWarm !== (terrainFillMode === 'warm')) {
+          // A terrain-fill mode treats the opposite temperature as erasable
+          // paint, not as removable ground.
+          tile.isWarm = terrainFillMode === 'warm';
+          if (tile.isWarm) tile.isFlake = false;
+          break;
+        }
         lv.objects[row][col] = null;
         tile.isFlake = false;
         tile.isGoal = false;
@@ -588,15 +696,18 @@ export default function Editor({ level, setLevel }: EditorProps) {
         }
       }
     }
+    setWidthInput(w.toString());
+    setHeightInput(h.toString());
+    clampSelectionToBounds(w, h);
     setLevel(newLevel);
   };
 
-  const resetMap = () => {
+  const resetMap = useCallback(() => {
     pushUndo();
     setLevel(createLevel(level.width, level.height));
-  };
+  }, [level.height, level.width, pushUndo, setLevel]);
 
-  const fillAll = (warm: boolean) => {
+  const fillAll = useCallback((warm: boolean) => {
     pushUndo();
     const newLevel = cloneLevel(level);
     for (let r = 0; r < newLevel.height; r++)
@@ -604,9 +715,41 @@ export default function Editor({ level, setLevel }: EditorProps) {
         if (newLevel.tiles[r][c].isVoid) continue;
         newLevel.tiles[r][c].isWarm = warm;
         if (warm) newLevel.tiles[r][c].isFlake = false;
-      }
+    }
     setLevel(newLevel);
-  };
+  }, [level, pushUndo, setLevel]);
+
+  const applyTerrainFill = useCallback((mode: TerrainFillMode) => {
+    setTerrainFillMode(mode);
+    fillAll(mode === 'warm');
+  }, [fillAll]);
+
+  // Tool selection shortcuts use name-based keys, with modifiers denoting a
+  // related variant (for example Shift+1/2 for snowball size). `code` keeps the
+  // mapping independent of the active IME.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+
+      const terrainEntry = (Object.entries(TERRAIN_FILL_HOTKEYS) as [TerrainFillMode, Hotkey][])
+        .find(([, hotkey]) => matchesHotkey(e, hotkey));
+      if (terrainEntry) {
+        e.preventDefault();
+        applyTerrainFill(terrainEntry[0]);
+        return;
+      }
+
+      const entry = (Object.entries(TOOL_HOTKEYS) as [EditorTool, Hotkey][])
+        .find(([, hotkey]) => matchesHotkey(e, hotkey));
+      if (!entry) return;
+
+      e.preventDefault();
+      selectTool(entry[0]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [applyTerrainFill, selectTool]);
 
   const toggleShadow = () => {
     pushUndo();
@@ -627,7 +770,13 @@ export default function Editor({ level, setLevel }: EditorProps) {
     setLevel({ ...cloneLevel(level), sunDirection: dir });
   };
 
-  const handleExport = () => {
+  const cycleSun = () => {
+    const directions: SunDirection[] = ['left', 'up', 'right', 'down'];
+    const current = directions.indexOf(level.sunDirection);
+    setSun(directions[(current + 1) % directions.length]);
+  };
+
+  const handleExport = useCallback(() => {
     const code = encodeLevelCode(level);
     setJsonText(code);
     navigator.clipboard.writeText(code).then(() => {
@@ -635,7 +784,7 @@ export default function Editor({ level, setLevel }: EditorProps) {
       setTimeout(() => setCopyMsg(false), 2000);
     });
     setShowImportExport(true);
-  };
+  }, [level]);
 
   const handleImport = () => {
     const text = jsonText.trim();
@@ -644,6 +793,9 @@ export default function Editor({ level, setLevel }: EditorProps) {
       : decodeLevelCode(text);
     if (imported) {
       pushUndo();
+      setWidthInput(imported.width.toString());
+      setHeightInput(imported.height.toString());
+      clampSelectionToBounds(imported.width, imported.height);
       setLevel(imported);
       setShowImportExport(false);
     } else {
@@ -651,12 +803,18 @@ export default function Editor({ level, setLevel }: EditorProps) {
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(jsonText).then(() => {
-      setCopyMsg(true);
-      setTimeout(() => setCopyMsg(false), 2000);
-    });
-  };
+  const openImport = useCallback(() => {
+    setJsonText('');
+    setShowImportExport(true);
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    undo,
+    redo,
+    reset: resetMap,
+    exportCode: handleExport,
+    openImport,
+  }), [undo, redo, resetMap, handleExport, openImport]);
 
   // Tool metadata (label + emoji). The tile/object *grouping* below is purely a
   // visual arrangement in the editor — the underlying tools/logic are unchanged
@@ -668,54 +826,60 @@ export default function Editor({ level, setLevel }: EditorProps) {
     player: { label: '플레이어', emoji: '⛄' },
     wall: { label: '벽', emoji: '🧱' },
     tree: { label: '나무', emoji: '🌲' },
-    snowballLarge: { label: '큰 눈덩이', emoji: '⚪' },
-    snowballSmall: { label: '작은 눈덩이', emoji: '🔵' },
+    snowballLarge: { label: '크기 2', emoji: '⚪' },
+    snowballSmall: { label: '크기 1', emoji: '🔵' },
     block: { label: '블록', emoji: '📦' },
     flake: { label: '눈꽃', emoji: '❄️' },
-    columnTunnel: { label: '가로 터널', emoji: '🚇' },
-    rowTunnel: { label: '세로 터널', emoji: '🚇' },
-    snowman1: { label: '눈사람 1', emoji: '⛄' },
-    snowman2: { label: '눈사람 2', emoji: '⛄' },
-    snowman3: { label: '눈사람 3', emoji: '⛄' },
-    triangle: { label: '삼각 벽', emoji: '📐' },
-    triangleBlock: { label: '삼각 블록', emoji: '🔺' },
-    yellowWall: { label: '노랑 벽', emoji: '🟨' },
+    columnTunnel: { label: '가로', emoji: '🚇' },
+    rowTunnel: { label: '세로', emoji: '🚇' },
+    snowman1: { label: '크기 1', emoji: '⛄' },
+    snowman2: { label: '크기 2', emoji: '⛄' },
+    snowman3: { label: '크기 3', emoji: '⛄' },
+    triangle: { label: '삼각 벽', emoji: '◢' },
+    yellowWall: { label: '벽', emoji: '🟨' },
     keyTile: { label: '초록 버튼', emoji: '🟢' },
-    yellowButton: { label: '노랑 버튼', emoji: '🟡' },
+    yellowButton: { label: '버튼', emoji: '🟡' },
     laser: { label: '레이저', emoji: '🔴' },
     soulSwap: { label: '영혼 발판', emoji: '🌀' },
-    orangeButton: { label: '주황 버튼', emoji: '🟠' },
-    orangeWall: { label: '주황 벽', emoji: '🔶' },
+    orangeButton: { label: '버튼', emoji: '🟠' },
+    orangeWall: { label: '벽', emoji: '🔶' },
     hole: { label: '구멍', emoji: '🕳️' },
-    crackWarm: { label: '쪼개진(따뜻)', emoji: '♨️' },
-    crackCool: { label: '쪼개진(차가움)', emoji: '🧊' },
+    crackWarm: { label: '따뜻함', emoji: '♨️' },
+    crackCool: { label: '차가움', emoji: '🧊' },
     portal: { label: '포탈', emoji: '🟣' },
     removeGround: { label: '땅 제거', emoji: '⬛' },
     restoreGround: { label: '땅 복원', emoji: '⬜' },
   };
 
-  // "타일" section: only terrain. Arch tools live here too (they're placed by
-  // clicking cell edges). Laid out in 3 rows.
-  const tileRows: EditorTool[][] = [
-    ['removeGround', 'restoreGround'],
-    ['warm', 'cool'],
-    ['crackWarm', 'crackCool'],
-    ['edgeArch1', 'edgeArch2'],
-    ['hole', 'goal'],
+  // "타일" section: per-cell terrain features, grouped like the object tools.
+  // Ground removal/restoration instead live beside the map-wide terrain fills.
+  const tileGroups: { label: string; tools: EditorTool[] }[] = [
+    { label: '기본', tools: ['warm', 'cool'] },
+    { label: '균열', tools: ['crackWarm', 'crackCool'] },
+    { label: '아치', tools: ['edgeArch1', 'edgeArch2'] },
+    { label: '기타', tools: ['hole', 'goal'] },
   ];
 
-  // "오브젝트" section: everything else, arranged exactly as requested.
-  const objectRows: EditorTool[][] = [
-    ['player', 'wall', 'tree'],
-    ['snowballLarge', 'snowballSmall'],
-    ['block', 'triangleBlock', 'flake'],
-    ['columnTunnel', 'rowTunnel'],
-    ['snowman1', 'snowman2', 'snowman3'],
-    ['triangle', 'keyTile'],
-    ['yellowWall', 'yellowButton'],
-    ['orangeWall', 'orangeButton'],
-    ['laser', 'soulSwap'],
-    ['portal'],
+  // "오브젝트" section: related tools are shown as clearly-labelled button groups.
+  const objectGroups: {
+    label?: string;
+    tools?: EditorTool[];
+    columns?: number;
+    subgroups?: { label: string; tools: EditorTool[] }[];
+  }[] = [
+    { label: '기본', tools: ['player'] },
+    { label: '눈사람', tools: ['snowman1', 'snowman2', 'snowman3'] },
+    {
+      subgroups: [
+        { label: '눈덩이', tools: ['snowballSmall', 'snowballLarge'] },
+        { label: '눈꽃', tools: ['flake'] },
+      ],
+    },
+    { label: '장애물', tools: ['wall', 'tree', 'triangle', 'block'], columns: 2 },
+    { label: '터널', tools: ['columnTunnel', 'rowTunnel'] },
+    { label: '노랑', tools: ['yellowWall', 'yellowButton'] },
+    { label: '주황', tools: ['orangeWall', 'orangeButton'] },
+    { label: '특수', tools: ['keyTile', 'laser', 'soulSwap', 'portal'], columns: 2 },
   ];
 
   // Portals must come in pairs (exactly 0 or 2). Count them for an inline warning.
@@ -725,15 +889,25 @@ export default function Editor({ level, setLevel }: EditorProps) {
       if (level.tiles[r][c].isPortal) portalCount++;
   const portalWarning = portalCount !== 0 && portalCount !== 2;
 
-  const renderToolRow = (ids: EditorTool[]) => (
-    <div className="tool-row" style={{ display: 'grid', gridTemplateColumns: `repeat(${ids.length}, 1fr)`, gap: 6 }}>
+  const hotkeyBadge = (id: EditorTool) => {
+    const hotkey = TOOL_HOTKEYS[id];
+    return hotkey && (
+      <kbd className="tool-hotkey" aria-label={`${hotkeyTitle(hotkey)} 키`}>
+        {hotkeyLabel(hotkey)}
+      </kbd>
+    );
+  };
+
+  const renderToolRow = (ids: EditorTool[], columns = ids.length) => (
+    <div className="tool-row" style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 6 }}>
       {ids.map((id) => {
         if (id === 'edgeArch1' || id === 'edgeArch2') {
           return (
             <button key={id}
               className={`tool-btn ${selectedTool === id ? 'active' : ''}`}
-              onClick={() => setSelectedTool(id)}>
-              <span className="tool-emoji">🏛️</span>{id === 'edgeArch1' ? '높이 1 아치' : '높이 2 아치'}
+              onClick={() => selectTool(id)}
+              title={`단축키: ${hotkeyTitle(TOOL_HOTKEYS[id]!)}`}>
+              <span className="tool-emoji">🏛️</span>{id === 'edgeArch1' ? '높이 1' : '높이 2'}{hotkeyBadge(id)}
             </button>
           );
         }
@@ -741,11 +915,27 @@ export default function Editor({ level, setLevel }: EditorProps) {
         return (
           <button key={id}
             className={`tool-btn ${selectedTool === id ? 'active' : ''}`}
-            onClick={() => setSelectedTool(id)}>
-            <span className="tool-emoji">{m.emoji}</span>{m.label}
+            onClick={() => selectTool(id)}
+            title={`단축키: ${hotkeyTitle(TOOL_HOTKEYS[id]!)}`}>
+            <span className="tool-emoji">{m.emoji}</span>{m.label}{hotkeyBadge(id)}
           </button>
         );
       })}
+    </div>
+  );
+
+  const renderTriangleDirectionControl = () => (
+    <div className="triangle-direction-control">
+      <span>삼각 방향</span>
+      <div>
+        {(['tl', 'tr', 'bl', 'br'] as TriangleCorner[]).map((corner) => (
+          <button key={corner}
+            className={triCorner === corner ? 'active' : ''}
+            onClick={() => setTriCorner(corner)}>
+            {TRI_LABEL[corner]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -768,55 +958,81 @@ export default function Editor({ level, setLevel }: EditorProps) {
                 onBlur={handleHeightBlur} />
             </label>
           </div>
-          <button className={`shadow-toggle ${level.hasShadow ? 'on' : 'off'}`}
-            onClick={toggleShadow}>
-            그림자: {level.hasShadow ? 'ON' : 'OFF'}
-          </button>
+          <div className="shadow-control">
+            <button className={`shadow-toggle ${level.hasShadow ? 'on' : 'off'}`} onClick={toggleShadow}>
+              그림자: {level.hasShadow ? 'ON' : 'OFF'}
+            </button>
+            {level.hasShadow && (
+              <button className="shadow-direction-cycle" onClick={cycleSun}
+                title="클릭해 해 방향 변경"
+                aria-label="해 방향 변경">
+                {level.sunDirection === 'left' ? '←' : level.sunDirection === 'right' ? '→' : level.sunDirection === 'up' ? '↑' : '↓'}
+              </button>
+            )}
+          </div>
           <button className={`shadow-toggle ${level.soulSwapEnabled ? 'on' : 'off'}`}
             onClick={toggleSoulSwap}
             title="켜면 시뮬레이터에서 M키로 눈사람 큐를 순회하며 영혼을 옮길 수 있습니다.">
             영혼 이동(M): {level.soulSwapEnabled ? 'ON' : 'OFF'}
           </button>
-          {level.hasShadow && (
-            <div className="sun-section">
-              <span className="sun-label">해 방향</span>
-              <div className="sun-controls">
-                {(['left', 'right', 'up', 'down'] as SunDirection[]).map((dir) => (
-                  <button key={dir}
-                    className={level.sunDirection === dir ? 'active' : ''}
-                    onClick={() => setSun(dir)}>
-                    {dir === 'left' ? '←' : dir === 'right' ? '→' : dir === 'up' ? '↑' : '↓'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
 
         <section className="editor-section">
-          <button className={`tool-btn select-btn-full ${selectedTool === 'select' ? 'active' : ''}`}
-            onClick={() => setSelectedTool(selectedTool === 'select' ? 'none' : 'select')}
-            title="드래그로 영역 선택 후, 다시 드래그하면 이동. 다시 누르면 해제. Delete로 삭제, Esc로 해제.">
-            <span className="tool-emoji">🔲</span>선택 / 이동
-          </button>
-          {selectedTool === 'select' && (
-            <div className="select-hint">
-              드래그: 선택 · 선택된 칸 다시 드래그: 이동 · Delete: 삭제 · Esc: 해제
-            </div>
-          )}
+          <h3>지형</h3>
+          <div className="tool-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            <button
+              className={`tool-btn terrain-fill-button ${terrainFillMode === 'warm' ? 'active' : ''}`}
+              onClick={() => applyTerrainFill('warm')}
+              aria-pressed={terrainFillMode === 'warm'}
+              title={`단축키: ${hotkeyTitle(TERRAIN_FILL_HOTKEYS.warm)}`}>
+              <span className="tool-emoji">🟧</span>따뜻한 지형
+              <kbd className="tool-hotkey" aria-label="Shift+H 키">{hotkeyLabel(TERRAIN_FILL_HOTKEYS.warm)}</kbd>
+            </button>
+            <button
+              className={`tool-btn terrain-fill-button ${terrainFillMode === 'cool' ? 'active' : ''}`}
+              onClick={() => applyTerrainFill('cool')}
+              aria-pressed={terrainFillMode === 'cool'}
+              title={`단축키: ${hotkeyTitle(TERRAIN_FILL_HOTKEYS.cool)}`}>
+              <span className="tool-emoji">🟦</span>차가운 지형
+              <kbd className="tool-hotkey" aria-label="Shift+C 키">{hotkeyLabel(TERRAIN_FILL_HOTKEYS.cool)}</kbd>
+            </button>
+          </div>
+          <div className="tool-rows" style={{ marginTop: 6 }}>
+            {renderToolRow(['removeGround', 'restoreGround'])}
+          </div>
         </section>
 
         <section className="editor-section">
           <h3>타일</h3>
-          <div className="tool-rows">
-            {tileRows.map((row, i) => <div key={i}>{renderToolRow(row)}</div>)}
+          <div className="tool-groups">
+            {tileGroups.map((group) => (
+              <div className="tool-group" key={group.label}>
+                <div className="tool-group-label">{group.label}</div>
+                {renderToolRow(group.tools)}
+              </div>
+            ))}
           </div>
         </section>
 
         <section className="editor-section">
           <h3>오브젝트</h3>
-          <div className="tool-rows">
-            {objectRows.map((row, i) => <div key={i}>{renderToolRow(row)}</div>)}
+          <div className="tool-groups">
+            {objectGroups.map((group) => (
+              <div className="tool-group" key={group.label ?? 'snow-tools'}>
+                {group.label && <div className="tool-group-label">{group.label}</div>}
+                {group.subgroups ? (
+                  <div className="tool-subgroups">
+                    {group.subgroups.map((subgroup) => (
+                      <div className="tool-subgroup" key={subgroup.label}>
+                        <div className="tool-group-label">{subgroup.label}</div>
+                        {renderToolRow(subgroup.tools)}
+                      </div>
+                    ))}
+                  </div>
+                ) : renderToolRow(group.tools!, group.columns)}
+                {group.label === '장애물' && selectedTool === 'triangle' && renderTriangleDirectionControl()}
+              </div>
+            ))}
           </div>
           {portalWarning && (
             <div className="select-hint" style={{ color: '#e6a23c' }}>
@@ -846,45 +1062,16 @@ export default function Editor({ level, setLevel }: EditorProps) {
               </div>
             </div>
           )}
-          {(selectedTool === 'triangle' || selectedTool === 'triangleBlock') && (
-            <div className="tree-height-input">
-              <span style={{fontSize:12,color:'#aaa',marginBottom:4,display:'block'}}>삼각 방향 (직각 = 솔리드 모서리)</span>
-              <div style={{display:'flex',gap:4}}>
-                {(['tl','tr','bl','br'] as TriangleCorner[]).map(corner => (
-                  <button key={corner}
-                    style={{flex:1,padding:'3px 0',fontSize:16,background:triCorner===corner?'#3a6ec2':'transparent',color:triCorner===corner?'#fff':'#ccc',border:'1px solid #555',borderRadius:4,cursor:'pointer'}}
-                    onClick={() => setTriCorner(corner)}>
-                    {TRI_LABEL[corner]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
 
         <section className="editor-section">
           <button className={`tool-btn eraser-btn-full ${selectedTool === 'eraser' ? 'active' : ''}`}
-            onClick={() => setSelectedTool('eraser')}>
-            <span className="tool-emoji">🧹</span>지우개
+            onClick={() => selectTool('eraser')}
+            title="단축키: V">
+            <span className="tool-emoji">🧹</span>지우개{hotkeyBadge('eraser')}
           </button>
         </section>
 
-        <section className="editor-section">
-          <h3>동작</h3>
-          <div className="action-row">
-            <button onClick={undo} disabled={undoStack.length === 0}>↩ 실행취소</button>
-            <button onClick={redo} disabled={redoStack.length === 0}>↪ 다시실행</button>
-          </div>
-          <div className="action-col" style={{ marginTop: 6 }}>
-            <button onClick={() => fillAll(true)}>🟧 따뜻한 칸으로 채우기</button>
-            <button onClick={() => fillAll(false)}>🟦 차가운 칸으로 채우기</button>
-            <button onClick={resetMap} className="danger-btn">🗑️ 초기화</button>
-          </div>
-          <div className="action-row" style={{ marginTop: 6 }}>
-            <button onClick={handleExport}>내보내기</button>
-            <button onClick={() => { setJsonText(''); setShowImportExport(true); }}>불러오기</button>
-          </div>
-        </section>
       </div>
 
       <div className="editor-grid-area">
@@ -910,7 +1097,6 @@ export default function Editor({ level, setLevel }: EditorProps) {
               rows={4} placeholder="레벨 코드를 여기에 붙여넣으세요..." />
             <div className="modal-buttons">
               <button onClick={handleImport}>불러오기</button>
-              <button onClick={handleCopy}>복사</button>
               <button onClick={() => setShowImportExport(false)}>닫기</button>
             </div>
           </div>
@@ -918,4 +1104,6 @@ export default function Editor({ level, setLevel }: EditorProps) {
       )}
     </div>
   );
-}
+});
+
+export default Editor;

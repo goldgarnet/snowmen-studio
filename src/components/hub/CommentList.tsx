@@ -44,7 +44,7 @@ export default function CommentList({ mapId }: { mapId: string }) {
     catch (e) { console.error(e); }
   }, [mapId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
 
   const canSubmit = body.trim().length > 0 || (suggesting && suggestedDiff != null);
 

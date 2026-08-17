@@ -311,7 +311,7 @@ export default function ChapterComposer() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
 
   const loadStages = useCallback(async (chapterId: string) => {
     setStagesLoading(true);
@@ -320,7 +320,12 @@ export default function ChapterComposer() {
     finally { setStagesLoading(false); }
   }, []);
 
-  useEffect(() => { if (selectedId) loadStages(selectedId); else setStages([]); }, [selectedId, loadStages]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (selectedId) void loadStages(selectedId);
+      else setStages([]);
+    });
+  }, [selectedId, loadStages]);
 
   const folderNames = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
 

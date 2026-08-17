@@ -41,7 +41,7 @@ export default function FolderDetail({ folder: initial, onBack, onOpenMap, onCha
     finally { setLoading(false); }
   }, [folder.id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
 
   const saveEdit = async (p: FolderFormPayload) => {
     const updated = await updateFolder(folder.id, {

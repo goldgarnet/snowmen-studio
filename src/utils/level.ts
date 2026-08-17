@@ -29,7 +29,7 @@ export function createLevel(width: number, height: number): Level {
     width,
     height,
     sunDirection: 'left',
-    hasShadow: true,
+    hasShadow: false,
     soulSwapEnabled: false,
     tiles,
     objects,

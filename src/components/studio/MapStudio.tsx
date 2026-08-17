@@ -14,7 +14,7 @@ import {
 } from '../../api/folders';
 import type { MapRow, FolderRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
-import Editor from '../editor/Editor';
+import Editor, { type EditorHistoryState, type EditorToolbarApi } from '../editor/Editor';
 import PlayView from '../editor/PlayView';
 import UploadForm, { UploadPayload } from '../hub/UploadForm';
 import FolderForm, { FolderFormPayload } from '../hub/FolderForm';
@@ -43,6 +43,8 @@ export default function MapStudio() {
 
   // Editing state (the map currently open in the editor).
   const [level, setLevel] = useState<Level>(() => createLevel(8, 8));
+  const editorRef = useRef<EditorToolbarApi>(null);
+  const [editorHistory, setEditorHistory] = useState<EditorHistoryState>({ canUndo: false, canRedo: false });
   const [editId, setEditId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [published, setPublished] = useState(false);
@@ -87,8 +89,8 @@ export default function MapStudio() {
     ...rootMaps.map((m) => ({ kind: 'map' as const, map: m })),
   ];
   const pageCount = Math.max(1, Math.ceil(listEntries.length / PAGE_SIZE));
-  useEffect(() => { setPage((p) => Math.min(p, pageCount)); }, [pageCount]);
-  const pagedEntries = listEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const visiblePage = Math.min(page, pageCount);
+  const pagedEntries = listEntries.slice((visiblePage - 1) * PAGE_SIZE, visiblePage * PAGE_SIZE);
 
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1800); };
 
@@ -102,7 +104,7 @@ export default function MapStudio() {
     setLoading(false);
   }, [profile]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
 
   const openNew = (folderId: string | null = null) => {
     const fresh = createLevel(8, 8);
@@ -270,11 +272,6 @@ export default function MapStudio() {
     refresh();
   });
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(encodeLevelCode(level));
-    showFlash('맵 코드 복사됨');
-  };
-
   // 게임에 넣을 레벨 JSON 을 보여주는 모달 (복사만 하면 뭐가 들어갔는지 확인이 안 된다)
   const [showExport, setShowExport] = useState(false);
 
@@ -346,7 +343,10 @@ export default function MapStudio() {
   // that delegates to the latest closures. ---
   const isDirty = view === 'editor' && encodeLevelCode(level) !== savedCode;
   const latest = useRef<StudioApi>({ isDirty: () => false, save: async () => {} });
-  latest.current = { isDirty: () => isDirty, save };
+
+  useEffect(() => {
+    latest.current = { isDirty: () => isDirty, save };
+  });
 
   useEffect(() => {
     const api: StudioApi = { isDirty: () => latest.current.isDirty(), save: () => latest.current.save() };
@@ -481,7 +481,6 @@ export default function MapStudio() {
             title="snowmen-adventure 의 levels/L<번호>.json 에 그대로 붙여넣을 JSON 을 보여줍니다">
             📋 게임에 넣기
           </button>
-          <button className="btn" onClick={copyCode}>맵 코드 복사</button>
           <button className="btn" onClick={testPlay}>▶ 시뮬레이터</button>
           {published && editId && (
             <button
@@ -493,15 +492,22 @@ export default function MapStudio() {
               ● 풀이 등록
             </button>
           )}
-          <button className="btn btn-primary" onClick={save}>저장</button>
+          <div className="studio-toolbar-editor-actions" aria-label="에디터 동작">
+            <button className="btn btn-sm" onClick={() => editorRef.current?.undo()} disabled={!editorHistory.canUndo}>↩ 실행취소</button>
+            <button className="btn btn-sm" onClick={() => editorRef.current?.redo()} disabled={!editorHistory.canRedo}>↪ 다시실행</button>
+            <button className="btn btn-sm" onClick={() => editorRef.current?.reset()}>🗑️ 초기화</button>
+            <button className="btn btn-sm studio-toolbar-divider-before" onClick={() => editorRef.current?.exportCode()}>📤 내보내기</button>
+            <button className="btn btn-sm" onClick={() => editorRef.current?.openImport()}>📥 불러오기</button>
+          </div>
+          <button className="btn btn-primary studio-toolbar-divider-before" onClick={save}>💾 저장</button>
           {/* Folder maps are published together with their folder, not individually. */}
           {!editFolderId && (
-            <button className="btn btn-primary" onClick={() => setShowPublish(true)}>허브에 올리기</button>
+            <button className="btn btn-primary" onClick={() => setShowPublish(true)}>🚀 허브에 올리기</button>
           )}
         </div>
 
         <div className="studio-editor-body">
-          <Editor level={level} setLevel={setLevel} />
+          <Editor ref={editorRef} level={level} setLevel={setLevel} onHistoryChange={setEditorHistory} />
         </div>
 
         {showPublish && (
@@ -681,7 +687,7 @@ export default function MapStudio() {
             </div>
           ) : renderMapTile(e.map, 'list'))}
         </div>
-        <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+        <Pagination page={visiblePage} pageCount={pageCount} onChange={setPage} />
         </>
       )}
 

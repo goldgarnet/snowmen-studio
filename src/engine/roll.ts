@@ -81,7 +81,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
   const obj = level.objects[fromPos.row][fromPos.col];
   if (!obj || obj.type !== 'snowball') return;
 
-  let rollingGroup: { pos: Position; obj: GameObject }[] = [{ pos: { ...fromPos }, obj }];
+  const rollingGroup: { pos: Position; obj: GameObject }[] = [{ pos: { ...fromPos }, obj }];
   let rollingSize = obj.size;
   let guard = 0;
   const MAX_ITERS = level.width * level.height * 4 + 16;
