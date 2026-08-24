@@ -48,11 +48,9 @@ const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'removeGround', 'restoreGround
 // Object tools place an object in the cell; they clear any hole there first (an object
 // can't sit on a hole), matching the "no objects on holes" rule.
 const OBJECT_TOOLS: EditorTool[] = ['player', 'snowballLarge', 'snowballSmall', 'snowman1', 'snowman2', 'snowman3', 'wall', 'block', 'tree', 'laser'];
-// NOTE: 'eraser' is intentionally NOT an edge tool. If it were, selecting the
-// eraser would put the grid in edge-mode, whose edge-hit strips intercept clicks
-// near cell borders — making it hard to erase tile flags (flake/goal/tunnel/
-// footplate). Edge arches are cleared by right-clicking a cell (or by right-
-// clicking the edge while an edge-arch tool is active).
+// The eraser is intentionally not an edge tool: edge-mode exposes every grid
+// edge and would intercept ordinary tile editing near cell borders. Existing
+// edge arches remain right-clickable in Grid regardless of the selected tool.
 const EDGE_TOOLS: EditorTool[] = ['edgeArch1', 'edgeArch2'];
 
 // Tool shortcuts follow the editor's top-to-bottom, left-to-right layout. Use
@@ -119,7 +117,6 @@ function hotkeyTitle(hotkey: Hotkey) {
 const TRI_LABEL: Record<TriangleCorner, string> = { tl: '◤', tr: '◥', bl: '◣', br: '◢' };
 
 interface Pos { r: number; c: number; }
-interface BBox { minR: number; maxR: number; minC: number; maxC: number; }
 
 interface SnapshotCell { r: number; c: number; tile: Tile; obj: GameObject | null; }
 interface EdgeArchSnapshot {
@@ -133,7 +130,7 @@ type DragState =
   | { kind: 'select'; anchor: Pos; current: Pos }
   | {
       kind: 'move'; anchor: Pos; current: Pos; snapshot: SnapshotCell[];
-      edges: EdgeArchSnapshot[]; bbox: BBox; copy: boolean;
+      edges: EdgeArchSnapshot[]; copy: boolean;
     };
 
 const cellKey = (r: number, c: number) => `${r},${c}`;
@@ -148,22 +145,17 @@ function rectKeys(a: Pos, b: Pos): Set<string> {
   return s;
 }
 
-function bboxFromKeys(keys: Set<string>): BBox {
-  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
-  for (const k of keys) {
-    const [r, c] = k.split(',').map(Number);
-    minR = Math.min(minR, r); maxR = Math.max(maxR, r);
-    minC = Math.min(minC, c); maxC = Math.max(maxC, c);
-  }
-  return { minR, maxR, minC, maxC };
-}
+const isInBounds = (row: number, col: number, width: number, height: number) => (
+  row >= 0 && row < height && col >= 0 && col < width
+);
 
-function clampDelta(bbox: BBox, raw: { dr: number; dc: number }, w: number, h: number) {
-  return {
-    dr: Math.max(-bbox.minR, Math.min(h - 1 - bbox.maxR, raw.dr)),
-    dc: Math.max(-bbox.minC, Math.min(w - 1 - bbox.maxC, raw.dc)),
-  };
-}
+const isInteriorEdge = (
+  row: number,
+  col: number,
+  field: EdgeArchSnapshot['field'],
+  width: number,
+  height: number,
+) => isInBounds(row, col, width, height) && (field === 'edgeArchTop' ? row > 0 : col > 0);
 
 interface EditorProps {
   level: Level;
@@ -186,7 +178,7 @@ export interface EditorToolbarApi {
 
 const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level, setLevel, onHistoryChange }, ref) {
   const [selectedTool, setSelectedTool] = useState<EditorTool>('select');
-  const [terrainFillMode, setTerrainFillMode] = useState<TerrainFillMode | null>(null);
+  const [terrainFillMode, setTerrainFillMode] = useState<TerrainFillMode | null>('cool');
   const [treeHeight, setTreeHeight] = useState<number>(2);
   const [laserDir, setLaserDir] = useState<'right'|'left'|'up'|'down'>('right');
   const [triCorner, setTriCorner] = useState<TriangleCorner>('tl');
@@ -263,16 +255,14 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     : null;
 
   const moveDelta = drag?.kind === 'move'
-    ? clampDelta(
-        drag.bbox,
-        { dr: drag.current.r - drag.anchor.r, dc: drag.current.c - drag.anchor.c },
-        level.width, level.height
-      )
+    ? { dr: drag.current.r - drag.anchor.r, dc: drag.current.c - drag.anchor.c }
     : null;
 
   const moveGhost = drag?.kind === 'move' && moveDelta
     ? {
-        sourceCells: drag.snapshot.map(({ r, c }) => ({ row: r, col: c })),
+        sourceCells: drag.snapshot
+          .filter(({ r, c }) => isInBounds(r + moveDelta.dr, c + moveDelta.dc, level.width, level.height))
+          .map(({ r, c }) => ({ row: r, col: c })),
         delta: moveDelta,
         copy: drag.copy,
         copyMarker: {
@@ -313,20 +303,12 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         if (cs + 1 < level.width) addEdge(rs, cs + 1, 'edgeArchLeft');
       }
       const edges = [...edgeMap.values()];
-      const bbox = bboxFromKeys(selection);
-      for (const edge of edges) {
-        bbox.minR = Math.min(bbox.minR, edge.row);
-        bbox.maxR = Math.max(bbox.maxR, edge.row);
-        bbox.minC = Math.min(bbox.minC, edge.col);
-        bbox.maxC = Math.max(bbox.maxC, edge.col);
-      }
       setDrag({
         kind: 'move',
         anchor: { r, c },
         current: { r, c },
         snapshot: cells,
         edges,
-        bbox,
         copy: toggleCell,
       });
       return;
@@ -353,6 +335,13 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     });
   };
 
+  // Once the pointer leaves the board while moving a selection, retain its
+  // off-board coordinate. This lets the final move discard cells that leave
+  // the map instead of pinning the selection to the last valid cell.
+  const handleGridMouseLeave = useCallback((r: number, c: number) => {
+    setDrag((d) => d?.kind === 'move' ? { ...d, current: { r, c } } : d);
+  }, []);
+
   const finalizeDrag = useCallback(() => {
     if (!drag) {
       const pendingToggle = pendingToggleRef.current;
@@ -373,7 +362,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
       setSelection(rectKeys(drag.anchor, drag.current));
     } else {
       const raw = { dr: drag.current.r - drag.anchor.r, dc: drag.current.c - drag.anchor.c };
-      const delta = clampDelta(drag.bbox, raw, level.width, level.height);
+      const delta = raw;
       if (delta.dr !== 0 || delta.dc !== 0) {
         setUndoStack((s) => [...s, cloneLevel(level)]);
         setRedoStack([]);
@@ -392,6 +381,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         for (const cell of drag.snapshot) {
           const nr = cell.r + delta.dr;
           const nc = cell.c + delta.dc;
+          if (!isInBounds(nr, nc, level.width, level.height)) continue;
           newLevel.tiles[nr][nc] = cell.tile;
           newLevel.objects[nr][nc] = cell.obj;
           newSel.add(cellKey(nr, nc));
@@ -399,6 +389,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         for (const edge of drag.edges) {
           const edgeRow = edge.row + delta.dr;
           const edgeCol = edge.col + delta.dc;
+          if (!isInteriorEdge(edgeRow, edgeCol, edge.field, level.width, level.height)) continue;
           newLevel.tiles[edgeRow][edgeCol][edge.field] = edge.value;
         }
         setLevel(newLevel);
@@ -521,9 +512,8 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     setLevel(newLevel);
   };
 
-  // Right-click uses the eraser tool's exact rules, which deliberately preserve
-  // edge arches. Edge arches have their own precise right-click action when an
-  // edge-arch tool is active.
+  // Right-click uses the eraser tool's exact rules for cells. Existing edge
+  // arches have their own precise right-click hit area in Grid.
   const eraseDragRef = useRef<Level | null>(null);
   const eraseCell = (row: number, col: number) => {
     if (eraseDragRef.current === null) pushUndo(); // one undo step per right-drag
@@ -569,9 +559,6 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
       const field: 'edgeArchTop' | 'edgeArchLeft' = side === 'top' ? 'edgeArchTop' : 'edgeArchLeft';
       // Toggle: if same level is already set, clear; otherwise set to targetLevel.
       tile[field] = (tile[field] ?? 0) === targetLevel ? 0 : targetLevel;
-    } else if (selectedTool === 'eraser') {
-      if (side === 'top') tile.edgeArchTop = 0;
-      else tile.edgeArchLeft = 0;
     }
     setLevel(newLevel);
   };
@@ -1165,6 +1152,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
           onEdgeClick={handleEdgeClick}
           onCellErase={eraseCell}
           onEdgeErase={eraseEdge}
+          onGridMouseLeave={handleGridMouseLeave}
           edgeMode={EDGE_TOOLS.includes(selectedTool)}
           selectedCells={selection}
           previewSelectionCells={previewSelection}

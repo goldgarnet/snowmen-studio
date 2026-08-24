@@ -11,6 +11,7 @@ interface GridProps {
   onCellErase?: (row: number, col: number) => void;
   onEdgeClick?: (row: number, col: number, side: 'top' | 'left') => void;
   onEdgeErase?: (row: number, col: number, side: 'top' | 'left') => void;
+  onGridMouseLeave?: (row: number, col: number) => void;
   edgeMode?: boolean;
   highlightPlayer?: boolean;
   // Read-only, cropped miniature render (used for map thumbnails). Disables all
@@ -133,7 +134,7 @@ const GridCell = memo(function GridCell({
 
 export default function Grid({
   level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgeErase, onBackgroundClick, edgeMode, highlightPlayer,
-  thumbnail, selectedCells, previewSelectionCells, moveGhost,
+  thumbnail, selectedCells, previewSelectionCells, moveGhost, onGridMouseLeave,
 }: GridProps) {
   const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase, onEdgeErase });
   useEffect(() => {
@@ -255,6 +256,15 @@ export default function Grid({
     }}>
       <div className="grid-stack"
         style={{ position: 'relative', width: gridW, height: gridH }}
+        onMouseLeave={(event) => {
+          handleMouseUp();
+          if (!onGridMouseLeave) return;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          onGridMouseLeave(
+            Math.floor((event.clientY - bounds.top) / cellSize),
+            Math.floor((event.clientX - bounds.left) / cellSize),
+          );
+        }}
         onContextMenu={(e) => e.preventDefault()}>
         {/* Shared paint servers avoid duplicating random-ID SVG filters for every
             snowman/goal and keep their attributes stable between turns. */}
@@ -281,7 +291,6 @@ export default function Grid({
             gridTemplateRows: `repeat(${level.height}, ${cellSize}px)`,
           }}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
         >
           {Array.from({ length: level.height }, (_, row) =>
             Array.from({ length: level.width }, (_, col) => {
@@ -366,8 +375,10 @@ export default function Grid({
           ))}
         </div>
 
-        {/* Edge hit strips — strictly on edges, never on corners */}
-        {edgeMode && (
+        {/* Edge hit strips — strictly on edges, never on corners. In ordinary
+            tile-editing mode, only existing arches get a strip so right-click
+            can erase them without exposing every grid edge. */}
+        {(edgeMode || horzEdges.length > 0 || vertEdges.length > 0) && (
           <div className="edge-hits" style={{ position: 'absolute', inset: 0 }}>
             {horzEdges.map(e => (
               <div key={`hh-${e.row}-${e.col}`} className="edge-hit edge-hit-h"
@@ -380,7 +391,10 @@ export default function Grid({
                 }}
                 onMouseDown={(ev) => {
                   ev.stopPropagation();
-                  if (ev.button === 0) onEdgeClick?.(e.row, e.col, 'top');
+                  if (ev.button === 0) {
+                    if (edgeMode) onEdgeClick?.(e.row, e.col, 'top');
+                    else interactionRef.current.onCellClick?.(e.row, e.col, ev.ctrlKey || ev.metaKey);
+                  }
                   else if (ev.button === 2) {
                     ev.preventDefault();
                     dragButtonRef.current = 'right-edge';
@@ -403,7 +417,10 @@ export default function Grid({
                 }}
                 onMouseDown={(ev) => {
                   ev.stopPropagation();
-                  if (ev.button === 0) onEdgeClick?.(e.row, e.col, 'left');
+                  if (ev.button === 0) {
+                    if (edgeMode) onEdgeClick?.(e.row, e.col, 'left');
+                    else interactionRef.current.onCellClick?.(e.row, e.col, ev.ctrlKey || ev.metaKey);
+                  }
                   else if (ev.button === 2) {
                     ev.preventDefault();
                     dragButtonRef.current = 'right-edge';

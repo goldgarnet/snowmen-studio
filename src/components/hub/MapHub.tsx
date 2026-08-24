@@ -24,6 +24,10 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'rejected', label: '반려' },
 ];
 
+interface MapHubProps {
+  onOpenMap?: (map: MapRow) => void;
+}
+
 function buildBackupText(maps: MapRow[]): string {
   const lines: string[] = [];
   lines.push('# Snowmen Studio — 맵 백업');
@@ -48,7 +52,7 @@ function buildBackupText(maps: MapRow[]): string {
   return lines.join('\n');
 }
 
-export default function MapHub() {
+export default function MapHub({ onOpenMap }: MapHubProps) {
   const { profile } = useAuth();
   const [maps, setMaps] = useState<MapRow[]>([]); // all published maps (standalone + members)
   const [folders, setFolders] = useState<FolderRow[]>([]);
@@ -161,6 +165,11 @@ export default function MapHub() {
     }
   };
 
+  const openMap = useCallback((map: MapRow) => {
+    if (onOpenMap) onOpenMap(map);
+    else setSelected(map);
+  }, [onOpenMap]);
+
   const exportBackup = async () => {
     try {
       const all = await fetchAllForBackup();
@@ -199,7 +208,7 @@ export default function MapHub() {
       <FolderDetail
         folder={selectedFolder}
         onBack={() => setSelectedFolder(null)}
-        onOpenMap={setSelected}
+        onOpenMap={openMap}
         onChanged={refresh}
       />
     );
@@ -257,7 +266,7 @@ export default function MapHub() {
           <div className="hub-grid">
             {paged.map((e) => e.kind === 'folder'
               ? <FolderCard key={`f-${e.folder.id}`} folder={e.folder} maps={mapsByFolder.get(e.folder.id) ?? []} onOpen={setSelectedFolder} />
-              : <MapCard key={`m-${e.map.id}`} map={e.map} onOpen={setSelected} />)}
+              : <MapCard key={`m-${e.map.id}`} map={e.map} onOpen={openMap} />)}
           </div>
           <Pagination page={visiblePage} pageCount={pageCount} onChange={setPage} />
         </>

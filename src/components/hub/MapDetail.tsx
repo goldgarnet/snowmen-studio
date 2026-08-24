@@ -30,6 +30,23 @@ function fullDate(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('클립보드에 복사할 수 없습니다.');
+}
+
 export default function MapDetail({ map: initial, onBack, onChanged }: MapDetailProps) {
   const { profile } = useAuth();
   const [map, setMap] = useState<MapRow>(initial);
@@ -96,7 +113,18 @@ export default function MapDetail({ map: initial, onBack, onChanged }: MapDetail
     catch (e) { alert('비공개 전환 실패: ' + (e as Error).message); setBusy(false); }
   };
 
-  const copyCode = () => { navigator.clipboard.writeText(map.code); showFlash('맵 코드 복사됨'); };
+  const copyCode = async () => {
+    try {
+      await copyText(map.code);
+      showFlash('맵 코드 복사됨');
+    } catch (error) { alert((error as Error).message); }
+  };
+  const copyLink = async () => {
+    try {
+      await copyText(new URL(`/maps/${map.id}`, window.location.origin).toString());
+      showFlash('맵 링크 복사됨');
+    } catch (error) { alert((error as Error).message); }
+  };
 
   // Anyone who clears the map can register that run as their own solution.
   const registerSolution = async (moves: string, turnCount: number) => {
@@ -183,6 +211,7 @@ export default function MapDetail({ map: initial, onBack, onChanged }: MapDetail
               <button className="btn btn-primary" onClick={() => setShowExport(true)}>
                 📋 게임에 넣기 (레벨 JSON)
               </button>
+              <button className="btn" onClick={copyLink}>🔗 맵 링크 복사</button>
               <button className="btn" onClick={copyCode}>맵 코드만 복사</button>
             </div>
 
