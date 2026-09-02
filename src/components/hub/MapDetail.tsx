@@ -23,6 +23,7 @@ interface MapDetailProps {
   // capture surface so a clear can be registered as a solution.
   onPlay: (map: MapRow) => void;
   onChanged: (updated?: MapRow) => void;
+  backLabel?: string; // 뒤로가기 버튼 문구 (기본 "← 허브로"). 챕터 구성 등에서 재사용.
 }
 
 function fullDate(iso: string): string {
@@ -47,7 +48,7 @@ async function copyText(text: string): Promise<void> {
   if (!copied) throw new Error('클립보드에 복사할 수 없습니다.');
 }
 
-export default function MapDetail({ map: initial, onBack, onChanged }: MapDetailProps) {
+export default function MapDetail({ map: initial, onBack, onChanged, backLabel }: MapDetailProps) {
   const { profile } = useAuth();
   const [map, setMap] = useState<MapRow>(initial);
   const [busy, setBusy] = useState(false);
@@ -177,7 +178,7 @@ export default function MapDetail({ map: initial, onBack, onChanged }: MapDetail
   return (
     <div className="map-detail">
       <div className="detail-topbar">
-        <button className="btn" onClick={onBack}>← 허브로</button>
+        <button className="btn" onClick={onBack}>{backLabel ?? '← 허브로'}</button>
         {flash && <span className="detail-flash">{flash}</span>}
         {isOwner && (
           <div className="detail-owner-actions">

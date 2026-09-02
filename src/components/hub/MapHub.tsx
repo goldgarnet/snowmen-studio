@@ -116,11 +116,13 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
     return list;
   }, [standaloneMaps, folders, filter, query]);
 
+  // 통계는 폴더 안에 든 맵까지 포함한 전체 공개 맵(maps) 기준으로 센다.
+  // (그리드에 낱개로 보이지 않는 폴더 멤버도 엄연히 허브에 올라온 맵이므로.)
   const stats = useMemo(() => ({
-    total: standaloneMaps.length,
-    adopted: standaloneMaps.filter((m) => m.status === 'accepted').length,
-    review: standaloneMaps.filter((m) => m.status === 'pending').length,
-  }), [standaloneMaps]);
+    total: maps.length,
+    adopted: maps.filter((m) => m.status === 'accepted').length,
+    review: maps.filter((m) => m.status === 'pending').length,
+  }), [maps]);
 
   // Pagination over the filtered list. Filter/search handlers reset to page 1;
   // derive a clamped value if a refresh reduces the number of visible pages.

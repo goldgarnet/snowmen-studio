@@ -11,7 +11,7 @@ import {
 import MapThumbnail from '../hub/MapThumbnail';
 import StarRating from '../hub/StarRating';
 import ConfirmModal from '../common/ConfirmModal';
-import PlayView from '../editor/PlayView';
+import MapDetail from '../hub/MapDetail';
 import './chapters.css';
 
 // 스테이지 번호는 저장되지 않고 위치에서 파생된다: "챕터번호-순번" (예: 2-1).
@@ -190,10 +190,12 @@ function MapPickerModal({ title, maps, folderNames, placedNos, onPick, onCancel 
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | MapRow['status']>('all');
   const [sort, setSort] = useState<PickerSort>('accepted');
+  const [unplacedOnly, setUnplacedOnly] = useState(false); // 아직 어느 챕터에도 배치되지 않은 맵만
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = maps.filter((m) => {
+      if (unplacedOnly && placedNos.has(m.id)) return false;
       if (status !== 'all' && m.status !== status) return false;
       if (!q) return true;
       const folder = m.folder_id ? (folderNames.get(m.folder_id) ?? '') : '';
@@ -205,7 +207,7 @@ function MapPickerModal({ title, maps, folderNames, placedNos, onPick, onCancel 
       if (sort === 'accepted' && rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status];
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [maps, folderNames, query, status, sort]);
+  }, [maps, folderNames, placedNos, query, status, sort, unplacedOnly]);
 
   const FILTERS: { key: 'all' | MapRow['status']; label: string }[] = [
     { key: 'all', label: '전체' },
@@ -226,6 +228,11 @@ function MapPickerModal({ title, maps, folderNames, placedNos, onPick, onCancel 
               <button key={f.key} className={`chip${status === f.key ? ' active' : ''}`}
                 onClick={() => setStatus(f.key)}>{f.label}</button>
             ))}
+            <button
+              className={`chip${unplacedOnly ? ' active' : ''}`}
+              onClick={() => setUnplacedOnly((v) => !v)}
+              title="어느 챕터에도 아직 배치하지 않은 맵만 봅니다"
+            >미배치만</button>
           </div>
           <select className="field-input stage-picker-sort" value={sort}
             onChange={(e) => setSort(e.target.value as PickerSort)}>
@@ -293,7 +300,7 @@ export default function ChapterComposer() {
   // 맵 선택 모달은 두 용도로 쓴다: 'add' = 새 스테이지 추가, 'swap' = 수정 중인 스테이지의 맵 교체.
   const [pickerMode, setPickerMode] = useState<'add' | 'swap' | null>(null);
   const [deleteStageTarget, setDeleteStageTarget] = useState<StageRow | null>(null);
-  const [playStage, setPlayStage] = useState<{ code: string; title: string } | null>(null);
+  const [detailMap, setDetailMap] = useState<MapRow | null>(null); // 맵 페이지(풀이·댓글)로 열린 스테이지 맵
   const [editingStage, setEditingStage] = useState<{ stage: StageRow; no: string } | null>(null);
   const [editStageMap, setEditStageMap] = useState<MapRow | null>(null); // 수정 모달에서 새로 고른 맵
   const [busy, setBusy] = useState(false);
@@ -434,14 +441,29 @@ export default function ChapterComposer() {
     addStage(map);
   };
 
-  // ---- 플레이 서브모드: 스테이지의 맵을 클릭하면 곧바로 플레이 화면으로 ----
-  if (playStage) {
+  // 맵 페이지에서 상태/난이도/코멘트 등을 바꾸면 스테이지에 붙은 맵 정보도 즉시 반영한다.
+  // 삭제/비공개(updated 없음) 시엔 페이지를 닫고 목록을 다시 읽는다.
+  const onDetailChanged = (updated?: MapRow) => {
+    if (updated) {
+      setStages((prev) => prev.map((s) => (s.map && s.map.id === updated.id ? { ...s, map: updated } : s)));
+      setDetailMap(updated);
+    } else {
+      setDetailMap(null);
+      if (selectedId) void loadStages(selectedId);
+      listAllStages().then(setAllStages).catch(() => {});
+    }
+  };
+
+  // ---- 맵 페이지 서브모드: 스테이지의 맵을 클릭하면 그 맵의 페이지(풀이·댓글)로 ----
+  if (detailMap) {
     return (
-      <PlayView
-        code={playStage.code}
-        title={playStage.title}
-        backLabel="챕터 구성으로"
-        onClose={() => setPlayStage(null)}
+      <MapDetail
+        key={detailMap.id}
+        map={detailMap}
+        backLabel="← 챕터 구성으로"
+        onBack={() => setDetailMap(null)}
+        onPlay={() => undefined}
+        onChanged={onDetailChanged}
       />
     );
   }
@@ -453,7 +475,7 @@ export default function ChapterComposer() {
           <h1 className="hub-title">챕터 구성</h1>
           <p className="hub-sub">
             게임에 들어갈 챕터와 스테이지를 배치해요. 스테이지 번호는 순서에 따라 자동으로 매겨집니다.
-            <br />스테이지의 맵 이미지나 제목을 클릭하면 바로 플레이할 수 있어요.
+            <br />스테이지의 맵 이미지나 제목을 클릭하면 그 맵의 페이지(풀이·댓글)로 이동해요.
           </p>
         </div>
         {flash && <span className="detail-flash">{flash}</span>}
@@ -513,24 +535,18 @@ export default function ChapterComposer() {
                       <div className="stage-no">{stageNo(selected, i)}</div>
                       <div
                         className={`stage-thumb${s.map ? ' stage-thumb-playable' : ''}`}
-                        title={s.map ? '클릭하면 바로 플레이' : undefined}
-                        onClick={() => s.map && setPlayStage({
-                          code: s.map.code,
-                          title: `${stageNo(selected, i)} · ${s.map.title || '제목 없음'}`,
-                        })}
+                        title={s.map ? '클릭하면 맵 페이지로 이동' : undefined}
+                        onClick={() => s.map && setDetailMap(s.map)}
                       >
                         {s.map ? <MapThumbnail code={s.map.code} /> : <div className="stage-thumb-missing">맵 없음</div>}
-                        {s.map && <span className="stage-thumb-play">▶</span>}
+                        {s.map && <span className="stage-thumb-play">열기</span>}
                       </div>
                       <div className="stage-fields">
                         <div className="stage-map-line">
                           <span
                             className={`stage-map-title${s.map ? ' stage-map-title-playable' : ''}`}
-                            title={s.map ? '클릭하면 바로 플레이' : undefined}
-                            onClick={() => s.map && setPlayStage({
-                              code: s.map.code,
-                              title: `${stageNo(selected, i)} · ${s.map.title || '제목 없음'}`,
-                            })}
+                            title={s.map ? '클릭하면 맵 페이지로 이동' : undefined}
+                            onClick={() => s.map && setDetailMap(s.map)}
                           >{s.map?.title || '제목 없음'}</span>
                           {s.map && <span className={`badge badge-${s.map.status}`}>{STATUS_LABEL[s.map.status]}</span>}
                           {s.map?.folder_id && (
