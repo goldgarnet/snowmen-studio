@@ -10,6 +10,7 @@ interface GridProps {
   onBackgroundClick?: () => void;
   onCellErase?: (row: number, col: number) => void;
   onEdgeClick?: (row: number, col: number, side: 'top' | 'left') => void;
+  onEdgePaint?: (row: number, col: number, side: 'top' | 'left') => void;
   onEdgeErase?: (row: number, col: number, side: 'top' | 'left') => void;
   onGridMouseLeave?: (row: number, col: number) => void;
   edgeMode?: boolean;
@@ -133,14 +134,14 @@ const GridCell = memo(function GridCell({
 ));
 
 export default function Grid({
-  level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgeErase, onBackgroundClick, edgeMode, highlightPlayer,
+  level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgePaint, onEdgeErase, onBackgroundClick, edgeMode, highlightPlayer,
   thumbnail, selectedCells, previewSelectionCells, moveGhost, onGridMouseLeave,
 }: GridProps) {
-  const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase, onEdgeErase });
+  const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase, onEdgePaint, onEdgeErase });
   useEffect(() => {
-    interactionRef.current = { onCellClick, onCellDrag, onCellErase, onEdgeErase };
-  }, [onCellClick, onCellDrag, onCellErase, onEdgeErase]);
-  const dragButtonRef = useRef<'left-cell' | 'right-cell' | 'right-edge' | null>(null);
+    interactionRef.current = { onCellClick, onCellDrag, onCellErase, onEdgePaint, onEdgeErase };
+  }, [onCellClick, onCellDrag, onCellErase, onEdgePaint, onEdgeErase]);
+  const dragButtonRef = useRef<'left-cell' | 'left-edge' | 'right-cell' | 'right-edge' | null>(null);
 
   // Reset drag flags if the mouse is released anywhere (even outside the grid).
   useEffect(() => {
@@ -379,7 +380,7 @@ export default function Grid({
             tile-editing mode, only existing arches get a strip so right-click
             can erase them without exposing every grid edge. */}
         {(edgeMode || horzEdges.length > 0 || vertEdges.length > 0) && (
-          <div className="edge-hits" style={{ position: 'absolute', inset: 0 }}>
+          <div className="edge-hits" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
             {horzEdges.map(e => (
               <div key={`hh-${e.row}-${e.col}`} className="edge-hit edge-hit-h"
                 style={{
@@ -392,8 +393,15 @@ export default function Grid({
                 onMouseDown={(ev) => {
                   ev.stopPropagation();
                   if (ev.button === 0) {
-                    if (edgeMode) onEdgeClick?.(e.row, e.col, 'top');
-                    else interactionRef.current.onCellClick?.(e.row, e.col, ev.ctrlKey || ev.metaKey);
+                    if (edgeMode) {
+                      dragButtonRef.current = 'left-edge';
+                      onEdgeClick?.(e.row, e.col, 'top');
+                    }
+                    else {
+                      const bounds = ev.currentTarget.getBoundingClientRect();
+                      const row = ev.clientY < bounds.top + bounds.height / 2 ? e.row - 1 : e.row;
+                      interactionRef.current.onCellClick?.(row, e.col, ev.ctrlKey || ev.metaKey);
+                    }
                   }
                   else if (ev.button === 2) {
                     ev.preventDefault();
@@ -402,7 +410,8 @@ export default function Grid({
                   }
                 }}
                 onMouseEnter={() => {
-                  if (dragButtonRef.current === 'right-edge') interactionRef.current.onEdgeErase?.(e.row, e.col, 'top');
+                  if (dragButtonRef.current === 'left-edge') interactionRef.current.onEdgePaint?.(e.row, e.col, 'top');
+                  else if (dragButtonRef.current === 'right-edge') interactionRef.current.onEdgeErase?.(e.row, e.col, 'top');
                 }}
                 onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); }} />
             ))}
@@ -418,8 +427,15 @@ export default function Grid({
                 onMouseDown={(ev) => {
                   ev.stopPropagation();
                   if (ev.button === 0) {
-                    if (edgeMode) onEdgeClick?.(e.row, e.col, 'left');
-                    else interactionRef.current.onCellClick?.(e.row, e.col, ev.ctrlKey || ev.metaKey);
+                    if (edgeMode) {
+                      dragButtonRef.current = 'left-edge';
+                      onEdgeClick?.(e.row, e.col, 'left');
+                    }
+                    else {
+                      const bounds = ev.currentTarget.getBoundingClientRect();
+                      const col = ev.clientX < bounds.left + bounds.width / 2 ? e.col - 1 : e.col;
+                      interactionRef.current.onCellClick?.(e.row, col, ev.ctrlKey || ev.metaKey);
+                    }
                   }
                   else if (ev.button === 2) {
                     ev.preventDefault();
@@ -428,7 +444,8 @@ export default function Grid({
                   }
                 }}
                 onMouseEnter={() => {
-                  if (dragButtonRef.current === 'right-edge') interactionRef.current.onEdgeErase?.(e.row, e.col, 'left');
+                  if (dragButtonRef.current === 'left-edge') interactionRef.current.onEdgePaint?.(e.row, e.col, 'left');
+                  else if (dragButtonRef.current === 'right-edge') interactionRef.current.onEdgeErase?.(e.row, e.col, 'left');
                 }}
                 onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); }} />
             ))}

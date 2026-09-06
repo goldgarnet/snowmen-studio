@@ -184,11 +184,12 @@
   50% { opacity: 1; }
 }
 
-/* Edge click strips: shown in edge-mode only.
-   Positioned absolutely in pixel coords from Grid.tsx so they sit precisely
-   across boundary lines (with corner trim to avoid the "selecting corners" feel). */
+/* Edge click strips: shown for all edges in edge-mode, or only for existing
+   arches while editing tiles. The container ignores pointer events so the
+   empty area never blocks the grid; each strip opts back in below. */
 .edge-hit {
   z-index: 6;
+  pointer-events: auto;
   cursor: pointer;
   background: rgba(255, 200, 80, 0.0);
   border-radius: 3px;

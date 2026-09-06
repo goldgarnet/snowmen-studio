@@ -539,11 +539,15 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     setLevel(newLevel);
   };
 
-  // Reset right-drag accumulators whenever the global mouseup fires.
+  // Keep an in-progress arch paint locally so a left-drag is one undo step.
+  const edgePaintDragRef = useRef<Level | null>(null);
+
+  // Reset drag accumulators whenever the global mouseup fires.
   useEffect(() => {
     const onUp = () => {
       eraseDragRef.current = null;
       eraseEdgeDragRef.current = null;
+      edgePaintDragRef.current = null;
     };
     window.addEventListener('mouseup', onUp);
     return () => window.removeEventListener('mouseup', onUp);
@@ -551,8 +555,9 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
 
   const handleEdgeClick = (row: number, col: number, side: 'top' | 'left') => {
     if (!EDGE_TOOLS.includes(selectedTool)) return;
-    pushUndo();
-    const newLevel = cloneLevel(level);
+    const base = edgePaintDragRef.current ?? level;
+    if (edgePaintDragRef.current === null) pushUndo();
+    const newLevel = cloneLevel(base);
     const tile = newLevel.tiles[row][col];
     if (selectedTool === 'edgeArch1' || selectedTool === 'edgeArch2') {
       const targetLevel = selectedTool === 'edgeArch1' ? 1 : 2;
@@ -560,6 +565,18 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
       // Toggle: if same level is already set, clear; otherwise set to targetLevel.
       tile[field] = (tile[field] ?? 0) === targetLevel ? 0 : targetLevel;
     }
+    edgePaintDragRef.current = newLevel;
+    setLevel(newLevel);
+  };
+
+  const paintEdge = (row: number, col: number, side: 'top' | 'left') => {
+    if (!EDGE_TOOLS.includes(selectedTool)) return;
+    const base = edgePaintDragRef.current ?? level;
+    if (edgePaintDragRef.current === null) pushUndo();
+    const newLevel = cloneLevel(base);
+    const field: 'edgeArchTop' | 'edgeArchLeft' = side === 'top' ? 'edgeArchTop' : 'edgeArchLeft';
+    newLevel.tiles[row][col][field] = selectedTool === 'edgeArch1' ? 1 : 2;
+    edgePaintDragRef.current = newLevel;
     setLevel(newLevel);
   };
 
@@ -703,6 +720,73 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         tile.triangle = triCorner;
         break;
       case 'eraser':
+        // Remove exactly one visible layer at a time, in reverse render order.
+        // This keeps stacked editor elements inspectable and lets terrain-fill
+        // erasing happen only after every overlay has been cleared.
+        if (lv.objects[row][col]) {
+          lv.objects[row][col] = null;
+          break;
+        }
+        if (tile.triangle) {
+          tile.triangle = undefined;
+          break;
+        }
+        if (tile.isPortal) {
+          tile.isPortal = false;
+          break;
+        }
+        if (tile.isCrack) {
+          tile.isCrack = false;
+          tile.crackArmed = false;
+          break;
+        }
+        if (tile.isHole) {
+          tile.isHole = false;
+          break;
+        }
+        if (tile.isOrangeWall) {
+          tile.isOrangeWall = false;
+          break;
+        }
+        if (tile.isOrangeButton) {
+          tile.isOrangeButton = false;
+          tile.orangePressed = false;
+          break;
+        }
+        if (tile.isYellowWall) {
+          tile.isYellowWall = false;
+          break;
+        }
+        if (tile.isYellowButton) {
+          tile.isYellowButton = false;
+          break;
+        }
+        if (tile.isKeyTile) {
+          tile.isKeyTile = false;
+          break;
+        }
+        if (tile.isSoulSwap) {
+          tile.isSoulSwap = false;
+          break;
+        }
+        if (tile.isRowArch || tile.isColumnArch) {
+          tile.isRowArch = false;
+          tile.isColumnArch = false;
+          tile.isShade = false;
+          break;
+        }
+        if (tile.isFlake) {
+          tile.isFlake = false;
+          break;
+        }
+        if (tile.isGoal) {
+          tile.isGoal = false;
+          break;
+        }
+        if (tile.isShade) {
+          tile.isShade = false;
+          break;
+        }
         if (terrainFillMode && tile.isWarm !== (terrainFillMode === 'warm')) {
           // A terrain-fill mode treats the opposite temperature as erasable
           // paint, not as removable ground.
@@ -710,24 +794,6 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
           if (tile.isWarm) tile.isFlake = false;
           break;
         }
-        lv.objects[row][col] = null;
-        tile.isFlake = false;
-        tile.isGoal = false;
-        tile.isRowArch = false;
-        tile.isColumnArch = false;
-        tile.isShade = false;
-        tile.isSoulSwap = false;
-        tile.isKeyTile = false;
-        tile.isYellowButton = false;
-        tile.isYellowWall = false;
-        tile.isOrangeButton = false;
-        tile.isOrangeWall = false;
-        tile.orangePressed = false;
-        tile.isHole = false;
-        tile.isCrack = false;
-        tile.crackArmed = false;
-        tile.isPortal = false;
-        tile.triangle = undefined;
         // Note: edge arches are erased via handleEdgeClick when clicking edges.
         break;
     }
@@ -1150,6 +1216,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
           onCellDrag={handleCellDrag}
           onBackgroundClick={clearSelection}
           onEdgeClick={handleEdgeClick}
+          onEdgePaint={paintEdge}
           onCellErase={eraseCell}
           onEdgeErase={eraseEdge}
           onGridMouseLeave={handleGridMouseLeave}
