@@ -82,7 +82,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
   if (!obj || obj.type !== 'snowball') return;
 
   const rollingGroup: { pos: Position; obj: GameObject }[] = [{ pos: { ...fromPos }, obj }];
-  let rollingSize = obj.size;
+  let rollingSize = getRollingSize(rollingGroup);
   let guard = 0;
   const MAX_ITERS = level.width * level.height * 4 + 16;
 
@@ -115,7 +115,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
 
     if (!obstacle) {
       moveRollingGroup(level, rollingGroup, dir);
-      handleRollFlakeAll(level, rollingGroup);
+      rollingSize = handleRollFlakeAll(level, rollingGroup);
       if (killIfOnBeam(level, rollingGroup)) break;
       if (resolveRollLeadSpecial(level, rollingGroup)) break;
       continue;
@@ -127,7 +127,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
       const nd = deflectOffTriangleBlock(level, rollingGroup, nextPos, dir);
       if (nd === null) break;
       dir = nd;
-      handleRollFlakeAll(level, rollingGroup);
+      rollingSize = handleRollFlakeAll(level, rollingGroup);
       if (killIfOnBeam(level, rollingGroup)) break;
       if (resolveRollLeadSpecial(level, rollingGroup)) break;
       continue;
@@ -158,7 +158,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
       for (const g of obstacleGroup) {
         rollingGroup.push({ pos: { ...g.pos }, obj: g.obj });
       }
-      rollingSize += obstacleSize;
+      rollingSize = getRollingSize(rollingGroup);
       continue;
     } else if (obstacleSize === rollingSize) {
       // Rolling group stops, obstacle group starts rolling as a unit
@@ -183,7 +183,7 @@ export function rollSnowballGroup(level: Level, positions: Position[], dir: Dire
 }
 
 function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], dir: Direction, turnCount: number): void {
-  let rollingSize = group.reduce((sum, g) => sum + g.obj.size, 0);
+  let rollingSize = getRollingSize(group);
   let guard = 0;
   const MAX_ITERS = level.width * level.height * 4 + 16;
 
@@ -212,7 +212,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
 
     if (!obstacle) {
       moveRollingGroup(level, group, dir);
-      handleRollFlakeAll(level, group);
+      rollingSize = handleRollFlakeAll(level, group);
       if (killIfOnBeam(level, group)) break;
       if (resolveRollLeadSpecial(level, group)) break;
       continue;
@@ -223,7 +223,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
       const nd = deflectOffTriangleBlock(level, group, nextPos, dir);
       if (nd === null) break;
       dir = nd;
-      handleRollFlakeAll(level, group);
+      rollingSize = handleRollFlakeAll(level, group);
       if (killIfOnBeam(level, group)) break;
       if (resolveRollLeadSpecial(level, group)) break;
       continue;
@@ -251,7 +251,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
       for (const g of obstacleGroup) {
         group.push({ pos: { ...g.pos }, obj: g.obj });
       }
-      rollingSize += obstacleSize;
+      rollingSize = getRollingSize(group);
       continue;
     } else if (obstacleSize === rollingSize) {
       rollGroup(level, obstacleGroup, dir, turnCount);
@@ -339,6 +339,11 @@ function handleRollFlake(level: Level, pos: Position, obj: GameObject): void {
 // Every ball in a rolling group picks up a flake on the cell it just landed on —
 // not only the lead ball. Without this, trailing balls roll over flakes without
 // growing (and a flake the size-2 lead can't absorb is left for the ball behind).
-function handleRollFlakeAll(level: Level, group: { pos: Position; obj: GameObject }[]): void {
+function getRollingSize(group: { pos: Position; obj: GameObject }[]): number {
+  return group.reduce((sum, g) => sum + g.obj.size, 0);
+}
+
+function handleRollFlakeAll(level: Level, group: { pos: Position; obj: GameObject }[]): number {
   for (const g of group) handleRollFlake(level, g.pos, g.obj);
+  return getRollingSize(group);
 }

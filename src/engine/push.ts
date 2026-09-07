@@ -122,6 +122,15 @@ function resolvePush(
   // A is a wall/tree (size 100)
   if (a.isWall) return { level, playerMoved: false };
 
+  // Resolve the boundary immediately in front of A before considering the object in
+  // B. canMoveTo deliberately ignores object occupancy, so a false result here means
+  // an arch, tunnel, triangle, or solid partition prevents the snowball from ever
+  // reaching B. Without this priority, a snowball beyond a blocking edge masks the
+  // closer barrier and a direct push incorrectly becomes a no-op.
+  if (a.isSnowball && ps >= a.size && b.exists && !aCanMoveIntoB) {
+    return doForceA(level, posA, dir, turnCount);
+  }
+
   // Indirect force: the player is pushing a BLOCK. A block is a rigid pusher that can
   // transmit the player's force down a jammed chain and crush a snowball trapped at the
   // far end against a wall/block. Resolved before the block's own move/no-op cases — it

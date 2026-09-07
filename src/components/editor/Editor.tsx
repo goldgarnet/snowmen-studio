@@ -70,15 +70,15 @@ const TOOL_HOTKEYS: Partial<Record<EditorTool, Hotkey>> = {
   player: { code: 'KeyP', label: 'P' },
   wall: { code: 'KeyW', label: 'W' },
   tree: { code: 'KeyT', label: 'T' },
-  snowballLarge: { code: 'Digit2', label: '2', shiftKey: true },
-  snowballSmall: { code: 'Digit1', label: '1', shiftKey: true },
+  snowballLarge: { code: 'Digit2', label: '2' },
+  snowballSmall: { code: 'Digit1', label: '1' },
   block: { code: 'KeyB', label: 'B' },
   flake: { code: 'KeyF', label: 'F' },
   columnTunnel: { code: 'KeyG', label: 'G', shiftKey: true },
   rowTunnel: { code: 'KeyV', label: 'V', shiftKey: true },
-  snowman1: { code: 'Digit1', label: '1' },
-  snowman2: { code: 'Digit2', label: '2' },
-  snowman3: { code: 'Digit3', label: '3' },
+  snowman1: { code: 'Digit1', label: '1', shiftKey: true },
+  snowman2: { code: 'Digit2', label: '2', shiftKey: true },
+  snowman3: { code: 'Digit3', label: '3', shiftKey: true },
   triangle: { code: 'KeyV', label: 'V' },
   keyTile: { code: 'KeyK', label: 'K' },
   yellowWall: { code: 'KeyY', label: 'Y' },
@@ -855,7 +855,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   }, [fillAll]);
 
   // Tool selection shortcuts use name-based keys, with modifiers denoting a
-  // related variant (for example Shift+1/2 for snowball size). `code` keeps the
+  // related variant (for example Shift+1/2 for snowman size). `code` keeps the
   // mapping independent of the active IME.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
