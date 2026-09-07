@@ -27,162 +27,106 @@ export function applyForce(
   }
 
   if (obj.size === 2) {
-    // Splits into two size-1 snowballs perpendicular to force direction
-    level.objects[pos.row][pos.col] = null;
+    // "쪼개기": two size-1 snowballs are born in the origin cell, then each is shoved
+    // ONE cell (strength 1) in the two directions perpendicular to the force.
+    //  - A ball that can't move that way — a wall/edge/arch/tunnel blocks it, or its
+    //    neighbour is an object it can't shove — stays in the origin cell.
+    //  - A ball whose neighbour is a single pushable object (size ≤ 1, empty cell
+    //    beyond) shoves it one cell and takes its place. This is a plain push, so it
+    //    never builds a snowman.
+    //  - If BOTH balls stay, they immediately merge into a size-1 snowman — but only on
+    //    a DIRECT push. Indirect (block-transmitted) force never builds a snowman, so
+    //    with nowhere to split the ball is left intact (a no-op press).
+    //  - A lone ball left in the origin cell absorbs a snowflake there (→ size 2).
     const [dir1, dir2] = getPerpendicularDirs(dir);
-    const pos1 = getNextPos(pos, dir1);
-    const pos2 = getNextPos(pos, dir2);
+    level.objects[pos.row][pos.col] = null;
 
-    const placed1 = tryPlaceSplitSnowball(level, pos, pos1, dir1, turnCount, direct);
-    const placed2 = tryPlaceSplitSnowball(level, pos, pos2, dir2, turnCount, direct);
+    const moved1 = shoveSplitBall(level, pos, dir1, turnCount);
+    const moved2 = shoveSplitBall(level, pos, dir2, turnCount);
 
-    if (!placed1 && !placed2) {
+    if (!moved1 && !moved2) {
       if (!direct) {
-        // Indirect force never builds a snowman. With nowhere to split, the ball is
-        // left intact — the block simply couldn't do anything to it.
+        // Indirect force with nowhere to split: leave the ball intact, press is a no-op.
         level.objects[pos.row][pos.col] = obj;
         return false;
       }
-      // Direct push, both sides blocked: the two halves compact into a size-1 snowman.
+      // Both sides blocked: the two halves compact into a size-1 snowman.
       level.objects[pos.row][pos.col] = {
-        type: 'snowman',
-        size: 1,
-        isMelting: false,
-        createdAt: turnCount,
+        type: 'snowman', size: 1, isMelting: false, createdAt: turnCount,
       };
       level.tiles[pos.row][pos.col].isWarm = false;
       return true;
-    } else if (!placed1) {
-      // One side failed: the returning half lands back at the original cell (if empty).
-      if (!level.objects[pos.row][pos.col]) {
-        placeReturnedSnowball(level, pos, turnCount);
-      } else {
-        const existing = level.objects[pos.row][pos.col];
-        if (direct && existing && existing.type === 'snowball') {
-          level.objects[pos.row][pos.col] = {
-            type: 'snowman',
-            size: 1,
-            isMelting: false,
-            createdAt: turnCount,
-          };
-          level.tiles[pos.row][pos.col].isWarm = false;
-        }
-      }
-      return true;
-    } else if (!placed2) {
-      if (!level.objects[pos.row][pos.col]) {
-        placeReturnedSnowball(level, pos, turnCount);
-      } else {
-        const existing = level.objects[pos.row][pos.col];
-        if (direct && existing && existing.type === 'snowball') {
-          level.objects[pos.row][pos.col] = {
-            type: 'snowman',
-            size: 1,
-            isMelting: false,
-            createdAt: turnCount,
-          };
-          level.tiles[pos.row][pos.col].isWarm = false;
-        }
-      }
-      return true;
     }
-    return true; // both halves placed
+
+    // Exactly one side blocked → that half stays in the origin cell as a size-1 ball
+    // (absorbing a flake there → size 2). If both moved, the origin stays empty.
+    if (!moved1 || !moved2) {
+      placeStayedSplitBall(level, pos, turnCount);
+    }
+    return true;
   }
 
   return false;
 }
 
-// Place a size-1 snowball back at its origin cell after a split where the other
-// direction was blocked. If the origin tile holds a snowflake, the returning ball
-// absorbs it and grows to size 2 (the flake is consumed) — the same rule as landing
-// a split ball on any flake tile. This is why splitting a size-2 ball that sits on a
-// flake, with one side walled, yields a size-2 ball at the origin plus a size-1 ball
-// on the open side.
-function placeReturnedSnowball(level: Level, pos: Position, turnCount: number): void {
-  level.objects[pos.row][pos.col] = {
-    type: 'snowball',
-    size: 1,
-    isMelting: false,
-    createdAt: turnCount,
-  };
+/**
+ * Shove the freshly-split size-1 ball one cell from `origin` in `dir` (strength 1).
+ * Returns true if the ball left the origin cell, false if it can't move (so it must
+ * stay in the origin cell). Never builds a snowman.
+ */
+function shoveSplitBall(level: Level, origin: Position, dir: Direction, turnCount: number): boolean {
+  const splitBall: GameObject = { type: 'snowball', size: 1, isMelting: false, createdAt: turnCount };
+
+  // Can a size-1 ball physically leave origin and cross the edge into the neighbour?
+  // (arches / tunnels / triangle legs / solid partitions). canMoveTo ignores whether the
+  // neighbour cell is occupied — that is handled explicitly below.
+  if (!canMoveTo(level, origin, dir, splitBall)) return false;
+  const target = getNextPos(origin, dir);
+  if (!isInBounds(level, target)) return false;
+
+  const targetObj = level.objects[target.row][target.col];
+  if (targetObj) {
+    // Occupied: strength-1 can shove ONE pushable object (size ≤ 1, not a wall/tree) into
+    // an empty passable cell beyond. No snowman is ever built by a split shove.
+    if (targetObj.size > 1 || targetObj.type === 'wall' || targetObj.type === 'tree') return false;
+    const beyond = getNextPos(target, dir);
+    if (!isInBounds(level, beyond)) return false;
+    if (level.objects[beyond.row][beyond.col]) return false;
+    if (!canMoveTo(level, target, dir, targetObj)) return false;
+    // Push the neighbour one cell, then move our split ball into the vacated cell.
+    level.objects[beyond.row][beyond.col] = targetObj;
+    level.objects[target.row][target.col] = null;
+    absorbFlake(level, beyond); // the shoved piece grows on snow like any moved object
+  }
+
+  level.objects[target.row][target.col] = splitBall;
+  absorbFlake(level, target);
+  return true;
+}
+
+/**
+ * A split ball that couldn't move stays in the origin cell as a size-1 ball, absorbing
+ * a snowflake there (→ size 2) per the split rule.
+ */
+function placeStayedSplitBall(level: Level, pos: Position, turnCount: number): void {
+  level.objects[pos.row][pos.col] = { type: 'snowball', size: 1, isMelting: false, createdAt: turnCount };
+  absorbFlake(level, pos);
+}
+
+/**
+ * Grow the snow object at `pos` by one size (cap: ball 2 / player 3 / snowman 3) if it
+ * sits on a snowflake, consuming the flake — the same rule as pickFlake in push.ts.
+ * Non-snow objects (block/laser/tree) never grow and leave the flake untouched.
+ */
+function absorbFlake(level: Level, pos: Position): void {
+  const obj = level.objects[pos.row][pos.col];
+  if (!obj) return;
   const tile = level.tiles[pos.row][pos.col];
-  if (tile.isFlake) {
-    const sb = level.objects[pos.row][pos.col]!;
-    if (sb.size < 2) {
-      sb.size += 1;
-      tile.isFlake = false;
-      tile.isWarm = false;
-    }
+  if (!tile.isFlake) return;
+  const cap = obj.type === 'player' ? 3 : obj.type === 'snowman' ? 3 : obj.type === 'snowball' ? 2 : 0;
+  if (obj.size < cap) {
+    obj.size += 1;
+    tile.isFlake = false;
+    tile.isWarm = false;
   }
-}
-
-function tryPlaceSplitSnowball(
-  level: Level, originPos: Position, targetPos: Position, dir: Direction, turnCount: number,
-  direct: boolean
-): boolean {
-  // Out of bounds = wall
-  if (!isInBounds(level, targetPos)) return false;
-
-  // Check arch constraints: can a split snowball leave origin and enter target in this direction?
-  const splitBall: GameObject = { type: 'snowball', size: 1, isMelting: false, createdAt: 0 };
-  if (!canMoveTo(level, originPos, dir, splitBall)) return false;
-
-  const targetObj = level.objects[targetPos.row][targetPos.col];
-
-  if (!targetObj) {
-    // Empty: place snowball
-    level.objects[targetPos.row][targetPos.col] = {
-      type: 'snowball',
-      size: 1,
-      isMelting: false,
-      createdAt: turnCount,
-    };
-    // Check flake
-    const tile = level.tiles[targetPos.row][targetPos.col];
-    if (tile.isFlake) {
-      const sb = level.objects[targetPos.row][targetPos.col]!;
-      if (sb.size < 2) {
-        sb.size += 1;
-        tile.isFlake = false;
-        tile.isWarm = false;
-      }
-    }
-    return true;
-  }
-
-  // Target has a snowball: build snowman — but only on a direct push. Indirect
-  // (block-transmitted) force never builds a snowman, so treat this side as blocked.
-  if (targetObj.type === 'snowball') {
-    if (!direct) return false;
-    const snowmanSize = targetObj.size === 2 ? 2 : 1;
-    level.objects[targetPos.row][targetPos.col] = {
-      type: 'snowman',
-      size: snowmanSize,
-      isMelting: false,
-      createdAt: turnCount,
-    };
-    level.tiles[targetPos.row][targetPos.col].isWarm = false;
-    return true;
-  }
-
-  // Target has another object: try to push it (effective size = 1)
-  if (targetObj.size <= 1 && targetObj.type !== 'wall') {
-    // Can push size-1 objects
-    const pushTarget = getNextPos(targetPos, dir);
-    if (isInBounds(level, pushTarget) && !level.objects[pushTarget.row][pushTarget.col] &&
-        canMoveTo(level, targetPos, dir, targetObj)) {
-      // Push the object
-      level.objects[pushTarget.row][pushTarget.col] = targetObj;
-      level.objects[targetPos.row][targetPos.col] = {
-        type: 'snowball',
-        size: 1,
-        isMelting: false,
-        createdAt: turnCount,
-      };
-      return true;
-    }
-  }
-
-  // Can't place here
-  return false;
 }
