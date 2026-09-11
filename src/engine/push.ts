@@ -46,18 +46,26 @@ export function executePush(level: Level, playerPos: Position, dir: Direction, t
   const posC = (b.exists && isInBounds(level, posB)) ? getNextPos(posB, dir) : null;
   const c = posC ? getObjAt(level, posC) : { exists: false, type: 'wall' as const, size: 100, isSnowball: false, isWall: true, isBlock: false };
 
-  // If there are 4+ objects in a row, treat C as wall
+  // The three-object push table treats a fourth object as a wall at C. Apply the
+  // same rule when a block or laser at C cannot advance into a real hard
+  // backing boundary (for example, block -> laser -> board edge). A laser with
+  // open space beyond it must stay movable, so this is based on its ability to
+  // advance rather than its type.
+  let hasFourthObject = false;
   if (c.exists && posC) {
     const posD = getNextPos(posC, dir);
     if (isInBounds(level, posD) && level.objects[posD.row][posD.col]) {
-      // 4+ objects: treat as if C is a wall for push purposes
-      return resolvePush(level, playerPos, posA, posB, posC, dir, ps, a, b,
-        { exists: true, type: 'wall', size: 100, isSnowball: false, isWall: true, isBlock: false },
-        turnCount);
+      hasFourthObject = true;
     }
   }
 
-  return resolvePush(level, playerPos, posA, posB, posC, dir, ps, a, b, c, turnCount);
+  const cHardStopped = !!posC && c.isBlock && !canMoveObj(level, posC, dir) && isBacked(level, posC, dir);
+  const cActsAsWall = hasFourthObject || cHardStopped;
+  const effectiveC = cActsAsWall ? WALL_INFO : c;
+  const effectiveBackedAtB = cActsAsWall || isBacked(level, posB, dir);
+
+  return resolvePush(level, playerPos, posA, posB, posC, dir, ps, a, b, effectiveC,
+    effectiveBackedAtB, turnCount);
 }
 
 interface ObjInfo {
@@ -70,6 +78,9 @@ interface ObjInfo {
 }
 
 const OPP_DIR: Record<string, string> = { right:'left', left:'right', up:'down', down:'up' };
+const WALL_INFO: ObjInfo = {
+  exists: true, type: 'wall', size: 100, isSnowball: false, isWall: true, isBlock: false,
+};
 
 function objInfo(obj: GameObject): ObjInfo {
   return {
@@ -103,7 +114,7 @@ function resolvePush(
   level: Level, playerPos: Position, posA: Position, posB: Position,
   posC: Position | null, dir: Direction,
   ps: number, a: ObjInfo, b: ObjInfo, c: ObjInfo,
-  turnCount: number
+  backedAtB: boolean, turnCount: number
 ): PushResult {
   // Check if A can physically move (arch constraints)
   const objA = level.objects[posA.row][posA.col]!;
@@ -114,10 +125,6 @@ function resolvePush(
   // the board edge crash (leave a flake) exactly like one pressed against a wall;
   // canMoveTo would wrongly return false for the out-of-bounds edge case.
   const aCanPress = canLeaveTile(level, posA, dir, objA) && canPassEdge(level, posA, dir, objA);
-
-  // For force/build backing: does the cell behind B back the push?
-  // (wall/block/tree/OOB/perpendicular tunnel/edge-arch blocking heavy objects)
-  const backedAtB = isBacked(level, posB, dir);
 
   // A is a wall/tree (size 100)
   if (a.isWall) return { level, playerMoved: false };

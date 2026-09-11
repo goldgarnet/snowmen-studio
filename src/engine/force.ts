@@ -39,7 +39,12 @@ export function applyForce(
     //    with nowhere to split the ball is left intact (a no-op press).
     //  - A lone ball left in the origin cell absorbs a snowflake there (→ size 2).
     const [dir1, dir2] = getPerpendicularDirs(dir);
-    level.objects[pos.row][pos.col] = null;
+
+    // A split is one atomic push result. In particular, a size-2 ball resting on
+    // a yellow button must keep that button held while both new halves test their
+    // exits. Removing it first would re-close a yellow wall before a half can
+    // enter the wall cell that was open at the start of the push.
+    level.objects[pos.row][pos.col] = obj;
 
     const moved1 = shoveSplitBall(level, pos, dir1, turnCount);
     const moved2 = shoveSplitBall(level, pos, dir2, turnCount);
@@ -62,6 +67,10 @@ export function applyForce(
     // (absorbing a flake there → size 2). If both moved, the origin stays empty.
     if (!moved1 || !moved2) {
       placeStayedSplitBall(level, pos, turnCount);
+    } else {
+      // Both halves left the origin, so release the source button only after the
+      // complete split has resolved.
+      level.objects[pos.row][pos.col] = null;
     }
     return true;
   }
