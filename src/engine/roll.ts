@@ -96,7 +96,6 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
   while (true) {
     if (++guard > MAX_ITERS) break;
     const leadPos = rollingGroup[rollingGroup.length - 1].pos;
-    const leadObj = rollingGroup[rollingGroup.length - 1].obj;
 
     // Triangle mirror: if a single ball is currently inside a triangle cell, reflect
     // its direction (it entered across an open edge). A train can't turn a corner.
@@ -106,7 +105,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
       if (nd) dir = nd;
     }
 
-    if (!canMoveTo(level, leadPos, dir, leadObj)) break;
+    if (!canMoveRollingGroup(level, rollingGroup, dir)) break;
 
     const nextPos = getNextPos(leadPos, dir);
     if (!isInBounds(level, nextPos)) break;
@@ -143,7 +142,7 @@ export function rollSnowball(level: Level, fromPos: Position, dir: Direction, tu
     if (obstacleSize < rollingSize) {
       // Absorb: need room for obstacle to be pushed forward
       const obsLead = obstacleGroup[obstacleGroup.length - 1];
-      if (!canMoveTo(level, obsLead.pos, dir, obsLead.obj)) break;
+      if (!canMoveRollingGroup(level, obstacleGroup, dir)) break;
       const obsNextPos = getNextPos(obsLead.pos, dir);
       if (!isInBounds(level, obsNextPos) || level.objects[obsNextPos.row][obsNextPos.col]) break;
 
@@ -195,7 +194,6 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
   while (true) {
     if (++guard > MAX_ITERS) break;
     const leadPos = group[group.length - 1].pos;
-    const leadObj = group[group.length - 1].obj;
 
     const curTri = level.tiles[leadPos.row][leadPos.col].triangle;
     if (curTri && group.length === 1) {
@@ -203,7 +201,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
       if (nd) dir = nd;
     }
 
-    if (!canMoveTo(level, leadPos, dir, leadObj)) break;
+    if (!canMoveRollingGroup(level, group, dir)) break;
 
     const nextPos = getNextPos(leadPos, dir);
     if (!isInBounds(level, nextPos)) break;
@@ -238,7 +236,7 @@ function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], di
     if (obstacleSize < rollingSize) {
       // Absorb: need room for obstacle to be pushed forward
       const obsLead = obstacleGroup[obstacleGroup.length - 1];
-      if (!canMoveTo(level, obsLead.pos, dir, obsLead.obj)) break;
+      if (!canMoveRollingGroup(level, obstacleGroup, dir)) break;
       const obsNextPos = getNextPos(obsLead.pos, dir);
       if (!isInBounds(level, obsNextPos) || level.objects[obsNextPos.row][obsNextPos.col]) break;
 
@@ -270,6 +268,15 @@ function moveRollingGroup(level: Level, group: { pos: Position; obj: GameObject 
     level.objects[pos.row][pos.col] = null;
     group[i].pos = nextPos;
   }
+}
+
+// A rolling train shifts every member by one cell. Checking only its lead lets a
+// smaller lead pass an edge arch while a larger trailing ball crosses that same
+// boundary unchecked. Each member must be able to cross its own outgoing edge.
+function canMoveRollingGroup(
+  level: Level, group: { pos: Position; obj: GameObject }[], dir: Direction
+): boolean {
+  return group.every(({ pos, obj }) => canMoveTo(level, pos, dir, obj));
 }
 
 const BEAM_DIRS_ROLL: Record<string, [number, number]> = {

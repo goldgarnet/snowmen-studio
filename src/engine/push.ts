@@ -46,26 +46,11 @@ export function executePush(level: Level, playerPos: Position, dir: Direction, t
   const posC = (b.exists && isInBounds(level, posB)) ? getNextPos(posB, dir) : null;
   const c = posC ? getObjAt(level, posC) : { exists: false, type: 'wall' as const, size: 100, isSnowball: false, isWall: true, isBlock: false };
 
-  // The three-object push table treats a fourth object as a wall at C. Apply the
-  // same rule when a block or laser at C cannot advance into a real hard
-  // backing boundary (for example, block -> laser -> board edge). A laser with
-  // open space beyond it must stay movable, so this is based on its ability to
-  // advance rather than its type.
-  let hasFourthObject = false;
-  if (c.exists && posC) {
-    const posD = getNextPos(posC, dir);
-    if (isInBounds(level, posD) && level.objects[posD.row][posD.col]) {
-      hasFourthObject = true;
-    }
-  }
-
-  const cHardStopped = !!posC && c.isBlock && !canMoveObj(level, posC, dir) && isBacked(level, posC, dir);
-  const cActsAsWall = hasFourthObject || cHardStopped;
-  const effectiveC = cActsAsWall ? WALL_INFO : c;
-  const effectiveBackedAtB = cActsAsWall || isBacked(level, posB, dir);
-
-  return resolvePush(level, playerPos, posA, posB, posC, dir, ps, a, b, effectiveC,
-    effectiveBackedAtB, turnCount);
+  // The push table only describes A, B, and C. A fourth ordinary object is not a
+  // wall: it merely prevents C from moving in rules that need an empty D cell.
+  // Keep C's real identity so that an unspecified long chain safely becomes a no-op.
+  return resolvePush(level, playerPos, posA, posB, posC, dir, ps, a, b, c,
+    isBacked(level, posB, dir), turnCount);
 }
 
 interface ObjInfo {
@@ -78,10 +63,6 @@ interface ObjInfo {
 }
 
 const OPP_DIR: Record<string, string> = { right:'left', left:'right', up:'down', down:'up' };
-const WALL_INFO: ObjInfo = {
-  exists: true, type: 'wall', size: 100, isSnowball: false, isWall: true, isBlock: false,
-};
-
 function objInfo(obj: GameObject): ObjInfo {
   return {
     exists: true,
@@ -145,6 +126,22 @@ function resolvePush(
   if (a.isBlock) {
     const forced = tryBlockTransmittedForce(level, posA, dir, ps, turnCount);
     if (forced) return forced;
+  }
+
+  // An explicit size-3 chain rule: when all three pushed objects are size-1
+  // snowballs and C is pressed against a REAL hard backer, only C receives the
+  // transmitted force. A and B are not directly pushed into each other, so they
+  // must not merge into a snowman. A fourth soft object is not a backer and falls
+  // through to the normal table (which leaves the unsupported chain unchanged).
+  if (ps === 3 && posC && a.isSnowball && a.size === 1 &&
+    b.isSnowball && b.size === 1 && c.isSnowball && c.size === 1 &&
+    isBacked(level, posC, dir)) {
+    const objB = level.objects[posB.row][posB.col];
+    if (aCanMoveIntoB && objB && canMoveTo(level, posB, dir, objB)) {
+      if (applyForce(level, posC, dir, turnCount, false)) {
+        return { level, playerMoved: true };
+      }
+    }
   }
 
   // ===== PLAYER SIZE 1 =====
