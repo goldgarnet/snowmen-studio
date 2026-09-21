@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useRef, useEffect, useId } from 'react';
+import { memo, useState, useCallback, useRef, useEffect, useId, useLayoutEffect } from 'react';
 import { GameObject, Level, Tile } from '../../types';
 import { yellowWallsSolid, orangeWallsSolid } from '../../engine/helpers';
 import './Grid.css';
@@ -26,6 +26,10 @@ interface GridProps {
     copy: boolean;
     copyMarker: { row: number; col: number };
   } | null;
+  // Used by Simulator playback. The engine supplies stable motionId values in its
+  // snapshots, letting the grid interpolate an object instead of jumping cell-to-cell.
+  animateObjects?: boolean;
+  animationDurationMs?: number;
 }
 
 interface GridCellProps {
@@ -54,6 +58,26 @@ function shallowEqualRecord(a: object | null, b: object | null): boolean {
   const aKeys = Object.keys(aRecord);
   if (aKeys.length !== Object.keys(bRecord).length) return false;
   return aKeys.every((key) => aRecord[key] === bRecord[key]);
+}
+
+interface MotionPosition {
+  row: number;
+  col: number;
+}
+
+function collectMotionPositions(level: Level): Map<string, MotionPosition> {
+  const positions = new Map<string, MotionPosition>();
+  for (let row = 0; row < level.height; row++) {
+    for (let col = 0; col < level.width; col++) {
+      const object = level.objects[row][col];
+      if (!object) continue;
+      // Maps loaded before the first engine turn do not yet have a runtime ID. This
+      // deterministic fallback matches the ID assigned by turn.ts for that first move.
+      const motionId = object.motionId ?? `${object.type}:${row}:${col}`;
+      positions.set(motionId, { row, col });
+    }
+  }
+  return positions;
 }
 
 // A turn clones the level for engine safety, so unchanged cells receive new object
@@ -108,7 +132,10 @@ const GridCell = memo(function GridCell({
       {tile.isPortal && <PortalOverlay size={cellSize} />}
       {tile.triangle && <TriangleOverlay corner={tile.triangle} size={cellSize} />}
       {!tile.isVoid && obj && (
-        <div className={`object obj-${obj.type} size-${obj.size} ${highlightPlayer && obj.type === 'player' ? 'player-highlight' : ''} ${obj.isMelting ? 'melting' : ''}`}>
+        <div
+          className={`object obj-${obj.type} size-${obj.size} ${highlightPlayer && obj.type === 'player' ? 'player-highlight' : ''} ${obj.isMelting ? 'melting' : ''}`}
+          data-motion-id={obj.motionId}
+        >
           {renderObject(obj, cellSize, snowmanFilterId)}
         </div>
       )}
@@ -135,7 +162,7 @@ const GridCell = memo(function GridCell({
 
 export default function Grid({
   level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgePaint, onEdgeErase, onBackgroundClick, edgeMode, highlightPlayer,
-  thumbnail, selectedCells, previewSelectionCells, moveGhost, onGridMouseLeave,
+  thumbnail, selectedCells, previewSelectionCells, moveGhost, onGridMouseLeave, animateObjects = false, animationDurationMs = 150,
 }: GridProps) {
   const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase, onEdgePaint, onEdgeErase });
   useEffect(() => {
@@ -152,6 +179,9 @@ export default function Grid({
 
   // Responsive cell sizing: measure the wrapper and fill available space.
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const stackRef = useRef<HTMLDivElement>(null);
+  const previousMotionPositionsRef = useRef(collectMotionPositions(level));
+  const animationFrameRef = useRef<number | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   useEffect(() => {
     if (!wrapperRef.current) return;
@@ -199,6 +229,54 @@ export default function Grid({
   const sharedDefsId = useId().replace(/:/g, '');
   const snowmanFilterId = `${sharedDefsId}-snowman-glow`;
   const goalGradientId = `${sharedDefsId}-goal-glow`;
+
+  // FLIP transition: React renders the object at its next cell first, then this
+  // layout effect offsets that DOM node back to its prior cell and releases it over
+  // the movement-frame duration. Only a single-cell delta is interpolated; portal
+  // jumps and triangle-block exits stay instantaneous instead of sliding across the
+  // board through terrain they never occupied.
+  useLayoutEffect(() => {
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    const nextPositions = collectMotionPositions(level);
+    const previousPositions = previousMotionPositionsRef.current;
+    previousMotionPositionsRef.current = nextPositions;
+
+    if (!animateObjects || !stackRef.current) return;
+
+    const movingElements: { element: HTMLElement; x: number; y: number }[] = [];
+    for (const [motionId, next] of nextPositions) {
+      const previous = previousPositions.get(motionId);
+      if (!previous) continue;
+      const deltaRow = previous.row - next.row;
+      const deltaCol = previous.col - next.col;
+      if (Math.abs(deltaRow) + Math.abs(deltaCol) !== 1) continue;
+
+      const element = Array.from(stackRef.current.querySelectorAll<HTMLElement>('[data-motion-id]'))
+        .find(candidate => candidate.dataset.motionId === motionId);
+      if (!element) continue;
+      movingElements.push({ element, x: deltaCol * cellSize, y: deltaRow * cellSize });
+    }
+
+    if (movingElements.length === 0) return;
+    for (const { element, x, y } of movingElements) {
+      element.style.transition = 'none';
+      element.style.transform = `translate(${x}px, ${y}px)`;
+    }
+    animationFrameRef.current = window.requestAnimationFrame(() => {
+      for (const { element } of movingElements) {
+        element.style.transition = `transform ${animationDurationMs}ms linear`;
+        element.style.transform = 'translate(0, 0)';
+      }
+      animationFrameRef.current = null;
+    });
+  }, [animateObjects, animationDurationMs, cellSize, level]);
+
+  useEffect(() => () => {
+    if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+  }, []);
 
   if (level.width === 0 || level.height === 0) {
     return <div ref={wrapperRef} className="grid-wrapper" />;
@@ -255,7 +333,7 @@ export default function Grid({
     <div ref={wrapperRef} className="grid-wrapper" onMouseDown={(event) => {
       if (event.button === 0 && event.target === event.currentTarget) onBackgroundClick?.();
     }}>
-      <div className="grid-stack"
+      <div ref={stackRef} className="grid-stack"
         style={{ position: 'relative', width: gridW, height: gridH }}
         onMouseLeave={(event) => {
           handleMouseUp();

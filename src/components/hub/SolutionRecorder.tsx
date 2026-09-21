@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { gameStateFromCode } from '../../utils/game';
 import {
   advanceSolutionState,
@@ -21,6 +21,7 @@ interface SolutionRecorderProps {
   // 'play': "바로 플레이"에서 진입 — 그냥 플레이하다가 클리어하면 아래 배너로 등록 유도.
   variant?: 'record' | 'play';
   title?: string;
+  backLabel?: string;
 }
 
 interface RecordingState {
@@ -28,6 +29,13 @@ interface RecordingState {
   // states[n] is the derived state after moves.slice(0, n). Keeping this timeline
   // makes both a new move and undo O(1) turns instead of replaying from move zero.
   states: StepState[];
+}
+
+const FRAME_DELAY_MS = { movement: 150, resolved: 0, 'turn-end': 0 } as const;
+
+interface ActivePlayback {
+  finalState: StepState;
+  frames: NonNullable<StepState['frames']>;
 }
 
 function createRecordingState(startLevel: NonNullable<ReturnType<typeof gameStateFromCode>>['level'], moves: SolutionMove[]): RecordingState {
@@ -43,51 +51,123 @@ function createRecordingState(startLevel: NonNullable<ReturnType<typeof gameStat
 // in sync without replaying the entire solution on every input. Saving is only allowed
 // once the played sequence actually clears the map.
 export default function SolutionRecorder({
-  code, initial, onSave, onCancel, variant = 'record', title,
+  code, initial, onSave, onCancel, variant = 'record', title, backLabel = '상세로',
 }: SolutionRecorderProps) {
   const isPlay = variant === 'play';
   const heading = title ?? (isPlay ? '바로 플레이' : '풀이 녹화');
   const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
-  const [recording, setRecording] = useState<RecordingState>(() => {
-    const initialMoves = (initial ? decodeSolution(initial) : null) ?? [];
-    return startLevel
-      ? createRecordingState(startLevel, initialMoves)
-      : { moves: initialMoves, states: [] };
-  });
+  const initialMoves = useMemo(() => (initial ? decodeSolution(initial) : null) ?? [], [initial]);
+  const initialRecording = useMemo<RecordingState>(() => (
+    startLevel ? createRecordingState(startLevel, initialMoves) : { moves: initialMoves, states: [] }
+  ), [initialMoves, startLevel]);
+  const [recording, setRecording] = useState<RecordingState>(() => initialRecording);
+  const [displayState, setDisplayState] = useState<StepState | null>(
+    () => initialRecording.states[initialRecording.states.length - 1] ?? null,
+  );
+  const [animationEnabled, setAnimationEnabled] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const playbackTimerRef = useRef<number | null>(null);
+  const playbackIdRef = useRef(0);
+  const activePlaybackRef = useRef<ActivePlayback | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const moves = recording.moves;
-  const state = recording.states[recording.states.length - 1] ?? null;
+  const recordedState = recording.states[recording.states.length - 1] ?? null;
+  const state = displayState;
 
   const playing = state?.status === 'playing';
   const cleared = state?.status === 'cleared';
   const soulEnabled = !!startLevel?.soulSwapEnabled;
 
-  const push = useCallback((m: SolutionMove) => {
-    setError(null);
-    setRecording((prev) => {
-      const current = prev.states[prev.states.length - 1];
-      if (!current || current.status !== 'playing') return prev;
-      return {
-        moves: [...prev.moves, m],
-        states: [...prev.states, advanceSolutionState(current, m)],
-      };
-    });
+  useEffect(() => () => {
+    playbackIdRef.current += 1;
+    activePlaybackRef.current = null;
+    if (playbackTimerRef.current !== null) window.clearTimeout(playbackTimerRef.current);
   }, []);
 
+  const finishPlaybackNow = useCallback(() => {
+    const playback = activePlaybackRef.current;
+    if (!playback) return;
+    playbackIdRef.current += 1;
+    activePlaybackRef.current = null;
+    if (playbackTimerRef.current !== null) {
+      window.clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+    setDisplayState(playback.finalState);
+    setIsAnimating(false);
+  }, []);
+
+  const playFrames = useCallback((nextState: StepState, frames: NonNullable<StepState['frames']>) => {
+    if (playbackTimerRef.current !== null) window.clearTimeout(playbackTimerRef.current);
+    const playbackId = playbackIdRef.current + 1;
+    playbackIdRef.current = playbackId;
+    activePlaybackRef.current = { finalState: nextState, frames };
+    setIsAnimating(true);
+
+    let frameIndex = 0;
+    const showNextFrame = () => {
+      if (playbackId !== playbackIdRef.current) return;
+      const frame = frames[frameIndex];
+      const isLastFrame = frameIndex === frames.length - 1;
+      setDisplayState({
+        level: frame.level,
+        status: isLastFrame ? nextState.status : 'playing',
+        turnCount: nextState.turnCount,
+      });
+
+      if (isLastFrame) {
+        playbackTimerRef.current = null;
+        activePlaybackRef.current = null;
+        setIsAnimating(false);
+        return;
+      }
+
+      const delay = FRAME_DELAY_MS[frame.phase];
+      frameIndex += 1;
+      playbackTimerRef.current = window.setTimeout(showNextFrame, delay);
+    };
+
+    showNextFrame();
+  }, []);
+
+  const handleAnimationToggle = useCallback((enabled: boolean) => {
+    setAnimationEnabled(enabled);
+    if (!enabled) finishPlaybackNow();
+  }, [finishPlaybackNow]);
+
+  const push = useCallback((m: SolutionMove) => {
+    if (!recordedState || recordedState.status !== 'playing' || isAnimating) return;
+    setError(null);
+    const animatedState = advanceSolutionState(recordedState, m, true);
+    const nextState: StepState = {
+      level: animatedState.level,
+      status: animatedState.status,
+      turnCount: animatedState.turnCount,
+    };
+    setRecording((prev) => ({ moves: [...prev.moves, m], states: [...prev.states, nextState] }));
+
+    const frames = animatedState.frames ?? [];
+    if (animationEnabled && frames.some(frame => frame.phase === 'movement')) {
+      playFrames(nextState, frames);
+    } else {
+      setDisplayState(nextState);
+    }
+  }, [animationEnabled, isAnimating, playFrames, recordedState]);
+
   const undo = useCallback(() => {
-    setRecording((prev) => prev.moves.length === 0 ? prev : {
-      moves: prev.moves.slice(0, -1),
-      states: prev.states.slice(0, -1),
-    });
-  }, []);
+    if (isAnimating || recording.moves.length === 0) return;
+    const states = recording.states.slice(0, -1);
+    setRecording({ moves: recording.moves.slice(0, -1), states });
+    setDisplayState(states[states.length - 1] ?? null);
+  }, [isAnimating, recording]);
   const reset = useCallback(() => {
-    setRecording((prev) => prev.moves.length === 0 ? prev : {
-      moves: [],
-      states: prev.states.slice(0, 1),
-    });
-  }, []);
+    if (isAnimating || recording.moves.length === 0) return;
+    const states = recording.states.slice(0, 1);
+    setRecording({ moves: [], states });
+    setDisplayState(states[0] ?? null);
+  }, [isAnimating, recording]);
 
   useEffect(() => {
     if (!startLevel) return;
@@ -112,7 +192,7 @@ export default function SolutionRecorder({
     setSaving(true);
     setError(null);
     try {
-      await onSave(encodeSolution(moves), state?.turnCount ?? 0);
+      await onSave(encodeSolution(moves), recordedState?.turnCount ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장에 실패했습니다.');
       setSaving(false);
@@ -123,7 +203,7 @@ export default function SolutionRecorder({
     return (
       <div className="play-view">
         <div className="play-view-bar">
-          <button className="btn btn-ghost" onClick={onCancel}>← 상세로</button>
+          <button className="btn btn-ghost" onClick={onCancel}>← {backLabel}</button>
           <span className="play-view-title">풀이 녹화</span>
         </div>
         <div className="play-view-error">맵 코드를 해석할 수 없어 풀이를 녹화할 수 없습니다.</div>
@@ -131,18 +211,22 @@ export default function SolutionRecorder({
     );
   }
 
-  const disabled = !playing || saving;
+  const disabled = !playing || saving || isAnimating;
 
   return (
     <div className="play-view">
       <div className="simulator">
         <div className="sim-topbar">
-          <button className="btn btn-ghost sim-back" onClick={onCancel} disabled={saving}>← 상세로</button>
+          <button className="btn btn-ghost sim-back" onClick={onCancel} disabled={saving}>← {backLabel}</button>
           <span className="sim-title">{heading}</span>
           <div className="sim-controls">
             <span className="sim-info">턴 {state.turnCount} · 입력 {moves.length}</span>
-            <button onClick={undo} disabled={moves.length === 0 || saving}>되돌리기 (Z)</button>
-            <button onClick={reset} disabled={moves.length === 0 || saving}>초기화 (R)</button>
+            <label className={`sim-animation-toggle ${animationEnabled ? 'is-on' : ''}`}>
+              <input type="checkbox" checked={animationEnabled} onChange={(event) => handleAnimationToggle(event.target.checked)} />
+              <span>이동 애니메이션</span>
+            </label>
+            <button onClick={undo} disabled={moves.length === 0 || saving || isAnimating}>되돌리기 (Z)</button>
+            <button onClick={reset} disabled={moves.length === 0 || saving || isAnimating}>초기화 (R)</button>
             {!isPlay && (
               <button className="btn btn-primary" onClick={save} disabled={!cleared || saving}>
                 {saving ? '저장 중…' : '이 풀이 저장'}
@@ -176,7 +260,7 @@ export default function SolutionRecorder({
 
         <div className="sim-body">
           <div className="sim-grid-area">
-            <Grid level={state.level} highlightPlayer />
+            <Grid level={state.level} highlightPlayer animateObjects={isAnimating && animationEnabled} animationDurationMs={FRAME_DELAY_MS.movement} />
           </div>
 
           <div className="sim-touch-pad">
@@ -191,8 +275,8 @@ export default function SolutionRecorder({
               {soulEnabled && (
                 <button onClick={() => push('soul')} disabled={disabled}>🌀 영혼이동 (M)</button>
               )}
-              <button onClick={undo} disabled={moves.length === 0 || saving}>↩ 되돌리기</button>
-              <button onClick={reset} disabled={moves.length === 0 || saving}>⟳ 초기화</button>
+              <button onClick={undo} disabled={moves.length === 0 || saving || isAnimating}>↩ 되돌리기</button>
+              <button onClick={reset} disabled={moves.length === 0 || saving || isAnimating}>⟳ 초기화</button>
             </div>
           </div>
         </div>

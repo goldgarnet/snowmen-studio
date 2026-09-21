@@ -36,6 +36,36 @@
 
 .sim-info { font-size: 14px; color: var(--text-dim); font-weight: 700; }
 
+.sim-animation-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+.sim-animation-toggle.is-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.sim-animation-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.sim-animation-toggle:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+.sim-animation-toggle input:disabled { cursor: not-allowed; }
+
 /* 풀이 재생 속도 슬라이더 (SolutionPlayer) */
 .sol-speed {
   display: inline-flex; align-items: center; gap: 8px;

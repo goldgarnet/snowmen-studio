@@ -58,6 +58,10 @@ export default function MapStudio() {
 
   // Editing state (the map currently open in the editor).
   const [level, setLevel] = useState<Level>(() => createLevel(8, 8));
+  // Once a saved map's layout changes, its persisted walkthroughs are invalid even
+  // if the edit is later undone. Reset after a new solution is registered so a later
+  // edit invalidates that fresh walkthrough too.
+  const invalidatedSolutionsForRef = useRef<string | null>(null);
   const editorRef = useRef<EditorToolbarApi>(null);
   const [editorHistory, setEditorHistory] = useState<EditorHistoryState>({ canUndo: false, canRedo: false });
   const [editId, setEditId] = useState<string | null>(null);
@@ -107,7 +111,7 @@ export default function MapStudio() {
   const visiblePage = Math.min(page, pageCount);
   const pagedEntries = listEntries.slice((visiblePage - 1) * PAGE_SIZE, visiblePage * PAGE_SIZE);
 
-  const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1800); };
+  const showFlash = useCallback((msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1800); }, []);
 
   const refresh = useCallback(async () => {
     if (!profile) return;
@@ -125,6 +129,7 @@ export default function MapStudio() {
     const fresh = createLevel(8, 8);
     setLevel(fresh);
     setSavedCode(encodeLevelCode(fresh));
+    invalidatedSolutionsForRef.current = null;
     setEditId(null); setEditTitle('새 맵'); setPublished(false); setEditRow(null);
     setEditFolderId(folderId);
     setView('editor');
@@ -135,6 +140,7 @@ export default function MapStudio() {
     if (!lv) { alert('맵 코드를 해석할 수 없어 열 수 없습니다.'); return; }
     setLevel(lv);
     setSavedCode(encodeLevelCode(lv));
+    invalidatedSolutionsForRef.current = null;
     setEditId(m.id); setEditTitle(m.title ?? '제목 없음'); setPublished(m.published); setEditRow(m);
     setEditFolderId(m.folder_id);
     setView('editor');
@@ -168,6 +174,27 @@ export default function MapStudio() {
       refresh();
     } catch (e) { alert('저장 실패: ' + (e as Error).message); }
   };
+
+  const invalidateSolutionsForLayoutEdit = useCallback((mapId: string) => {
+    if (invalidatedSolutionsForRef.current === mapId) return;
+    invalidatedSolutionsForRef.current = mapId;
+    void deleteSolutionsForMap(mapId).then(
+      () => showFlash('맵 수정으로 기존 풀이를 삭제했습니다'),
+      (error: unknown) => {
+        // Retry on a later edit if the immediate invalidation request failed.
+        invalidatedSolutionsForRef.current = null;
+        console.error(error);
+        showFlash('기존 풀이 삭제에 실패했습니다. 다시 수정하거나 저장해 주세요.');
+      },
+    );
+  }, [showFlash]);
+
+  const setEditorLevel = useCallback((nextLevel: Level) => {
+    setLevel(nextLevel);
+    if (editId && encodeLevelCode(nextLevel) !== savedCode) {
+      invalidateSolutionsForLayoutEdit(editId);
+    }
+  }, [editId, invalidateSolutionsForLayoutEdit, savedCode]);
 
   // ---- folder actions ----
   const createFolder = async () => {
@@ -342,6 +369,7 @@ export default function MapStudio() {
       moves,
       turn_count: turnCount,
     });
+    invalidatedSolutionsForRef.current = null;
     setView('editor');
     showFlash('풀이가 등록되었습니다');
   };
@@ -460,6 +488,22 @@ export default function MapStudio() {
 
   // ---------- play submode ----------
   if (view === 'play') {
+    // A private saved map is still a real map record, so its ordinary play view can
+    // store a cleared run. Unsaved/dirty layouts stay playable, but never write a
+    // walkthrough that would belong to a different persisted map code.
+    const canSaveSolution = !!editId && !!profile && playCode === savedCode;
+    if (canSaveSolution) {
+      return (
+        <SolutionRecorder
+          code={playCode}
+          variant="play"
+          title={editTitle}
+          backLabel="에디터로"
+          onSave={saveStudioSolution}
+          onCancel={() => setView('editor')}
+        />
+      );
+    }
     return <PlayView code={playCode} title={editTitle} backLabel="에디터로" onClose={() => setView('editor')} />;
   }
 
@@ -497,7 +541,7 @@ export default function MapStudio() {
             📋 게임에 넣기
           </button>
           <button className="btn studio-toolbar-icon-btn" onClick={testPlay} title="시뮬레이터" aria-label="시뮬레이터"><ToolbarIcon name="play" /></button>
-          {published && editId && (
+          {editId && (
             <button
               className="btn studio-toolbar-icon-btn"
               onClick={() => setView('record')}
@@ -521,7 +565,7 @@ export default function MapStudio() {
         </div>
 
         <div className="studio-editor-body">
-          <Editor ref={editorRef} level={level} setLevel={setLevel} onHistoryChange={setEditorHistory} />
+          <Editor ref={editorRef} level={level} setLevel={setEditorLevel} onHistoryChange={setEditorHistory} />
         </div>
 
         {showPublish && (

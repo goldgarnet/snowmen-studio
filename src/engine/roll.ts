@@ -4,312 +4,280 @@ import { getNextPos, canMoveTo, yellowWallsSolid } from './helpers';
 
 // Triangle-mirror reflection — a snowball that has ENTERED a triangle cell turns 90°
 // based on the direction it came in (like a light ray hitting the diagonal mirror).
-// "/" mirror swaps right↔up & left↔down; "\" mirror swaps right↔down & left↔up.
 const TRI_DEFLECT: Record<TriangleCorner, Partial<Record<Direction, Direction>>> = {
-  br: { down: 'left', right: 'up' },    // ◢ mirror "/"
-  bl: { down: 'right', left: 'up' },    // ◣ mirror "\"
-  tl: { up: 'right', left: 'down' },    // ◤ mirror "/"
-  tr: { up: 'left', right: 'down' },    // ◥ mirror "\"
+  br: { down: 'left', right: 'up' },
+  bl: { down: 'right', left: 'up' },
+  tl: { up: 'right', left: 'down' },
+  tr: { up: 'left', right: 'down' },
 };
 
-// Portals for the roll module (kept local to avoid a turn.ts import cycle).
-function findPortalsRoll(level: Level): Position[] {
-  const ps: Position[] = [];
-  for (let r = 0; r < level.height; r++) {
-    for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isPortal) ps.push({ row: r, col: c });
-    }
-  }
-  return ps;
+/** Called after every committed rolling tick. Return false to stop the active motion. */
+export type RollTickHook = (level: Level) => boolean;
+
+interface RollingMember {
+  pos: Position;
+  obj: GameObject;
 }
 
-// After the rolling group's lead lands on a cell, resolve holes and portals:
-//   - Hole: the lead falls in and disappears → the roll stops (returns true).
-//   - Portal: if the map has exactly two portals and the OTHER portal is empty, the
-//     lead is relocated there and the roll stops (returns true). If the destination
-//     portal is occupied (or portals aren't paired), nothing happens and the ball
-//     keeps rolling (returns false).
-function resolveRollLeadSpecial(level: Level, group: { pos: Position; obj: GameObject }[]): boolean {
-  if (group.length === 0) return true;
+type RollingGroup = RollingMember[]; // rear → front in the direction of travel
+
+// Kept local to avoid a turn.ts import cycle.
+function findPortalsRoll(level: Level): Position[] {
+  const portals: Position[] = [];
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isPortal) portals.push({ row: r, col: c });
+    }
+  }
+  return portals;
+}
+
+// The rolling lead resolves holes and portals immediately after landing. A portal
+// transfer ends this lead's motion; justTeleported prevents a later turn-level pass.
+function resolveRollLeadSpecial(level: Level, group: RollingGroup): boolean {
   const lead = group[group.length - 1];
+  if (!lead) return true;
   const tile = level.tiles[lead.pos.row][lead.pos.col];
+
   if (tile.isHole) {
     level.objects[lead.pos.row][lead.pos.col] = null;
     return true;
   }
-  if (tile.isPortal) {
-    const portals = findPortalsRoll(level);
-    if (portals.length === 2) {
-      const other = portals.find(p => !(p.row === lead.pos.row && p.col === lead.pos.col));
-      if (other && !level.objects[other.row][other.col]) {
-        const moving = level.objects[lead.pos.row][lead.pos.col];
-        level.objects[lead.pos.row][lead.pos.col] = null;
-        level.objects[other.row][other.col] = moving;
-        if (moving) moving.justTeleported = true;
-        return true;
-      }
-    }
-    return false; // destination occupied / unpaired → keep rolling
-  }
-  return false;
+  if (!tile.isPortal) return false;
+
+  const portals = findPortalsRoll(level);
+  if (portals.length !== 2) return false;
+  const other = portals.find(p => p.row !== lead.pos.row || p.col !== lead.pos.col);
+  if (!other || level.objects[other.row][other.col]) return false;
+
+  const moving = level.objects[lead.pos.row][lead.pos.col];
+  level.objects[lead.pos.row][lead.pos.col] = null;
+  level.objects[other.row][other.col] = moving;
+  if (moving) moving.justTeleported = true;
+  return true;
 }
 
-// Deflect a single rolling ball off a triangle block EXACTLY like a triangle wall:
-// the ball "passes through" the block's cell (which it can't rest in, being solid) and
-// comes out on the far side in the reflected direction — so the turn happens AT the
-// block's cell, matching a triangle wall of the same corner. Moves the ball to that
-// exit cell and returns the new direction, or null if the roll should stop (the ball
-// hit a solid leg, or the exit cell is blocked / out of bounds).
+// A triangle block turns a single ball at the block cell. The ball never rests in it;
+// it exits on the reflected side in the same simulation tick.
 function deflectOffTriangleBlock(
-  level: Level, group: { pos: Position; obj: GameObject }[], blockPos: Position, dir: Direction
+  level: Level, group: RollingGroup, blockPos: Position, dir: Direction
 ): Direction | null {
   const block = level.objects[blockPos.row][blockPos.col];
-  if (!block || !block.triangleCorner) return null;
-  const nd = TRI_DEFLECT[block.triangleCorner][dir];
-  if (!nd) return null;                                    // solid-leg side → stop
-  if (!canMoveTo(level, blockPos, nd, group[0].obj)) return null; // can't exit toward nd
-  const exitPos = getNextPos(blockPos, nd);
-  if (level.objects[exitPos.row][exitPos.col]) return null; // exit cell occupied → stop
-  const lead = group[0].pos;
-  level.objects[exitPos.row][exitPos.col] = level.objects[lead.row][lead.col];
-  level.objects[lead.row][lead.col] = null;
-  group[0].pos = { row: exitPos.row, col: exitPos.col };
-  return nd;
+  if (!block?.triangleCorner) return null;
+  const nextDir = TRI_DEFLECT[block.triangleCorner][dir];
+  if (!nextDir) return null;
+
+  const lead = group[group.length - 1];
+  if (!lead || !canMoveTo(level, blockPos, nextDir, lead.obj)) return null;
+  const exitPos = getNextPos(blockPos, nextDir);
+  if (level.objects[exitPos.row][exitPos.col]) return null;
+
+  level.objects[exitPos.row][exitPos.col] = level.objects[lead.pos.row][lead.pos.col];
+  level.objects[lead.pos.row][lead.pos.col] = null;
+  lead.pos = exitPos;
+  return nextDir;
 }
 
-export function rollSnowball(level: Level, fromPos: Position, dir: Direction, turnCount: number): void {
+/**
+ * Start rolling a snowball that has already been moved one cell by push.ts.
+ * The tick hook records animation frames and resolves whole-board immediate effects.
+ */
+export function rollSnowball(
+  level: Level, fromPos: Position, dir: Direction, _turnCount: number, onTick?: RollTickHook,
+): void {
   const obj = level.objects[fromPos.row][fromPos.col];
   if (!obj || obj.type !== 'snowball') return;
-
-  const rollingGroup: { pos: Position; obj: GameObject }[] = [{ pos: { ...fromPos }, obj }];
-  let rollingSize = getRollingSize(rollingGroup);
-  let guard = 0;
-  const MAX_ITERS = level.width * level.height * 4 + 16;
-
-  // The ball has just been placed at fromPos by the push helper (which may have
-  // moved it one cell forward onto a beam). If that starting cell is already on a
-  // laser beam, it dies right there — before rolling any further.
-  if (killIfOnBeam(level, rollingGroup)) return;
-  // Likewise, if it was placed onto a hole or portal, resolve that immediately.
-  if (resolveRollLeadSpecial(level, rollingGroup)) return;
-
-  while (true) {
-    if (++guard > MAX_ITERS) break;
-    const leadPos = rollingGroup[rollingGroup.length - 1].pos;
-
-    // Triangle mirror: if a single ball is currently inside a triangle cell, reflect
-    // its direction (it entered across an open edge). A train can't turn a corner.
-    const curTri = level.tiles[leadPos.row][leadPos.col].triangle;
-    if (curTri && rollingGroup.length === 1) {
-      const nd = TRI_DEFLECT[curTri][dir];
-      if (nd) dir = nd;
-    }
-
-    if (!canMoveRollingGroup(level, rollingGroup, dir)) break;
-
-    const nextPos = getNextPos(leadPos, dir);
-    if (!isInBounds(level, nextPos)) break;
-
-    const obstacle = level.objects[nextPos.row][nextPos.col];
-
-    if (!obstacle) {
-      moveRollingGroup(level, rollingGroup, dir);
-      rollingSize = handleRollFlakeAll(level, rollingGroup);
-      if (killIfOnBeam(level, rollingGroup)) break;
-      if (resolveRollLeadSpecial(level, rollingGroup)) break;
-      continue;
-    }
-
-    // Triangle block: a single rolling ball reflects off it like a triangle wall at the
-    // block's own cell (see deflectOffTriangleBlock).
-    if (obstacle.type === 'block' && obstacle.triangleCorner && rollingGroup.length === 1) {
-      const nd = deflectOffTriangleBlock(level, rollingGroup, nextPos, dir);
-      if (nd === null) break;
-      dir = nd;
-      rollingSize = handleRollFlakeAll(level, rollingGroup);
-      if (killIfOnBeam(level, rollingGroup)) break;
-      if (resolveRollLeadSpecial(level, rollingGroup)) break;
-      continue;
-    }
-
-    // Collision with obstacle
-    const obstacleGroup = getConsecutiveObjects(level, nextPos, dir);
-    const obstacleSize = obstacleGroup.reduce((sum, g) => sum + g.obj.size, 0);
-    const allSnowballs = obstacleGroup.every(g => g.obj.type === 'snowball');
-
-    if (!allSnowballs) break;
-
-    if (obstacleSize < rollingSize) {
-      // Absorb: need room for obstacle to be pushed forward
-      const obsLead = obstacleGroup[obstacleGroup.length - 1];
-      if (!canMoveRollingGroup(level, obstacleGroup, dir)) break;
-      const obsNextPos = getNextPos(obsLead.pos, dir);
-      if (!isInBounds(level, obsNextPos) || level.objects[obsNextPos.row][obsNextPos.col]) break;
-
-      // Move obstacle forward first, then rolling group
-      moveRollingGroup(level, obstacleGroup, dir);
-      handleRollFlakeAll(level, obstacleGroup);
-
-      moveRollingGroup(level, rollingGroup, dir);
-      handleRollFlakeAll(level, rollingGroup);
-
-      // Merge obstacle group into rolling group
-      for (const g of obstacleGroup) {
-        rollingGroup.push({ pos: { ...g.pos }, obj: g.obj });
-      }
-      rollingSize = getRollingSize(rollingGroup);
-      continue;
-    } else if (obstacleSize === rollingSize) {
-      // Rolling group stops, obstacle group starts rolling as a unit
-      rollGroup(level, obstacleGroup, dir, turnCount);
-      break;
-    } else {
-      break;
-    }
-  }
+  rollGroup(level, [{ pos: { ...fromPos }, obj }], dir, onTick);
 }
 
-export function rollSnowballGroup(level: Level, positions: Position[], dir: Direction, turnCount: number): void {
-  const group: { pos: Position; obj: GameObject }[] = [];
+export function rollSnowballGroup(
+  level: Level, positions: Position[], dir: Direction, _turnCount: number, onTick?: RollTickHook,
+): void {
+  const group: RollingGroup = [];
   for (const pos of positions) {
     const obj = level.objects[pos.row][pos.col];
-    if (obj && obj.type === 'snowball') {
-      group.push({ pos: { ...pos }, obj });
-    }
+    if (obj?.type === 'snowball') group.push({ pos: { ...pos }, obj });
   }
-  if (group.length === 0) return;
-  rollGroup(level, group, dir, turnCount);
+  if (group.length > 0) rollGroup(level, group, dir, onTick);
 }
 
-function rollGroup(level: Level, group: { pos: Position; obj: GameObject }[], dir: Direction, turnCount: number): void {
-  let rollingSize = getRollingSize(group);
+/**
+ * Resolve a rolling train one simulation tick at a time.
+ *
+ * A terrain boundary may stop an interior/rear member while a passable front suffix
+ * continues. The stopped prefix loses its motion; the already-forward suffix keeps
+ * its motion and receives a new mass calculation on the next collision.
+ */
+function rollGroup(level: Level, initialGroup: RollingGroup, initialDir: Direction, onTick?: RollTickHook): void {
+  let group = initialGroup;
+  let dir = initialDir;
+  let isInitialTick = true;
   let guard = 0;
-  const MAX_ITERS = level.width * level.height * 4 + 16;
+  const maxTicks = level.width * level.height * 4 + 16;
 
-  // Same as rollSnowball: if the group's starting cell is already on a beam
-  // (e.g. it was just placed there by the push helper), it dies before rolling.
-  if (killIfOnBeam(level, group)) return;
-  if (resolveRollLeadSpecial(level, group)) return;
-
-  while (true) {
-    if (++guard > MAX_ITERS) break;
-    const leadPos = group[group.length - 1].pos;
-
-    const curTri = level.tiles[leadPos.row][leadPos.col].triangle;
-    if (curTri && group.length === 1) {
-      const nd = TRI_DEFLECT[curTri][dir];
-      if (nd) dir = nd;
+  while (group.length > 0 && ++guard <= maxTicks) {
+    // The first tick is the position produced by the player's push. It is observable:
+    // a ball may have landed on a button, beam, hole, or portal already.
+    if (isInitialTick) {
+      isInitialTick = false;
+      const stopped = resolveRollLeadSpecial(level, group);
+      if (!finishTick(level, group, onTick) || stopped) return;
+      continue;
     }
 
-    if (!canMoveRollingGroup(level, group, dir)) break;
+    const lead = group[group.length - 1];
+    if (!lead || !isGroupPresent(level, group)) return;
 
-    const nextPos = getNextPos(leadPos, dir);
-    if (!isInBounds(level, nextPos)) break;
+    // A single ball can turn inside a triangle tile. Multi-ball trains cannot bend.
+    const triangle = level.tiles[lead.pos.row][lead.pos.col].triangle;
+    if (triangle && group.length === 1) {
+      const reflected = TRI_DEFLECT[triangle][dir];
+      if (reflected) dir = reflected;
+    }
 
+    // A height-limited boundary splits a moving train instead of freezing it. The
+    // blocked member and rear prefix stay put; a passable front suffix advances in
+    // this same tick, leaving a gap behind it.
+    const firstBlocked = group.findIndex(({ pos, obj }) => !canMoveTo(level, pos, dir, obj));
+    if (firstBlocked >= 0) {
+      group = group.slice(firstBlocked + 1);
+      if (group.length === 0) return;
+    }
+
+    const activeLead = group[group.length - 1];
+    const nextPos = getNextPos(activeLead.pos, dir);
+    if (!isInBounds(level, nextPos)) return;
     const obstacle = level.objects[nextPos.row][nextPos.col];
 
     if (!obstacle) {
       moveRollingGroup(level, group, dir);
-      rollingSize = handleRollFlakeAll(level, group);
-      if (killIfOnBeam(level, group)) break;
-      if (resolveRollLeadSpecial(level, group)) break;
+      handleRollFlakeAll(level, group);
+      const stopped = resolveRollLeadSpecial(level, group);
+      if (!finishTick(level, group, onTick) || stopped) return;
       continue;
     }
 
-    // Triangle block deflection (single ball only) — see deflectOffTriangleBlock.
+    // A triangle block deflects only a lone rolling ball.
     if (obstacle.type === 'block' && obstacle.triangleCorner && group.length === 1) {
-      const nd = deflectOffTriangleBlock(level, group, nextPos, dir);
-      if (nd === null) break;
-      dir = nd;
-      rollingSize = handleRollFlakeAll(level, group);
-      if (killIfOnBeam(level, group)) break;
-      if (resolveRollLeadSpecial(level, group)) break;
+      const reflected = deflectOffTriangleBlock(level, group, nextPos, dir);
+      if (reflected === null) return;
+      dir = reflected;
+      handleRollFlakeAll(level, group);
+      const stopped = resolveRollLeadSpecial(level, group);
+      if (!finishTick(level, group, onTick) || stopped) return;
       continue;
     }
 
     const obstacleGroup = getConsecutiveObjects(level, nextPos, dir);
-    const obstacleSize = obstacleGroup.reduce((sum, g) => sum + g.obj.size, 0);
-    const allSnowballs = obstacleGroup.every(g => g.obj.type === 'snowball');
+    if (!obstacleGroup.every(member => member.obj.type === 'snowball')) return;
 
-    if (!allSnowballs) break;
+    const rollingMass = getRollingMass(group);
+    const obstacleMass = getRollingMass(obstacleGroup);
 
-    if (obstacleSize < rollingSize) {
-      // Absorb: need room for obstacle to be pushed forward
-      const obsLead = obstacleGroup[obstacleGroup.length - 1];
-      if (!canMoveRollingGroup(level, obstacleGroup, dir)) break;
-      const obsNextPos = getNextPos(obsLead.pos, dir);
-      if (!isInBounds(level, obsNextPos) || level.objects[obsNextPos.row][obsNextPos.col]) break;
+    if (obstacleMass < rollingMass) {
+      // A stationary obstacle train has no independent momentum, so it must move as a
+      // whole. The already-rolling train above is the only group that may split.
+      if (!canMoveGroup(level, obstacleGroup, dir)) return;
+      const obstacleLead = obstacleGroup[obstacleGroup.length - 1];
+      const obstacleNext = getNextPos(obstacleLead.pos, dir);
+      if (!isInBounds(level, obstacleNext) || level.objects[obstacleNext.row][obstacleNext.col]) return;
 
+      // Both groups advance one cell during this one tick, then merge.
       moveRollingGroup(level, obstacleGroup, dir);
       handleRollFlakeAll(level, obstacleGroup);
-
       moveRollingGroup(level, group, dir);
       handleRollFlakeAll(level, group);
+      group = [...group, ...obstacleGroup];
 
-      for (const g of obstacleGroup) {
-        group.push({ pos: { ...g.pos }, obj: g.obj });
-      }
-      rollingSize = getRollingSize(group);
+      const stopped = resolveRollLeadSpecial(level, group);
+      if (!finishTick(level, group, onTick) || stopped) return;
       continue;
-    } else if (obstacleSize === rollingSize) {
-      rollGroup(level, obstacleGroup, dir, turnCount);
-      break;
-    } else {
-      break;
     }
+
+    if (obstacleMass === rollingMass) {
+      // Equal mass transfers motion to the stationary group.
+      rollGroup(level, obstacleGroup, dir, onTick);
+    }
+    return;
   }
 }
 
-function moveRollingGroup(level: Level, group: { pos: Position; obj: GameObject }[], dir: Direction): void {
+function moveRollingGroup(level: Level, group: RollingGroup, dir: Direction): void {
   for (let i = group.length - 1; i >= 0; i--) {
-    const { pos } = group[i];
-    const nextPos = getNextPos(pos, dir);
-    level.objects[nextPos.row][nextPos.col] = level.objects[pos.row][pos.col];
-    level.objects[pos.row][pos.col] = null;
-    group[i].pos = nextPos;
+    const member = group[i];
+    const next = getNextPos(member.pos, dir);
+    level.objects[next.row][next.col] = level.objects[member.pos.row][member.pos.col];
+    level.objects[member.pos.row][member.pos.col] = null;
+    member.pos = next;
   }
 }
 
-// A rolling train shifts every member by one cell. Checking only its lead lets a
-// smaller lead pass an edge arch while a larger trailing ball crosses that same
-// boundary unchecked. Each member must be able to cross its own outgoing edge.
-function canMoveRollingGroup(
-  level: Level, group: { pos: Position; obj: GameObject }[], dir: Direction
-): boolean {
+function canMoveGroup(level: Level, group: RollingGroup, dir: Direction): boolean {
   return group.every(({ pos, obj }) => canMoveTo(level, pos, dir, obj));
 }
 
-const BEAM_DIRS_ROLL: Record<string, [number, number]> = {
+function isGroupPresent(level: Level, group: RollingGroup): boolean {
+  return group.every(({ pos, obj }) => level.objects[pos.row][pos.col] === obj && obj.type === 'snowball');
+}
+
+function getConsecutiveObjects(level: Level, startPos: Position, dir: Direction): RollingGroup {
+  const result: RollingGroup = [];
+  let pos = startPos;
+  while (isInBounds(level, pos)) {
+    const obj = level.objects[pos.row][pos.col];
+    if (!obj) break;
+    result.push({ pos: { ...pos }, obj });
+    pos = getNextPos(pos, dir);
+  }
+  return result;
+}
+
+function getRollingMass(group: RollingGroup): number {
+  return group.reduce((total, member) => total + member.obj.size, 0);
+}
+
+function handleRollFlake(level: Level, member: RollingMember): void {
+  const tile = level.tiles[member.pos.row][member.pos.col];
+  if (!tile.isFlake || member.obj.type !== 'snowball' || member.obj.size >= 2) return;
+  member.obj.size += 1;
+  tile.isFlake = false;
+  tile.isWarm = false;
+}
+
+function handleRollFlakeAll(level: Level, group: RollingGroup): void {
+  for (const member of group) handleRollFlake(level, member);
+}
+
+// Fallback for callers without a turn-level hook. New turn resolution always supplies
+// the hook, which performs the more complete whole-board laser calculation.
+const BEAM_DIRS: Record<string, [number, number]> = {
   right: [0, 1], left: [0, -1], up: [-1, 0], down: [1, 0],
 };
-const BEAM_BLOCKERS_ROLL = new Set(['wall', 'block', 'tree', 'laser']);
+const BEAM_BLOCKERS = new Set(['wall', 'block', 'tree', 'laser']);
 
-// Returns true and kills the object if pos is on any laser beam. Triangle tiles
-// stop the beam at their own cell (one cell further than a solid blocker).
-function killIfOnBeam(level: Level, group: { pos: Position; obj: GameObject }[]): boolean {
+function killGroupOnBeam(level: Level, group: RollingGroup): boolean {
+  const yellowSolid = yellowWallsSolid(level);
   let killed = false;
-  const ySolid = yellowWallsSolid(level);
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const laser = level.objects[r][c];
-      if (!laser || laser.type !== 'laser') continue;
-      const [dr, dc] = BEAM_DIRS_ROLL[laser.laserDirection ?? 'right'];
+      if (laser?.type !== 'laser') continue;
+      const [dr, dc] = BEAM_DIRS[laser.laserDirection ?? 'right'];
       let cr = r + dr;
       let cc = c + dc;
       while (cr >= 0 && cc >= 0 && cr < level.height && cc < level.width) {
         if (level.tiles[cr][cc].isVoid) break;
         const hit = level.objects[cr][cc];
         if (hit) {
-          if (BEAM_BLOCKERS_ROLL.has(hit.type)) break;
-          // Check if this hit object is in our rolling group
-          if (group.some(g => g.pos.row === cr && g.pos.col === cc)) {
+          if (BEAM_BLOCKERS.has(hit.type)) break;
+          if (group.some(member => member.pos.row === cr && member.pos.col === cc)) {
             hit.size = 0;
             killed = true;
           }
-          break; // beam is blocked by this object (killed or not)
+          break;
         }
-        if (level.tiles[cr][cc].triangle) break; // triangle stops the beam at this cell
-        if (ySolid && level.tiles[cr][cc].isYellowWall) break; // solid yellow wall blocks
+        if (level.tiles[cr][cc].triangle) break;
+        if (yellowSolid && level.tiles[cr][cc].isYellowWall) break;
         cr += dr;
         cc += dc;
       }
@@ -318,39 +286,7 @@ function killIfOnBeam(level: Level, group: { pos: Position; obj: GameObject }[])
   return killed;
 }
 
-function getConsecutiveObjects(level: Level, startPos: Position, dir: Direction): { pos: Position; obj: GameObject }[] {
-  const result: { pos: Position; obj: GameObject }[] = [];
-  let pos = startPos;
-
-  while (isInBounds(level, pos)) {
-    const obj = level.objects[pos.row][pos.col];
-    if (!obj) break;
-    result.push({ pos: { ...pos }, obj });
-    pos = getNextPos(pos, dir);
-  }
-
-  return result;
-}
-
-function handleRollFlake(level: Level, pos: Position, obj: GameObject): void {
-  const tile = level.tiles[pos.row][pos.col];
-  if (!tile.isFlake) return;
-
-  if (obj.type === 'snowball' && obj.size < 2) {
-    obj.size += 1;
-    tile.isFlake = false;
-    tile.isWarm = false;
-  }
-}
-
-// Every ball in a rolling group picks up a flake on the cell it just landed on —
-// not only the lead ball. Without this, trailing balls roll over flakes without
-// growing (and a flake the size-2 lead can't absorb is left for the ball behind).
-function getRollingSize(group: { pos: Position; obj: GameObject }[]): number {
-  return group.reduce((sum, g) => sum + g.obj.size, 0);
-}
-
-function handleRollFlakeAll(level: Level, group: { pos: Position; obj: GameObject }[]): number {
-  for (const g of group) handleRollFlake(level, g.pos, g.obj);
-  return getRollingSize(group);
+function finishTick(level: Level, group: RollingGroup, onTick?: RollTickHook): boolean {
+  if (onTick) return onTick(level) && isGroupPresent(level, group);
+  return !killGroupOnBeam(level, group);
 }

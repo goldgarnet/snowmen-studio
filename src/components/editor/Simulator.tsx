@@ -1,6 +1,6 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { GameState, Direction } from '../../types';
-import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared } from '../../engine/turn';
+import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared, type TurnResult } from '../../engine/turn';
 import Grid from './Grid';
 import './Simulator.css';
 
@@ -12,37 +12,120 @@ interface SimulatorProps {
   title?: string;
 }
 
+const FRAME_DELAY_MS = {
+  movement: 150,
+  // Resolved frames apply button/laser changes before the next movement but do not
+  // add a visual pause, so a rolling object appears to travel continuously.
+  resolved: 0,
+  'turn-end': 0,
+} as const;
+
+interface ActivePlayback {
+  result: TurnResult;
+  history: GameState['history'];
+  turnCount: number;
+}
+
 export default function Simulator({ gameState, setGameState, onBack, backLabel = '나가기', title }: SimulatorProps) {
-  const handleMove = useCallback((dir: Direction) => {
-    if (gameState.status !== 'playing') return;
+  // Keep the existing immediate-play behavior until the player opts in.
+  const [animationEnabled, setAnimationEnabled] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const playbackTimerRef = useRef<number | null>(null);
+  const playbackIdRef = useRef(0);
+  const activePlaybackRef = useRef<ActivePlayback | null>(null);
 
-    const result = executeTurn(gameState.level, dir);
+  useEffect(() => () => {
+    playbackIdRef.current += 1;
+    activePlaybackRef.current = null;
+    if (playbackTimerRef.current !== null) window.clearTimeout(playbackTimerRef.current);
+  }, []);
 
+  const finishPlaybackNow = useCallback(() => {
+    const playback = activePlaybackRef.current;
+    if (!playback) return;
+
+    // Invalidate queued frame callbacks before showing the engine's already-computed
+    // terminal state. The input remains one turn with one undo snapshot.
+    playbackIdRef.current += 1;
+    activePlaybackRef.current = null;
+    if (playbackTimerRef.current !== null) {
+      window.clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
     setGameState({
-      level: result.level,
-      status: result.status,
-      turnCount: gameState.turnCount + 1,
-      // executeTurn clones before mutating, so the current level is already a safe,
-      // immutable undo snapshot. Avoid cloning the whole board a second time.
-      history: [...gameState.history, gameState.level],
+      level: playback.result.level,
+      status: playback.result.status,
+      turnCount: playback.turnCount,
+      history: playback.history,
     });
-  }, [gameState, setGameState]);
+    setIsAnimating(false);
+  }, [setGameState]);
+
+  const playFrames = useCallback((result: TurnResult, history: GameState['history'], turnCount: number) => {
+    if (playbackTimerRef.current !== null) window.clearTimeout(playbackTimerRef.current);
+    const playbackId = playbackIdRef.current + 1;
+    playbackIdRef.current = playbackId;
+    activePlaybackRef.current = { result, history, turnCount };
+    setIsAnimating(true);
+
+    let frameIndex = 0;
+    const showNextFrame = () => {
+      if (playbackId !== playbackIdRef.current) return;
+
+      const frame = result.frames[frameIndex];
+      const isLastFrame = frameIndex === result.frames.length - 1;
+      setGameState({
+        level: frame.level,
+        status: isLastFrame ? result.status : 'playing',
+        turnCount,
+        history,
+      });
+
+      if (isLastFrame) {
+        playbackTimerRef.current = null;
+        activePlaybackRef.current = null;
+        setIsAnimating(false);
+        return;
+      }
+
+      const delay = FRAME_DELAY_MS[frame.phase];
+      frameIndex += 1;
+      playbackTimerRef.current = window.setTimeout(showNextFrame, delay);
+    };
+
+    showNextFrame();
+  }, [setGameState]);
+
+  const handleAnimationToggle = useCallback((enabled: boolean) => {
+    setAnimationEnabled(enabled);
+    if (!enabled) finishPlaybackNow();
+  }, [finishPlaybackNow]);
+
+  const commitTurnResult = useCallback((result: TurnResult) => {
+    const history = [...gameState.history, gameState.level];
+    const turnCount = gameState.turnCount + 1;
+    const hasMovement = result.frames.some(frame => frame.phase === 'movement');
+
+    if (animationEnabled && hasMovement) {
+      playFrames(result, history, turnCount);
+      return;
+    }
+
+    setGameState({ level: result.level, status: result.status, turnCount, history });
+  }, [animationEnabled, gameState, playFrames, setGameState]);
+
+  const handleMove = useCallback((dir: Direction) => {
+    if (gameState.status !== 'playing' || isAnimating) return;
+    commitTurnResult(executeTurn(gameState.level, dir));
+  }, [commitTurnResult, gameState.level, gameState.status, isAnimating]);
 
   const handleSkip = useCallback(() => {
-    if (gameState.status !== 'playing') return;
-
-    const result = executeSkipTurn(gameState.level);
-
-    setGameState({
-      level: result.level,
-      status: result.status,
-      turnCount: gameState.turnCount + 1,
-      history: [...gameState.history, gameState.level],
-    });
-  }, [gameState, setGameState]);
+    if (gameState.status !== 'playing' || isAnimating) return;
+    commitTurnResult(executeSkipTurn(gameState.level));
+  }, [commitTurnResult, gameState.level, gameState.status, isAnimating]);
 
   const handleUndo = useCallback(() => {
-    if (gameState.history.length === 0) return;
+    if (isAnimating || gameState.history.length === 0) return;
     const newHistory = [...gameState.history];
     const prevLevel = newHistory.pop()!;
     setGameState({
@@ -51,22 +134,22 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
       turnCount: gameState.turnCount - 1,
       history: newHistory,
     });
-  }, [gameState, setGameState]);
+  }, [gameState, isAnimating, setGameState]);
 
   const handleReset = useCallback(() => {
-    if (gameState.history.length === 0) return;
+    if (isAnimating || gameState.history.length === 0) return;
     setGameState({
       level: gameState.history[0],
       status: 'playing',
       turnCount: 0,
       history: [],
     });
-  }, [gameState, setGameState]);
+  }, [gameState, isAnimating, setGameState]);
 
   // M key: cycle the soul to the next snowman. A free action — does not advance the
   // turn (no melting/laser). To clear via a possessed snowman on the goal, end a turn.
   const handleSoulCycle = useCallback(() => {
-    if (gameState.status !== 'playing') return;
+    if (gameState.status !== 'playing' || isAnimating) return;
     if (!gameState.level.soulSwapEnabled) return;
     const newLevel = cycleSoul(gameState.level);
     if (!newLevel) return;
@@ -74,7 +157,7 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
     // the level should clear immediately.
     const status = isLevelCleared(newLevel) ? 'cleared' : gameState.status;
     setGameState({ ...gameState, level: newLevel, status });
-  }, [gameState, setGameState]);
+  }, [gameState, isAnimating, setGameState]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -93,7 +176,7 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
     return () => window.removeEventListener('keydown', handleKey);
   }, [handleMove, handleSkip, handleUndo, handleReset, handleSoulCycle]);
 
-  const disabled = gameState.status !== 'playing';
+  const disabled = gameState.status !== 'playing' || isAnimating;
 
   return (
     <div className="simulator">
@@ -104,13 +187,21 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
         {title != null && <span className="sim-title">{title}</span>}
         <div className="sim-controls">
           <span className="sim-info">턴 {gameState.turnCount}</span>
+          <label className={`sim-animation-toggle ${animationEnabled ? 'is-on' : ''}`}>
+            <input
+              type="checkbox"
+              checked={animationEnabled}
+              onChange={(event) => handleAnimationToggle(event.target.checked)}
+            />
+            <span>이동 애니메이션</span>
+          </label>
           <button onClick={handleSkip} disabled={disabled}>
             대기 (Space)
           </button>
-          <button onClick={handleUndo} disabled={gameState.history.length === 0}>
+          <button onClick={handleUndo} disabled={isAnimating || gameState.history.length === 0}>
             되돌리기 (Z)
           </button>
-          <button onClick={handleReset} disabled={gameState.history.length === 0}>
+          <button onClick={handleReset} disabled={isAnimating || gameState.history.length === 0}>
             초기화 (R)
           </button>
         </div>
@@ -122,7 +213,12 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
 
       <div className="sim-body">
         <div className="sim-grid-area">
-          <Grid level={gameState.level} highlightPlayer />
+          <Grid
+            level={gameState.level}
+            highlightPlayer
+            animateObjects={isAnimating && animationEnabled}
+            animationDurationMs={FRAME_DELAY_MS.movement}
+          />
         </div>
 
         <div className="sim-touch-pad">
@@ -137,8 +233,8 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
             {gameState.level.soulSwapEnabled && (
               <button onClick={handleSoulCycle} disabled={disabled}>🌀 영혼이동 (M)</button>
             )}
-            <button onClick={handleUndo} disabled={gameState.history.length === 0}>↩ 되돌리기</button>
-            <button onClick={handleReset} disabled={gameState.history.length === 0}>⟳ 초기화</button>
+            <button onClick={handleUndo} disabled={isAnimating || gameState.history.length === 0}>↩ 되돌리기</button>
+            <button onClick={handleReset} disabled={isAnimating || gameState.history.length === 0}>⟳ 초기화</button>
           </div>
         </div>
       </div>

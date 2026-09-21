@@ -82,6 +82,9 @@ export interface GameObject {
   // turn, so the post-push portal pass does not teleport it a second time. Cleared at
   // end of turn; not saved in the map code.
   justTeleported?: boolean;
+  // Runtime-only stable identity for matching an object across tick snapshots during
+  // editor-play animation. It is ignored by the level-code serializer.
+  motionId?: string;
 }
 
 export interface Position {

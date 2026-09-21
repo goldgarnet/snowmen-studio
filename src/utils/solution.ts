@@ -1,6 +1,6 @@
 import type { Level, GameStatus, Direction } from '../types';
 import { cloneLevel } from './level';
-import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared } from '../engine/turn';
+import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared, type TurnFrame } from '../engine/turn';
 
 // A 풀이(solution) is a recorded sequence of the player's actions while clearing a
 // map. It is stored as a compact letter string (one char per action) so it fits in
@@ -38,6 +38,9 @@ export interface StepState {
   level: Level;
   status: GameStatus;
   turnCount: number;   // number of turns taken (soul cycles are free, not counted)
+  // Runtime-only snapshots for an interactive recorder to animate the most recent
+  // turn. Stored solutions remain just the compact move string.
+  frames?: TurnFrame[];
 }
 
 /**
@@ -47,7 +50,7 @@ export interface StepState {
  * advance from the current state in O(one turn), instead of replaying the whole move
  * list from the beginning after every key press.
  */
-export function advanceSolutionState(state: StepState, move: SolutionMove): StepState {
+export function advanceSolutionState(state: StepState, move: SolutionMove, captureFrames = false): StepState {
   if (state.status !== 'playing') return state;
 
   if (move === 'soul') {
@@ -57,6 +60,7 @@ export function advanceSolutionState(state: StepState, move: SolutionMove): Step
       level: next,
       status: isLevelCleared(next) ? 'cleared' : state.status,
       turnCount: state.turnCount,
+      ...(captureFrames ? { frames: [] } : {}),
     };
   }
 
@@ -67,6 +71,7 @@ export function advanceSolutionState(state: StepState, move: SolutionMove): Step
     level: result.level,
     status: result.status,
     turnCount: state.turnCount + 1,
+    ...(captureFrames ? { frames: result.frames } : {}),
   };
 }
 

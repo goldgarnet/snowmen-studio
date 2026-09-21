@@ -7,6 +7,15 @@ import { yellowWallsSolid, orangeWallsSolid } from './helpers';
 export interface TurnResult {
   level: Level;
   status: GameStatus;
+  /** Ordered engine snapshots for replay/animation. UI may ignore these safely. */
+  frames: TurnFrame[];
+}
+
+export type TurnFramePhase = 'movement' | 'resolved' | 'turn-end';
+
+export interface TurnFrame {
+  level: Level;
+  phase: TurnFramePhase;
 }
 
 const DIR_DELTA: Record<string, [number, number]> = {
@@ -197,8 +206,10 @@ function resolveSoulFootplate(level: Level, pos: Position, ts: number): Position
 
 export function executeSkipTurn(level: Level): TurnResult {
   const newLevel = cloneLevel(level);
+  ensureMotionIds(newLevel);
+  const frames: TurnFrame[] = [];
   const playerPos = findPlayer(newLevel);
-  if (!playerPos) return { level: newLevel, status: 'gameover' };
+  if (!playerPos) return { level: newLevel, status: 'gameover', frames };
 
   const turnCount = nextAge();
   // Waiting on an armed soul footplate fires the delayed transfer.
@@ -207,20 +218,26 @@ export function executeSkipTurn(level: Level): TurnResult {
   endOfTurn(newLevel);
 
   const finalPlayerPos = findPlayer(newLevel);
-  if (!finalPlayerPos) return { level: newLevel, status: 'gameover' };
+  if (!finalPlayerPos) {
+    recordFrame(frames, newLevel, 'turn-end');
+    return { level: newLevel, status: 'gameover', frames };
+  }
 
   const finalTile = newLevel.tiles[finalPlayerPos.row][finalPlayerPos.col];
-  if (finalTile.isGoal && isGoalActive(newLevel)) return { level: newLevel, status: 'cleared' };
+  recordFrame(frames, newLevel, 'turn-end');
+  if (finalTile.isGoal && isGoalActive(newLevel)) return { level: newLevel, status: 'cleared', frames };
 
-  return { level: newLevel, status: 'playing' };
+  return { level: newLevel, status: 'playing', frames };
 }
 
 export function executeTurn(level: Level, dir: Direction): TurnResult {
   const newLevel = cloneLevel(level);
+  ensureMotionIds(newLevel);
+  const frames: TurnFrame[] = [];
   const playerPos = findPlayer(newLevel);
 
   if (!playerPos) {
-    return { level: newLevel, status: 'gameover' };
+    return { level: newLevel, status: 'gameover', frames };
   }
 
   // Portals don't move; snapshot their occupancy before the push so applyPortals can
@@ -229,11 +246,29 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
   const portalStartOccupied = portals.map(p => !!newLevel.objects[p.row][p.col]);
 
   const turnCount = nextAge();
-  const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount);
+  let hadRollingTick = false;
+  const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount, (tickLevel) => {
+    hadRollingTick = true;
+    // A rolling tick is a real, observable game state. Preserve the pre-reaction
+    // state for animation, then resolve board-wide hazards before another cell moves.
+    recordFrame(frames, tickLevel, 'movement');
+    applyHoles(tickLevel);
+    latchOrangeButtons(tickLevel);
+    applyLaserCheck(tickLevel);
+    recordFrame(frames, tickLevel, 'resolved');
+    // A surviving transferred soul may continue watching the same rolling action;
+    // no player means terminal game over and stops further ticks immediately.
+    return !!findPlayer(tickLevel);
+  });
 
   if (!playerMoved) {
-    return { level: newLevel, status: 'playing' };
+    return { level: newLevel, status: 'playing', frames };
   }
+
+  // A non-rolling push is still an observable one-cell movement. Keeping the same
+  // movement/resolved pair as rolling ticks lets the presentation layer animate all
+  // object movement with one API, rather than treating player/forced moves specially.
+  if (!hadRollingTick) recordFrame(frames, newLevel, 'movement');
 
   const newPlayerPos = findPlayer(newLevel);
 
@@ -250,31 +285,52 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
   // Lasers fire before the goal is evaluated: stepping onto a goal that sits on a
   // laser beam kills the player (death takes priority over clearing).
   applyLaserCheck(newLevel);
+  if (!hadRollingTick) recordFrame(frames, newLevel, 'resolved');
 
   const afterLaserPos = findPlayer(newLevel);
   if (!afterLaserPos) {
-    return { level: newLevel, status: 'gameover' };
+    recordFrame(frames, newLevel, 'turn-end');
+    return { level: newLevel, status: 'gameover', frames };
   }
 
   // Survived the laser and standing on an active goal → cleared.
   const goalTile = newLevel.tiles[afterLaserPos.row][afterLaserPos.col];
   if (goalTile.isGoal && isGoalActive(newLevel)) {
-    return { level: newLevel, status: 'cleared' };
+    recordFrame(frames, newLevel, 'turn-end');
+    return { level: newLevel, status: 'cleared', frames };
   }
 
   endOfTurn(newLevel);
 
   const finalPlayerPos = findPlayer(newLevel);
   if (!finalPlayerPos) {
-    return { level: newLevel, status: 'gameover' };
+    recordFrame(frames, newLevel, 'turn-end');
+    return { level: newLevel, status: 'gameover', frames };
   }
 
   const finalTile = newLevel.tiles[finalPlayerPos.row][finalPlayerPos.col];
-  if (finalTile.isGoal && isGoalActive(newLevel)) {
-    return { level: newLevel, status: 'cleared' };
-  }
+  recordFrame(frames, newLevel, 'turn-end');
+  if (finalTile.isGoal && isGoalActive(newLevel)) return { level: newLevel, status: 'cleared', frames };
 
-  return { level: newLevel, status: 'playing' };
+  return { level: newLevel, status: 'playing', frames };
+}
+
+function recordFrame(frames: TurnFrame[], level: Level, phase: TurnFramePhase): void {
+  ensureMotionIds(level);
+  frames.push({ level: cloneLevel(level), phase });
+}
+
+// Object references are cloned for engine safety, so the renderer needs a transient
+// identity that survives those clones to interpolate the same object between frames.
+// The initial position makes an ID deterministic for objects decoded from a map; newly
+// created objects receive an ID at the first frame in which they exist.
+function ensureMotionIds(level: Level): void {
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      const object = level.objects[r][c];
+      if (object && !object.motionId) object.motionId = `${object.type}:${r}:${c}`;
+    }
+  }
 }
 
 function endOfTurn(level: Level): void {
