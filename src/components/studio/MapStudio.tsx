@@ -15,7 +15,6 @@ import {
 import type { MapRow, FolderRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import Editor, { type EditorHistoryState, type EditorToolbarApi } from '../editor/Editor';
-import PlayView from '../editor/PlayView';
 import UploadForm, { UploadPayload } from '../hub/UploadForm';
 import FolderForm, { FolderFormPayload } from '../hub/FolderForm';
 import FolderGlyph from '../hub/FolderGlyph';
@@ -26,15 +25,14 @@ import ConfirmModal from '../common/ConfirmModal';
 import Pagination from '../common/Pagination';
 import './MapStudio.css';
 
-type View = 'list' | 'folder' | 'editor' | 'play' | 'record';
-type ToolbarIconName = 'play' | 'record' | 'undo' | 'redo' | 'reset' | 'export' | 'import' | 'save';
+type View = 'list' | 'folder' | 'editor' | 'play';
+type ToolbarIconName = 'play' | 'undo' | 'redo' | 'reset' | 'export' | 'import' | 'save';
 const PAGE_SIZE = 8; // 4 columns × 2 rows
 
 function ToolbarIcon({ name }: { name: ToolbarIconName }) {
   const svgProps = { className: 'studio-toolbar-icon', viewBox: '0 0 24 24', 'aria-hidden': true };
   switch (name) {
     case 'play': return <svg {...svgProps}><path d="m9 5 10 7-10 7Z" fill="currentColor" stroke="none" /></svg>;
-    case 'record': return <svg {...svgProps}><circle cx="12" cy="12" r="5.5" fill="currentColor" stroke="none" /></svg>;
     case 'undo': return <svg {...svgProps}><path d="M9 7 4 12l5 5M5 12h8a6 6 0 0 1 6 6" /></svg>;
     case 'redo': return <svg {...svgProps}><path d="m15 7 5 5-5 5m4-5h-8a6 6 0 0 0-6 6" /></svg>;
     case 'reset': return <svg {...svgProps}><path d="M5 7h14M10 11v6m4-6v6M9 7l1-3h4l1 3M7 7l1 14h8l1-14" /></svg>;
@@ -146,32 +144,43 @@ export default function MapStudio() {
     setView('editor');
   };
 
-  const save = async () => {
-    if (!profile) return;
+  const persistCurrentMap = async (): Promise<{ row: MapRow; codeChanged: boolean } | null> => {
+    if (!profile) return null;
     const code = encodeLevelCode(level);
     const codeChanged = !!editId && code !== savedCode;
-    try {
-      if (editId) {
-        await updateMap(editId, { title: editTitle || null, code });
-        // Layout changed → every recorded 풀이 no longer solves it. Wipe them.
-        if (codeChanged) await deleteSolutionsForMap(editId);
-      } else {
-        // A new map created inside a folder inherits the folder's published state so it
-        // stays visible/hidden together with the folder (keeps the member invariant).
-        const folderPub = editFolderId ? (folders.find((f) => f.id === editFolderId)?.published ?? false) : false;
-        const row = await insertMap({
-          owner_id: profile.id, title: editTitle || null, code,
-          published: folderPub,
-          published_at: folderPub ? new Date().toISOString() : null,
-          // Only reference folder_id when actually filing into a folder — keeps a plain
-          // new-map save working even before the folder_id column migration is applied.
-          ...(editFolderId ? { folder_id: editFolderId } : {}),
-        });
-        setEditId(row.id); setPublished(folderPub);
-      }
+    if (editId) {
+      const row = await updateMap(editId, { title: editTitle || null, code });
+      // Layout changed → every recorded 풀이 no longer solves it. Wipe them.
+      if (codeChanged) await deleteSolutionsForMap(editId);
+      setEditRow(row);
       setSavedCode(code);
-      showFlash(codeChanged ? '저장됨 (맵이 바뀌어 기존 풀이는 삭제)' : '저장됨');
-      refresh();
+      await refresh();
+      return { row, codeChanged };
+    }
+
+    // A new map created inside a folder inherits the folder's published state so it
+    // stays visible/hidden together with the folder (keeps the member invariant).
+    const folderPub = editFolderId ? (folders.find((f) => f.id === editFolderId)?.published ?? false) : false;
+    const row = await insertMap({
+      owner_id: profile.id, title: editTitle || null, code,
+      published: folderPub,
+      published_at: folderPub ? new Date().toISOString() : null,
+      // Only reference folder_id when actually filing into a folder — keeps a plain
+      // new-map save working even before the folder_id column migration is applied.
+      ...(editFolderId ? { folder_id: editFolderId } : {}),
+    });
+    setEditId(row.id); setPublished(folderPub); setEditRow(row);
+    setSavedCode(code);
+    await refresh();
+    return { row, codeChanged: false };
+  };
+
+  const save = async () => {
+    try {
+      const persisted = await persistCurrentMap();
+      if (persisted) {
+        showFlash(persisted.codeChanged ? '저장됨 (맵이 바뀌어 기존 풀이는 삭제)' : '저장됨');
+      }
     } catch (e) { alert('저장 실패: ' + (e as Error).message); }
   };
 
@@ -358,12 +367,19 @@ export default function MapStudio() {
     finally { setBusyId(null); }
   };
 
-  // Save a 풀이 recorded in the studio as the owner's solution. The record button is
-  // disabled while dirty, so the current level already matches the saved map code.
+  // Save a clear recorded in the studio as the owner's solution. Registering is an
+  // explicit action after the clear, so a new or modified layout is persisted first.
   const saveStudioSolution = async (moves: string, turnCount: number) => {
-    if (!editId || !profile) return;
+    if (!profile) return;
+    const currentCode = encodeLevelCode(level);
+    let mapId = editId;
+    if (!mapId || currentCode !== savedCode) {
+      const persisted = await persistCurrentMap();
+      mapId = persisted?.row.id ?? null;
+    }
+    if (!mapId) throw new Error('맵을 저장하지 못해 풀이를 등록할 수 없습니다.');
     await insertSolution({
-      map_id: editId,
+      map_id: mapId,
       author_id: profile.id,
       author_name: editRow?.author_name || profile.name,
       moves,
@@ -488,31 +504,11 @@ export default function MapStudio() {
 
   // ---------- play submode ----------
   if (view === 'play') {
-    // A private saved map is still a real map record, so its ordinary play view can
-    // store a cleared run. Unsaved/dirty layouts stay playable, but never write a
-    // walkthrough that would belong to a different persisted map code.
-    const canSaveSolution = !!editId && !!profile && playCode === savedCode;
-    if (canSaveSolution) {
-      return (
-        <SolutionRecorder
-          code={playCode}
-          variant="play"
-          title={editTitle}
-          backLabel="에디터로"
-          onSave={saveStudioSolution}
-          onCancel={() => setView('editor')}
-        />
-      );
-    }
-    return <PlayView code={playCode} title={editTitle} backLabel="에디터로" onClose={() => setView('editor')} />;
-  }
-
-  // ---------- solution recording submode ----------
-  if (view === 'record') {
     return (
       <SolutionRecorder
-        code={encodeLevelCode(level)}
-        title={`풀이 등록 · ${editTitle || '맵'}`}
+        code={playCode}
+        title={`플레이 · ${editTitle || '맵'}`}
+        backLabel="에디터로"
         onSave={saveStudioSolution}
         onCancel={() => setView('editor')}
       />
@@ -540,16 +536,7 @@ export default function MapStudio() {
             title="snowmen-adventure 의 levels/L<번호>.json 에 그대로 붙여넣을 JSON 을 보여줍니다">
             📋 게임에 넣기
           </button>
-          <button className="btn studio-toolbar-icon-btn" onClick={testPlay} title="시뮬레이터" aria-label="시뮬레이터"><ToolbarIcon name="play" /></button>
-          {editId && (
-            <button
-              className="btn studio-toolbar-icon-btn"
-              onClick={() => setView('record')}
-              disabled={isDirty}
-              title={isDirty ? '먼저 저장한 뒤 풀이를 녹화할 수 있어요' : '맵을 플레이해 풀이를 등록합니다'}
-              aria-label="풀이 등록"
-            ><ToolbarIcon name="record" /></button>
-          )}
+          <button className="btn studio-toolbar-icon-btn" onClick={testPlay} title="플레이" aria-label="플레이"><ToolbarIcon name="play" /></button>
           <div className="studio-toolbar-editor-actions" aria-label="에디터 동작">
             <button className="btn btn-sm studio-toolbar-icon-btn" onClick={() => editorRef.current?.undo()} disabled={!editorHistory.canUndo} title="실행취소" aria-label="실행취소"><ToolbarIcon name="undo" /></button>
             <button className="btn btn-sm studio-toolbar-icon-btn" onClick={() => editorRef.current?.redo()} disabled={!editorHistory.canRedo} title="다시 실행" aria-label="다시 실행"><ToolbarIcon name="redo" /></button>

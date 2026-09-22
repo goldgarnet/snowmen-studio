@@ -19,9 +19,6 @@ import GameLevelExport from '../common/GameLevelExport';
 interface MapDetailProps {
   map: MapRow;
   onBack: () => void;
-  // Kept for the hub's plain-play path; the detail screen now plays via the
-  // capture surface so a clear can be registered as a solution.
-  onPlay: (map: MapRow) => void;
   onChanged: (updated?: MapRow) => void;
   backLabel?: string; // 뒤로가기 버튼 문구 (기본 "← 허브로"). 챕터 구성 등에서 재사용.
 }
@@ -57,8 +54,9 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
   const [pendingDiff, setPendingDiff] = useState<number | null>(null); // meeting-difficulty change awaiting confirm
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
-  // 'record'/'play' capture a new solution; 'view' replays a chosen one.
-  const [solutionMode, setSolutionMode] = useState<'record' | 'play' | 'view' | null>(null);
+  // 'capture' is the single play surface: every clear can be registered; 'view'
+  // replays a previously saved solution.
+  const [solutionMode, setSolutionMode] = useState<'capture' | 'view' | null>(null);
   const [viewSolution, setViewSolution] = useState<SolutionRow | null>(null);
   const [solToken, setSolToken] = useState(0); // bump to reload the solution list
   // 게임(snowmen-adventure)에 넣을 레벨 JSON 을 보여주는 모달
@@ -142,22 +140,12 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
     showFlash('풀이가 등록되었습니다');
   };
 
-  // Full-screen sub-views: recording a new solution, playing to register one, or
-  // replaying a chosen solution.
-  if (solutionMode === 'record') {
+  // Full-screen sub-views: play and register from the same surface, or replay a
+  // chosen solution.
+  if (solutionMode === 'capture') {
     return (
       <SolutionRecorder
-        code={map.code}
-        onSave={registerSolution}
-        onCancel={() => setSolutionMode(null)}
-      />
-    );
-  }
-  if (solutionMode === 'play') {
-    return (
-      <SolutionRecorder
-        variant="play"
-        title={`바로 플레이 · ${map.title || '플레이'}`}
+        title={`플레이 · ${map.title || '맵'}`}
         code={map.code}
         onSave={registerSolution}
         onCancel={() => setSolutionMode(null)}
@@ -202,9 +190,9 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
 
             <button
               className="btn btn-primary detail-play"
-              onClick={() => setSolutionMode('play')}
-            >▶ 바로 플레이</button>
-            <div className="detail-play-hint">클리어하면 이 플레이를 풀이로 등록할 수 있어요.</div>
+              onClick={() => setSolutionMode('capture')}
+            >▶ 플레이</button>
+            <div className="detail-play-hint">플레이를 진행합니다.</div>
 
             {/* 게임(snowmen-adventure)에 넣기. raw 맵 코드는 파일에 그대로 못 넣으므로
                 붙여넣으면 바로 도는 JSON 을 **보여주고** 복사시킨다. */}
@@ -221,7 +209,7 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
               mapOwnerId={map.owner_id}
               reloadToken={solToken}
               onView={(s) => { setViewSolution(s); setSolutionMode('view'); }}
-              onRegister={() => setSolutionMode('record')}
+              onRegister={() => setSolutionMode('capture')}
             />
 
             {map.comment && (

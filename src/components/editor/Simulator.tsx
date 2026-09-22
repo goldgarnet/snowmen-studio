@@ -1,6 +1,14 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { GameState, Direction } from '../../types';
 import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared, type TurnResult } from '../../engine/turn';
+import {
+  ANIMATION_SPEED_STEP,
+  DEFAULT_ANIMATION_SPEED,
+  MAX_ANIMATION_SPEED,
+  MIN_ANIMATION_SPEED,
+  animationFrameDelayMs,
+  animationMovementDurationMs,
+} from '../../utils/animation';
 import Grid from './Grid';
 import './Simulator.css';
 
@@ -12,14 +20,6 @@ interface SimulatorProps {
   title?: string;
 }
 
-const FRAME_DELAY_MS = {
-  movement: 150,
-  // Resolved frames apply button/laser changes before the next movement but do not
-  // add a visual pause, so a rolling object appears to travel continuously.
-  resolved: 0,
-  'turn-end': 0,
-} as const;
-
 interface ActivePlayback {
   result: TurnResult;
   history: GameState['history'];
@@ -29,7 +29,9 @@ interface ActivePlayback {
 export default function Simulator({ gameState, setGameState, onBack, backLabel = '나가기', title }: SimulatorProps) {
   // Keep the existing immediate-play behavior until the player opts in.
   const [animationEnabled, setAnimationEnabled] = useState(false);
+  const [animationSpeed, setAnimationSpeed] = useState(DEFAULT_ANIMATION_SPEED);
   const [isAnimating, setIsAnimating] = useState(false);
+  const animationSpeedRef = useRef(animationSpeed);
   const playbackTimerRef = useRef<number | null>(null);
   const playbackIdRef = useRef(0);
   const activePlaybackRef = useRef<ActivePlayback | null>(null);
@@ -88,13 +90,17 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
         return;
       }
 
-      const delay = FRAME_DELAY_MS[frame.phase];
+      const delay = animationFrameDelayMs(frame.phase, animationSpeedRef.current);
       frameIndex += 1;
       playbackTimerRef.current = window.setTimeout(showNextFrame, delay);
     };
 
     showNextFrame();
   }, [setGameState]);
+
+  useEffect(() => {
+    animationSpeedRef.current = animationSpeed;
+  }, [animationSpeed]);
 
   const handleAnimationToggle = useCallback((enabled: boolean) => {
     setAnimationEnabled(enabled);
@@ -195,6 +201,21 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
             />
             <span>이동 애니메이션</span>
           </label>
+          {animationEnabled && (
+            <label className="sim-animation-speed">
+              <span>속도</span>
+              <input
+                type="range"
+                min={MIN_ANIMATION_SPEED}
+                max={MAX_ANIMATION_SPEED}
+                step={ANIMATION_SPEED_STEP}
+                value={animationSpeed}
+                onChange={(event) => setAnimationSpeed(Number(event.target.value))}
+                aria-label="이동 애니메이션 속도"
+              />
+              <output>{animationSpeed.toFixed(2).replace(/\.00$/, '')}배</output>
+            </label>
+          )}
           <button onClick={handleSkip} disabled={disabled}>
             대기 (Space)
           </button>
@@ -217,7 +238,7 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
             level={gameState.level}
             highlightPlayer
             animateObjects={isAnimating && animationEnabled}
-            animationDurationMs={FRAME_DELAY_MS.movement}
+            animationDurationMs={animationMovementDurationMs(animationSpeed)}
           />
         </div>
 

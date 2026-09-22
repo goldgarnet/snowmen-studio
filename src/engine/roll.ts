@@ -11,8 +11,8 @@ const TRI_DEFLECT: Record<TriangleCorner, Partial<Record<Direction, Direction>>>
   tr: { up: 'left', right: 'down' },
 };
 
-/** Called after every committed rolling tick. Return false to stop the active motion. */
-export type RollTickHook = (level: Level) => boolean;
+/** Called after every committed rolling tick or at an elastic collision impact. */
+export type RollTickHook = (level: Level, phase?: 'movement' | 'impact') => boolean;
 
 interface RollingMember {
   pos: Position;
@@ -108,10 +108,13 @@ export function rollSnowballGroup(
  * continues. The stopped prefix loses its motion; the already-forward suffix keeps
  * its motion and receives a new mass calculation on the next collision.
  */
-function rollGroup(level: Level, initialGroup: RollingGroup, initialDir: Direction, onTick?: RollTickHook): void {
+function rollGroup(
+  level: Level, initialGroup: RollingGroup, initialDir: Direction, onTick?: RollTickHook,
+  skipInitialTick = false,
+): void {
   let group = initialGroup;
   let dir = initialDir;
-  let isInitialTick = true;
+  let isInitialTick = !skipInitialTick;
   let guard = 0;
   const maxTicks = level.width * level.height * 4 + 16;
 
@@ -138,11 +141,22 @@ function rollGroup(level: Level, initialGroup: RollingGroup, initialDir: Directi
     // A height-limited boundary splits a moving train instead of freezing it. The
     // blocked member and rear prefix stay put; a passable front suffix advances in
     // this same tick, leaving a gap behind it.
-    const firstBlocked = group.findIndex(({ pos, obj }) => !canMoveTo(level, pos, dir, obj));
-    if (firstBlocked >= 0) {
-      group = group.slice(firstBlocked + 1);
-      if (group.length === 0) return;
+    // Resolve this tick per member. First, every ball checks its own terrain/edge
+    // crossing against the same tick-start board. Then resolve occupancy from front
+    // to rear: a rear member may advance only when it can cross AND the member in
+    // front will vacate its cell. This naturally leaves a stopped prefix and a moving
+    // suffix without a color-wall-specific exception.
+    const canCross = group.map(({ pos, obj }) => canMoveTo(level, pos, dir, obj));
+    const willMove = new Array<boolean>(group.length).fill(false);
+    let cellAheadWillVacate = true;
+    for (let index = group.length - 1; index >= 0; index--) {
+      willMove[index] = canCross[index] && cellAheadWillVacate;
+      cellAheadWillVacate = willMove[index];
     }
+
+    const movingStart = willMove.findIndex(Boolean);
+    if (movingStart < 0) return;
+    group = group.slice(movingStart);
 
     const activeLead = group[group.length - 1];
     const nextPos = getNextPos(activeLead.pos, dir);
@@ -196,7 +210,11 @@ function rollGroup(level: Level, initialGroup: RollingGroup, initialDir: Directi
 
     if (obstacleMass === rollingMass) {
       // Equal mass transfers motion to the stationary group.
-      rollGroup(level, obstacleGroup, dir, onTick);
+      // Pause briefly at the contact state, then start the transferred group on its
+      // first real movement tick. Its stationary position is already resolved by
+      // the previous tick, so do not emit a duplicate initial snapshot.
+      if (onTick && !onTick(level, 'impact')) return;
+      rollGroup(level, obstacleGroup, dir, onTick, true);
     }
     return;
   }

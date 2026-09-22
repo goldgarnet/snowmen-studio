@@ -73,7 +73,6 @@ function MapRoute({ id, onBack }: { id: string; onBack: () => void }) {
       key={map.id}
       map={map}
       onBack={onBack}
-      onPlay={() => undefined}
       onChanged={(updated) => { if (updated) setMap(updated); }}
     />
   );

@@ -9,7 +9,6 @@ import MapDetail from './MapDetail';
 import FolderCard from './FolderCard';
 import FolderDetail from './FolderDetail';
 import UploadForm, { UploadPayload } from './UploadForm';
-import PlayView from '../editor/PlayView';
 import Pagination from '../common/Pagination';
 import './hub.css';
 
@@ -62,7 +61,6 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
   const [showUpload, setShowUpload] = useState(false);
   const [selected, setSelected] = useState<MapRow | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<FolderRow | null>(null);
-  const [playMap, setPlayMap] = useState<MapRow | null>(null);
   const [page, setPage] = useState(1);
 
   const refresh = useCallback(async () => {
@@ -186,12 +184,6 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
     } catch (e) { alert('백업 실패: ' + (e as Error).message); }
   };
 
-  if (playMap) {
-    return (
-      <PlayView code={playMap.code} title={playMap.title || '플레이'} onClose={() => setPlayMap(null)} />
-    );
-  }
-
   // Map detail sits on top of everything (including a folder view): backing out just
   // clears the map, returning to the folder it was opened from (if any) or the hub.
   if (selected) {
@@ -199,7 +191,6 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
       <MapDetail
         map={selected}
         onBack={() => setSelected(null)}
-        onPlay={(m) => setPlayMap(m)}
         onChanged={onDetailChanged}
       />
     );

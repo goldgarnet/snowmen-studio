@@ -9,6 +9,14 @@ import {
   StepState,
 } from '../../utils/solution';
 import Grid from '../editor/Grid';
+import {
+  ANIMATION_SPEED_STEP,
+  DEFAULT_ANIMATION_SPEED,
+  MAX_ANIMATION_SPEED,
+  MIN_ANIMATION_SPEED,
+  animationFrameDelayMs,
+  animationMovementDurationMs,
+} from '../../utils/animation';
 import '../editor/Simulator.css';
 import '../editor/PlayView.css';
 
@@ -17,9 +25,6 @@ interface SolutionRecorderProps {
   initial?: string | null;          // existing solution to start from (수정 시)
   onSave: (moves: string, turnCount: number) => Promise<void>;
   onCancel: () => void;
-  // 'record' (기본): 대놓고 풀이를 만드는 화면. 상단에 저장 버튼 상시 노출.
-  // 'play': "바로 플레이"에서 진입 — 그냥 플레이하다가 클리어하면 아래 배너로 등록 유도.
-  variant?: 'record' | 'play';
   title?: string;
   backLabel?: string;
 }
@@ -30,8 +35,6 @@ interface RecordingState {
   // makes both a new move and undo O(1) turns instead of replaying from move zero.
   states: StepState[];
 }
-
-const FRAME_DELAY_MS = { movement: 150, resolved: 0, 'turn-end': 0 } as const;
 
 interface ActivePlayback {
   finalState: StepState;
@@ -51,10 +54,9 @@ function createRecordingState(startLevel: NonNullable<ReturnType<typeof gameStat
 // in sync without replaying the entire solution on every input. Saving is only allowed
 // once the played sequence actually clears the map.
 export default function SolutionRecorder({
-  code, initial, onSave, onCancel, variant = 'record', title, backLabel = '상세로',
+  code, initial, onSave, onCancel, title, backLabel = '상세로',
 }: SolutionRecorderProps) {
-  const isPlay = variant === 'play';
-  const heading = title ?? (isPlay ? '바로 플레이' : '풀이 녹화');
+  const heading = title ?? '플레이';
   const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
   const initialMoves = useMemo(() => (initial ? decodeSolution(initial) : null) ?? [], [initial]);
   const initialRecording = useMemo<RecordingState>(() => (
@@ -65,7 +67,9 @@ export default function SolutionRecorder({
     () => initialRecording.states[initialRecording.states.length - 1] ?? null,
   );
   const [animationEnabled, setAnimationEnabled] = useState(false);
+  const [animationSpeed, setAnimationSpeed] = useState(DEFAULT_ANIMATION_SPEED);
   const [isAnimating, setIsAnimating] = useState(false);
+  const animationSpeedRef = useRef(animationSpeed);
   const playbackTimerRef = useRef<number | null>(null);
   const playbackIdRef = useRef(0);
   const activePlaybackRef = useRef<ActivePlayback | null>(null);
@@ -124,13 +128,17 @@ export default function SolutionRecorder({
         return;
       }
 
-      const delay = FRAME_DELAY_MS[frame.phase];
+      const delay = animationFrameDelayMs(frame.phase, animationSpeedRef.current);
       frameIndex += 1;
       playbackTimerRef.current = window.setTimeout(showNextFrame, delay);
     };
 
     showNextFrame();
   }, []);
+
+  useEffect(() => {
+    animationSpeedRef.current = animationSpeed;
+  }, [animationSpeed]);
 
   const handleAnimationToggle = useCallback((enabled: boolean) => {
     setAnimationEnabled(enabled);
@@ -204,9 +212,9 @@ export default function SolutionRecorder({
       <div className="play-view">
         <div className="play-view-bar">
           <button className="btn btn-ghost" onClick={onCancel}>← {backLabel}</button>
-          <span className="play-view-title">풀이 녹화</span>
+          <span className="play-view-title">플레이</span>
         </div>
-        <div className="play-view-error">맵 코드를 해석할 수 없어 풀이를 녹화할 수 없습니다.</div>
+        <div className="play-view-error">맵 코드를 해석할 수 없어 플레이할 수 없습니다.</div>
       </div>
     );
   }
@@ -225,42 +233,43 @@ export default function SolutionRecorder({
               <input type="checkbox" checked={animationEnabled} onChange={(event) => handleAnimationToggle(event.target.checked)} />
               <span>이동 애니메이션</span>
             </label>
+            {animationEnabled && (
+              <label className="sim-animation-speed">
+                <span>속도</span>
+                <input
+                  type="range"
+                  min={MIN_ANIMATION_SPEED}
+                  max={MAX_ANIMATION_SPEED}
+                  step={ANIMATION_SPEED_STEP}
+                  value={animationSpeed}
+                  onChange={(event) => setAnimationSpeed(Number(event.target.value))}
+                  aria-label="이동 애니메이션 속도"
+                />
+                <output>{animationSpeed.toFixed(2).replace(/\.00$/, '')}배</output>
+              </label>
+            )}
             <button onClick={undo} disabled={moves.length === 0 || saving || isAnimating}>되돌리기 (Z)</button>
             <button onClick={reset} disabled={moves.length === 0 || saving || isAnimating}>초기화 (R)</button>
-            {!isPlay && (
-              <button className="btn btn-primary" onClick={save} disabled={!cleared || saving}>
-                {saving ? '저장 중…' : '이 풀이 저장'}
-              </button>
-            )}
+            <button className="btn btn-primary" onClick={save} disabled={!cleared || saving}>
+              {saving ? '등록 중…' : '풀이 등록'}
+            </button>
           </div>
         </div>
 
-        {/* Play 모드에서 클리어하면 등록 유도 배너를, 그 외엔 상황 안내를 보여준다. */}
-        {isPlay && cleared ? (
-          <div className="sim-notice" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span>🎉 클리어! 원하면 이 플레이를 <b>내 풀이</b>로 등록할 수 있어요. (턴 {state.turnCount})</span>
-            <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? '등록 중…' : '이 풀이로 등록'}
-            </button>
-          </div>
-        ) : (
-          <div className="sim-notice">
-            {cleared
-              ? '✅ 맵을 클리어했습니다. “이 풀이 저장”을 누르면 등록됩니다.'
-              : state.status === 'gameover'
-                ? '💀 게임 오버 — 되돌리기(Z)나 초기화(R)로 다시 시도하세요.'
-                : isPlay
-                  ? '맵을 플레이하세요. 클리어하면 이 풀이를 등록할 수 있어요.'
-                  : '맵을 직접 플레이해 풀이를 녹화하세요. 클리어하면 저장할 수 있습니다.'}
-            {soulEnabled && ' · 🌀 영혼 이동(M) 사용 가능'}
-          </div>
-        )}
+        <div className="sim-notice">
+          {cleared
+            ? '✅ 맵을 클리어했습니다. “풀이 등록”을 누르면 이 플레이가 저장됩니다.'
+            : state.status === 'gameover'
+              ? '💀 게임 오버 — 되돌리기(Z)나 초기화(R)로 다시 시도하세요.'
+              : '맵을 플레이하세요. 클리어하면 이 플레이를 풀이로 등록할 수 있어요.'}
+          {soulEnabled && ' · 🌀 영혼 이동(M) 사용 가능'}
+        </div>
 
         {error && <div className="play-view-error" style={{ padding: '8px 22px' }}>{error}</div>}
 
         <div className="sim-body">
           <div className="sim-grid-area">
-            <Grid level={state.level} highlightPlayer animateObjects={isAnimating && animationEnabled} animationDurationMs={FRAME_DELAY_MS.movement} />
+            <Grid level={state.level} highlightPlayer animateObjects={isAnimating && animationEnabled} animationDurationMs={animationMovementDurationMs(animationSpeed)} />
           </div>
 
           <div className="sim-touch-pad">

@@ -48,7 +48,7 @@ export const scenarios: ScenarioDefinition[] = [
 - `.tile(row, col, partialTile)` — 버튼, 벽, 눈송이, 구멍, 포털, 삼각 타일 등 모든 타일 속성
 - `.edgeArch(row, col, direction, height)` — 해당 칸에서 `direction`으로 나갈 때 통과하는 가장자리 아치
 
-검증에는 `expectStatus`, `expectObject`, `expectEmpty`, `expectNoPlayer`를 쓴다. 굴림 중간 상태까지 확인하려면 `expectFrame(result, turnIndex, phase, predicate, message)`를 사용한다. `phase`는 `movement`, `resolved`, `turn-end` 중 하나이고 `turnIndex`는 첫 입력이 `0`이다.
+검증에는 `expectStatus`, `expectObject`, `expectEmpty`, `expectNoPlayer`를 쓴다. 굴림 중간 상태까지 확인하려면 `expectFrame(result, turnIndex, phase, predicate, message)`를 사용한다. `phase`는 `movement`, `resolved`, `impact`, `turn-end` 중 하나이고 `turnIndex`는 첫 입력이 `0`이다.
 
 ## 포함된 회귀 사례
 

@@ -462,7 +462,6 @@ export default function ChapterComposer() {
         map={detailMap}
         backLabel="← 챕터 구성으로"
         onBack={() => setDetailMap(null)}
-        onPlay={() => undefined}
         onChanged={onDetailChanged}
       />
     );

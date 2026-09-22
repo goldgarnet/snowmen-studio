@@ -59,14 +59,14 @@ export default function SolutionList({ mapId, mapOwnerId, reloadToken, onView, o
     <div className="detail-solution">
       <div className="detail-solution-head">
         <span className="detail-mini-label" style={{ margin: 0 }}>풀이 ({sols.length})</span>
-        <button className="btn btn-sm" onClick={onRegister}>＋ 내 풀이 등록</button>
+        <button className="btn btn-sm" onClick={onRegister}>＋ 플레이하고 풀이 등록</button>
       </div>
 
       {loading ? (
         <p className="detail-solution-desc">불러오는 중…</p>
       ) : sols.length === 0 ? (
         <p className="detail-solution-desc">
-          아직 등록된 풀이가 없어요. <b>바로 플레이</b>로 클리어하거나 <b>내 풀이 등록</b>으로 풀이를 남겨보세요. (스포일러)
+          아직 등록된 풀이가 없어요. 플레이를 완료한 뒤 같은 화면에서 풀이를 등록해 보세요. (스포일러)
         </p>
       ) : (
         <ul className="sol-items">

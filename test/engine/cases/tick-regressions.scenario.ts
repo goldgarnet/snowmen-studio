@@ -47,7 +47,7 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
-    name: 'second yellow button opens the wall and exposes the player to a laser in the same tick',
+    name: 'second yellow button kills the player in the same tick without stopping the rolling ball',
     width: 8,
     height: 7,
     setup: (board) => {
@@ -62,6 +62,7 @@ export const scenarios: ScenarioDefinition[] = [
     },
     actions: ['right'],
     verify: (result) => {
+      const { level } = result;
       expectStatus(result, 'gameover');
       expectNoPlayer(result.level);
       expectFrame(
@@ -78,6 +79,86 @@ export const scenarios: ScenarioDefinition[] = [
         (level) => level.objects[3][4]?.type === 'snowball' && !level.objects[3][2],
         'expected the player to die in the resolved frame for that same button press',
       );
+      expectFrame(
+        result,
+        0,
+        'movement',
+        (level) => level.objects[3][5]?.type === 'snowball' && !level.objects[3][2],
+        'expected the snowball to keep rolling on the tick after the player dies',
+      );
+      expectObject(level, 3, 7, 'snowball', 1);
+    },
+  }),
+  defineScenario({
+    name: 'a yellow wall traps the rear ball while the front rolling suffix continues',
+    width: 8,
+    height: 5,
+    setup: (board) => {
+      const row = 2;
+      board
+        .player(row, 0, 3)
+        .snowball(row, 1, 1)
+        .snowball(row, 2, 1)
+        .tile(row, 2, { isYellowButton: true })
+        .tile(row, 3, { isYellowWall: true });
+    },
+    actions: ['right'],
+    verify: (result) => {
+      const { level } = result;
+      expectStatus(result, 'playing');
+      expectObject(level, 2, 3, 'snowball', 1);
+      expectEmpty(level, 2, 4);
+      expectObject(level, 2, 7, 'snowball', 1);
+    },
+  }),
+  defineScenario({
+    name: 'a closing wall stops balls behind and inside it but keeps the front suffix rolling',
+    width: 12,
+    height: 5,
+    setup: (board) => {
+      const row = 2;
+      board
+        .player(row, 0, 3)
+        .snowball(row, 1, 1)
+        .snowball(row, 2, 1)
+        .snowball(row, 4, 1)
+        .tile(row, 5, { isYellowButton: true })
+        .tile(row, 7, { isYellowWall: true });
+    },
+    actions: ['right'],
+    verify: (result) => {
+      const { level } = result;
+      expectStatus(result, 'playing');
+      expectObject(level, 2, 6, 'snowball', 1);
+      expectObject(level, 2, 7, 'snowball', 1);
+      expectEmpty(level, 2, 8);
+      expectObject(level, 2, 11, 'snowball', 1);
+    },
+  }),
+  defineScenario({
+    name: 'equal-mass snowball transfer emits a short impact frame before rolling on',
+    width: 12,
+    height: 5,
+    setup: (board) => {
+      const row = 2;
+      board
+        .player(row, 0, 3)
+        .snowball(row, 1, 1)
+        .snowball(row, 2, 1)
+        .snowball(row, 4, 2);
+    },
+    actions: ['right'],
+    verify: (result) => {
+      const { level } = result;
+      expectStatus(result, 'playing');
+      expectFrame(
+        result,
+        0,
+        'impact',
+        (frameLevel) => frameLevel.objects[2][4]?.type === 'snowball',
+        'expected an impact frame at the equal-mass contact state',
+      );
+      expectObject(level, 2, 11, 'snowball', 2);
     },
   }),
 ];

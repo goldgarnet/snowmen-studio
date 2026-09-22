@@ -11,7 +11,7 @@ export interface TurnResult {
   frames: TurnFrame[];
 }
 
-export type TurnFramePhase = 'movement' | 'resolved' | 'turn-end';
+export type TurnFramePhase = 'movement' | 'resolved' | 'impact' | 'turn-end';
 
 export interface TurnFrame {
   level: Level;
@@ -247,7 +247,11 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
 
   const turnCount = nextAge();
   let hadRollingTick = false;
-  const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount, (tickLevel) => {
+  const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount, (tickLevel, phase = 'movement') => {
+    if (phase === 'impact') {
+      recordFrame(frames, tickLevel, 'impact');
+      return true;
+    }
     hadRollingTick = true;
     // A rolling tick is a real, observable game state. Preserve the pre-reaction
     // state for animation, then resolve board-wide hazards before another cell moves.
@@ -256,9 +260,11 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     latchOrangeButtons(tickLevel);
     applyLaserCheck(tickLevel);
     recordFrame(frames, tickLevel, 'resolved');
-    // A surviving transferred soul may continue watching the same rolling action;
-    // no player means terminal game over and stops further ticks immediately.
-    return !!findPlayer(tickLevel);
+    // A laser death ends player control, not inertia. The rolling group keeps its
+    // already-committed motion until a terrain/collision rule stops it. `roll.ts`
+    // separately verifies that the moving group still exists (for example it may
+    // have fallen into a hole), so this hook need not stop for player game over.
+    return true;
   });
 
   if (!playerMoved) {

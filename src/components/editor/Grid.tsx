@@ -244,7 +244,17 @@ export default function Grid({
     const previousPositions = previousMotionPositionsRef.current;
     previousMotionPositionsRef.current = nextPositions;
 
-    if (!animateObjects || !stackRef.current) return;
+    if (!stackRef.current) return;
+
+    if (!animateObjects) {
+      // A playback toggle can turn off while a transform is in flight. Clear the
+      // inline FLIP styles so the final logical state is shown at its actual cell.
+      stackRef.current.querySelectorAll<HTMLElement>('[data-motion-id]').forEach((element) => {
+        element.style.transition = 'none';
+        element.style.transform = '';
+      });
+      return;
+    }
 
     const movingElements: { element: HTMLElement; x: number; y: number }[] = [];
     for (const [motionId, next] of nextPositions) {
@@ -265,6 +275,13 @@ export default function Grid({
       element.style.transition = 'none';
       element.style.transform = `translate(${x}px, ${y}px)`;
     }
+
+    // This layout effect runs before the browser paints. Force one layout read so
+    // the offset position is committed as the transition's starting point; without
+    // it, the next transform can be coalesced into the same paint and the object
+    // appears to jump one tick at a time.
+    void stackRef.current.offsetWidth;
+
     animationFrameRef.current = window.requestAnimationFrame(() => {
       for (const { element } of movingElements) {
         element.style.transition = `transform ${animationDurationMs}ms linear`;
