@@ -207,7 +207,11 @@ export default function MapStudio({
     if (loading) return;
     const map = maps.find((m) => m.id === editMapId);
     if (map) queueMicrotask(() => openExisting(map, playing ? 'play' : 'editor', false));
-  }, [editId, editMapId, level, loading, maps, openExisting, playing, refresh, view]);
+    else queueMicrotask(() => {
+      showFlash('이 맵을 편집할 권한이 없습니다');
+      onEditRouteChange(null);
+    });
+  }, [editId, editMapId, level, loading, maps, onEditRouteChange, openExisting, playing, refresh, showFlash, view]);
 
   // An unsaved brand-new map has no route or database ID yet, so offer its cache
   // from the studio list. Saved-map drafts are offered when that map is opened.

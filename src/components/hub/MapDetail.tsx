@@ -298,8 +298,8 @@ export default function MapDetail({
           }}
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}
-          secondaryActionLabel="맵 수정"
-          onSecondaryAction={onEditInStudio}
+          secondaryActionLabel={isOwner ? '맵 수정' : undefined}
+          onSecondaryAction={isOwner ? onEditInStudio : undefined}
         />
       )}
 
