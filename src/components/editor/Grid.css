@@ -33,6 +33,11 @@
   border-bottom: 1px solid rgba(100, 120, 140, 0.35);
   box-sizing: border-box;
 }
+.grid.editable {
+  /* The editor owns one-finger drags; don't let the browser turn them into a
+     page scroll or a synthetic click after the gesture ends. */
+  touch-action: none;
+}
 
 /* Thumbnail mode: a calm, non-interactive miniature of the real board. */
 .grid.thumb {

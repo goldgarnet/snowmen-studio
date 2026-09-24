@@ -23,11 +23,29 @@ import SolutionRecorder from '../hub/SolutionRecorder';
 import { insertSolution, deleteSolutionsForMap } from '../../api/solutions';
 import ConfirmModal from '../common/ConfirmModal';
 import Pagination from '../common/Pagination';
+import {
+  type EditorDraft, readEditorDraft, removeEditorDraft, writeEditorDraft,
+} from '../../utils/editorDraft';
 import './MapStudio.css';
 
 type View = 'list' | 'folder' | 'editor' | 'play';
 type ToolbarIconName = 'play' | 'undo' | 'redo' | 'reset' | 'export' | 'import' | 'save';
 const PAGE_SIZE = 8; // 4 columns × 2 rows
+
+interface MapStudioProps {
+  // A saved map gets its own address so an in-progress edit can be bookmarked or
+  // refreshed without losing which map was open.
+  editMapId?: string;
+  playing: boolean;
+  onEditRouteChange: (mapId: string | null) => void;
+  onPlayRouteChange: (mapId: string | null) => void;
+  onExitPlay: () => void;
+}
+
+interface DraftRestoreTarget {
+  draft: EditorDraft;
+  map: MapRow | null;
+}
 
 function ToolbarIcon({ name }: { name: ToolbarIconName }) {
   const svgProps = { className: 'studio-toolbar-icon', viewBox: '0 0 24 24', 'aria-hidden': true };
@@ -47,7 +65,9 @@ function formatDate(iso: string): string {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export default function MapStudio() {
+export default function MapStudio({
+  editMapId, playing, onEditRouteChange, onPlayRouteChange, onExitPlay,
+}: MapStudioProps) {
   const { profile } = useAuth();
   const guard = useGuard();
   const [maps, setMaps] = useState<MapRow[]>([]);
@@ -71,6 +91,7 @@ export default function MapStudio() {
   const [editRow, setEditRow] = useState<MapRow | null>(null);
   // The map code as of the last save/open — used to detect unsaved changes.
   const [savedCode, setSavedCode] = useState('');
+  const [savedTitle, setSavedTitle] = useState('');
   const [flash, setFlash] = useState<string | null>(null);
   const [showPublish, setShowPublish] = useState(false);
   const [playCode, setPlayCode] = useState('');
@@ -78,6 +99,9 @@ export default function MapStudio() {
   const [deleting, setDeleting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null); // per-card action in flight
   const [page, setPage] = useState(1);
+  const [draftRestoreTarget, setDraftRestoreTarget] = useState<DraftRestoreTarget | null>(null);
+  const pendingDraftKeyRef = useRef<string | null>(null);
+  const checkedNewDraftForRef = useRef<string | null>(null);
 
   // ---- folders ----
   const [folders, setFolders] = useState<FolderRow[]>([]);
@@ -127,21 +151,136 @@ export default function MapStudio() {
     const fresh = createLevel(8, 8);
     setLevel(fresh);
     setSavedCode(encodeLevelCode(fresh));
+    setSavedTitle('새 맵');
     invalidatedSolutionsForRef.current = null;
     setEditId(null); setEditTitle('새 맵'); setPublished(false); setEditRow(null);
     setEditFolderId(folderId);
     setView('editor');
+    onEditRouteChange(null);
   };
 
-  const openExisting = (m: MapRow) => {
+  const openExisting = useCallback((m: MapRow, nextView: 'editor' | 'play' = 'editor', updateRoute = true) => {
     const lv = decodeLevelCode(m.code);
     if (!lv) { alert('맵 코드를 해석할 수 없어 열 수 없습니다.'); return; }
     setLevel(lv);
     setSavedCode(encodeLevelCode(lv));
+    setSavedTitle(m.title ?? '제목 없음');
     invalidatedSolutionsForRef.current = null;
     setEditId(m.id); setEditTitle(m.title ?? '제목 없음'); setPublished(m.published); setEditRow(m);
     setEditFolderId(m.folder_id);
-    setView('editor');
+    if (nextView === 'play') setPlayCode(encodeLevelCode(lv));
+    setView(nextView);
+    const draft = profile ? readEditorDraft(profile.id, m.id) : null;
+    if (draft?.mapId === m.id && decodeLevelCode(draft.code)) {
+      pendingDraftKeyRef.current = m.id;
+      setDraftRestoreTarget({ draft, map: m });
+    }
+    if (updateRoute) onEditRouteChange(m.id);
+  }, [onEditRouteChange, profile]);
+
+  // Opening an editor or recording URL directly restores that owner's saved map.
+  // A new unsaved map can also enter recording at /editor/play because its editor
+  // state remains mounted while only the route changes.
+  useEffect(() => {
+    if (!editMapId) {
+      if (playing && view !== 'play') {
+        queueMicrotask(() => { setPlayCode(encodeLevelCode(level)); setView('play'); });
+        return;
+      }
+      if (!playing && view === 'play' && !editId) {
+        queueMicrotask(() => setView('editor'));
+        return;
+      }
+      if (view === 'editor' && editId) {
+        queueMicrotask(() => { setView('list'); void refresh(); });
+      }
+      return;
+    }
+    if (editId === editMapId) {
+      if (playing && view !== 'play') {
+        queueMicrotask(() => { setPlayCode(encodeLevelCode(level)); setView('play'); });
+      } else if (!playing && view === 'play') {
+        queueMicrotask(() => setView('editor'));
+      }
+      return;
+    }
+    if (loading) return;
+    const map = maps.find((m) => m.id === editMapId);
+    if (map) queueMicrotask(() => openExisting(map, playing ? 'play' : 'editor', false));
+  }, [editId, editMapId, level, loading, maps, openExisting, playing, refresh, view]);
+
+  // An unsaved brand-new map has no route or database ID yet, so offer its cache
+  // from the studio list. Saved-map drafts are offered when that map is opened.
+  useEffect(() => {
+    if (!profile || loading || editMapId || playing || view !== 'list' || checkedNewDraftForRef.current === profile.id) return;
+    checkedNewDraftForRef.current = profile.id;
+    const draft = readEditorDraft(profile.id, null);
+    if (draft && decodeLevelCode(draft.code)) {
+      pendingDraftKeyRef.current = 'new';
+      queueMicrotask(() => setDraftRestoreTarget({ draft, map: null }));
+    }
+  }, [editMapId, loading, playing, profile, view]);
+
+  const currentCode = encodeLevelCode(level);
+  const isDirty = view === 'editor' && (currentCode !== savedCode || editTitle !== savedTitle);
+
+  // Write every editor change immediately. Keeping this synchronous means a tab
+  // kill or browser crash still leaves the most recent completed edit available.
+  useEffect(() => {
+    if (!profile || view !== 'editor') return;
+    const draftKey = editId ?? 'new';
+    if (!isDirty) {
+      if (pendingDraftKeyRef.current !== draftKey) removeEditorDraft(profile.id, editId);
+      return;
+    }
+    writeEditorDraft(profile.id, {
+      version: 1,
+      mapId: editId,
+      folderId: editFolderId,
+      title: editTitle,
+      code: currentCode,
+      savedCode,
+      savedTitle,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [currentCode, editFolderId, editId, editTitle, isDirty, profile, savedCode, savedTitle, view]);
+
+  const discardCurrentDraft = useCallback(() => {
+    if (profile) removeEditorDraft(profile.id, editId);
+    pendingDraftKeyRef.current = null;
+  }, [editId, profile]);
+
+  const discardRestoreDraft = () => {
+    if (!draftRestoreTarget || !profile) return;
+    removeEditorDraft(profile.id, draftRestoreTarget.draft.mapId);
+    pendingDraftKeyRef.current = null;
+    setDraftRestoreTarget(null);
+  };
+
+  const restoreDraft = () => {
+    if (!draftRestoreTarget) return;
+    const levelFromDraft = decodeLevelCode(draftRestoreTarget.draft.code);
+    if (!levelFromDraft) { discardRestoreDraft(); return; }
+
+    const { draft, map } = draftRestoreTarget;
+    pendingDraftKeyRef.current = null;
+    setDraftRestoreTarget(null);
+    setLevel(levelFromDraft);
+    setEditTitle(draft.title);
+    setSavedCode(map ? encodeLevelCode(decodeLevelCode(map.code) ?? levelFromDraft) : draft.savedCode);
+    setSavedTitle(map ? (map.title ?? '제목 없음') : draft.savedTitle);
+
+    if (map) {
+      setEditId(map.id); setPublished(map.published); setEditRow(map); setEditFolderId(map.folder_id);
+      if (playing) setPlayCode(draft.code);
+      setView(playing ? 'play' : 'editor');
+    } else {
+      setEditId(null); setPublished(false); setEditRow(null); setEditFolderId(draft.folderId);
+      if (playing) setPlayCode(draft.code);
+      setView(playing ? 'play' : 'editor');
+      onEditRouteChange(null);
+    }
+    showFlash('임시 저장한 맵을 복구했습니다');
   };
 
   const persistCurrentMap = async (): Promise<{ row: MapRow; codeChanged: boolean } | null> => {
@@ -154,6 +293,8 @@ export default function MapStudio() {
       if (codeChanged) await deleteSolutionsForMap(editId);
       setEditRow(row);
       setSavedCode(code);
+      setSavedTitle(editTitle);
+      removeEditorDraft(profile.id, editId);
       await refresh();
       return { row, codeChanged };
     }
@@ -171,6 +312,8 @@ export default function MapStudio() {
     });
     setEditId(row.id); setPublished(folderPub); setEditRow(row);
     setSavedCode(code);
+    setSavedTitle(editTitle);
+    removeEditorDraft(profile.id, null);
     await refresh();
     return { row, codeChanged: false };
   };
@@ -318,6 +461,7 @@ export default function MapStudio() {
   };
 
   const leaveEditor = () => guard.attempt(() => {
+    onEditRouteChange(null);
     if (editFolderId) { setCurrentFolderId(editFolderId); setView('folder'); }
     else setView('list');
     refresh();
@@ -326,7 +470,11 @@ export default function MapStudio() {
   // 게임에 넣을 레벨 JSON 을 보여주는 모달 (복사만 하면 뭐가 들어갔는지 확인이 안 된다)
   const [showExport, setShowExport] = useState(false);
 
-  const testPlay = () => { setPlayCode(encodeLevelCode(level)); setView('play'); };
+  const testPlay = () => {
+    setPlayCode(encodeLevelCode(level));
+    setView('play');
+    onPlayRouteChange(editId);
+  };
 
   const doPublish = async (p: UploadPayload) => {
     if (!profile) return;
@@ -352,6 +500,9 @@ export default function MapStudio() {
       setEditId(row.id); setPublished(true); setEditRow(row);
     }
     setSavedCode(p.code);
+    setEditTitle(p.title ?? '');
+    setSavedTitle(p.title ?? '');
+    removeEditorDraft(profile.id, editId);
     setShowPublish(false);
     showFlash('허브에 올렸습니다');
     refresh();
@@ -387,28 +538,37 @@ export default function MapStudio() {
     });
     invalidatedSolutionsForRef.current = null;
     setView('editor');
+    onExitPlay();
     showFlash('풀이가 등록되었습니다');
   };
 
   const doDeleteMap = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    try { await deleteMap(deleteTarget.id); setDeleteTarget(null); refresh(); }
+    try {
+      await deleteMap(deleteTarget.id);
+      if (profile) removeEditorDraft(profile.id, deleteTarget.id);
+      setDeleteTarget(null);
+      refresh();
+    }
     catch (e) { alert('삭제 실패: ' + (e as Error).message); }
     finally { setDeleting(false); }
   };
 
   // --- unsaved-changes guard: expose isDirty/save to the app via a stable api
   // that delegates to the latest closures. ---
-  const isDirty = view === 'editor' && encodeLevelCode(level) !== savedCode;
-  const latest = useRef<StudioApi>({ isDirty: () => false, save: async () => {} });
+  const latest = useRef<StudioApi>({ isDirty: () => false, save: async () => {}, discard: () => {} });
 
   useEffect(() => {
-    latest.current = { isDirty: () => isDirty, save };
+    latest.current = { isDirty: () => isDirty, save, discard: discardCurrentDraft };
   });
 
   useEffect(() => {
-    const api: StudioApi = { isDirty: () => latest.current.isDirty(), save: () => latest.current.save() };
+    const api: StudioApi = {
+      isDirty: () => latest.current.isDirty(),
+      save: () => latest.current.save(),
+      discard: () => latest.current.discard(),
+    };
     guard.register(api);
     return () => guard.register(null);
   }, [guard]);
@@ -502,16 +662,37 @@ export default function MapStudio() {
     />
   );
 
+  const draftRestoreModal = draftRestoreTarget && (
+    <div className="modal-backdrop">
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="draft-restore-title" style={{ maxWidth: 460 }}>
+        <h3 className="modal-title" id="draft-restore-title">임시 저장한 맵이 있어요</h3>
+        <p className="unsaved-text">
+          {draftRestoreTarget.map
+            ? `'${draftRestoreTarget.map.title || '제목 없음'}' 맵의 저장하지 않은 변경사항을 찾았습니다.`
+            : '저장하지 않고 종료한 새 맵을 찾았습니다.'}
+          <br />마지막 임시 저장 시각: {new Date(draftRestoreTarget.draft.updatedAt).toLocaleString('ko-KR')}
+        </p>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={discardRestoreDraft}>삭제</button>
+          <button className="btn btn-primary" onClick={restoreDraft}>복구</button>
+        </div>
+      </div>
+    </div>
+  );
+
   // ---------- play submode ----------
   if (view === 'play') {
     return (
-      <SolutionRecorder
-        code={playCode}
-        title={`플레이 · ${editTitle || '맵'}`}
-        backLabel="에디터로"
-        onSave={saveStudioSolution}
-        onCancel={() => setView('editor')}
-      />
+      <>
+        <SolutionRecorder
+          code={playCode}
+          title={`플레이 · ${editTitle || '맵'}`}
+          backLabel="에디터로"
+          onSave={saveStudioSolution}
+          onCancel={() => { setView('editor'); onExitPlay(); }}
+        />
+        {draftRestoreModal}
+      </>
     );
   }
 
@@ -529,7 +710,7 @@ export default function MapStudio() {
           />
           {published && <span className="badge badge-accepted">허브 공개됨</span>}
           {editFolderId && <span className="badge badge-draft">📁 폴더 맵</span>}
-          {isDirty && <span className="studio-dirty">● 저장 안 됨</span>}
+          {isDirty && <span className="studio-dirty">● 저장 안 됨 · 임시 저장됨</span>}
           <div className="studio-toolbar-spacer" />
           {flash && <span className="studio-flash">{flash}</span>}
           <button className="btn" onClick={() => setShowExport(true)}
@@ -582,6 +763,7 @@ export default function MapStudio() {
             onClose={() => setShowExport(false)}
           />
         )}
+        {draftRestoreModal}
       </div>
     );
   }
@@ -691,6 +873,7 @@ export default function MapStudio() {
         )}
 
         {mapDeleteModal}
+        {draftRestoreModal}
       </div>
     );
   }
@@ -738,6 +921,7 @@ export default function MapStudio() {
 
       {newFolderModal}
       {mapDeleteModal}
+      {draftRestoreModal}
     </div>
   );
 }

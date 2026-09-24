@@ -409,7 +409,13 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   useEffect(() => {
     const onUp = () => finalizeDrag();
     window.addEventListener('mouseup', onUp);
-    return () => window.removeEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    window.addEventListener('touchcancel', onUp);
+    return () => {
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+      window.removeEventListener('touchcancel', onUp);
+    };
   }, [finalizeDrag]);
 
   useEffect(() => {

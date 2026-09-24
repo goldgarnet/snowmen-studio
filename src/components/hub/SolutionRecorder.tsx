@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { gameStateFromCode } from '../../utils/game';
 import {
   advanceSolutionState,
@@ -41,6 +41,13 @@ interface ActivePlayback {
   frames: NonNullable<StepState['frames']>;
 }
 
+interface TouchStart {
+  pointerId: number;
+  x: number;
+  y: number;
+  at: number;
+}
+
 function createRecordingState(startLevel: NonNullable<ReturnType<typeof gameStateFromCode>>['level'], moves: SolutionMove[]): RecordingState {
   const states: StepState[] = [createSolutionState(startLevel)];
   for (const move of moves) {
@@ -75,6 +82,8 @@ export default function SolutionRecorder({
   const activePlaybackRef = useRef<ActivePlayback | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const touchStartRef = useRef<TouchStart | null>(null);
+  const lastTapRef = useRef<{ x: number; y: number; at: number } | null>(null);
 
   const moves = recording.moves;
   const recordedState = recording.states[recording.states.length - 1] ?? null;
@@ -207,6 +216,42 @@ export default function SolutionRecorder({
     }
   };
 
+  const disabled = !playing || saving || isAnimating;
+
+  const handleTouchStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'touch' || disabled) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    touchStartRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp };
+  }, [disabled]);
+
+  const handleTouchEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    if (event.pointerType !== 'touch' || !start || start.pointerId !== event.pointerId) return;
+    touchStartRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= 28) {
+      push(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+      lastTapRef.current = null;
+      return;
+    }
+
+    const previousTap = lastTapRef.current;
+    const isDoubleTap = previousTap
+      && event.timeStamp - previousTap.at <= 320
+      && Math.hypot(event.clientX - previousTap.x, event.clientY - previousTap.y) <= 32;
+    if (isDoubleTap) {
+      lastTapRef.current = null;
+      push('wait');
+    } else {
+      lastTapRef.current = { x: event.clientX, y: event.clientY, at: event.timeStamp };
+    }
+  }, [push]);
+
+  const cancelTouch = useCallback(() => { touchStartRef.current = null; }, []);
+
   if (!startLevel || !state) {
     return (
       <div className="play-view">
@@ -218,8 +263,6 @@ export default function SolutionRecorder({
       </div>
     );
   }
-
-  const disabled = !playing || saving || isAnimating;
 
   return (
     <div className="play-view">
@@ -268,11 +311,16 @@ export default function SolutionRecorder({
         {error && <div className="play-view-error" style={{ padding: '8px 22px' }}>{error}</div>}
 
         <div className="sim-body">
-          <div className="sim-grid-area">
+          <div
+            className="sim-grid-area"
+            onPointerDown={handleTouchStart}
+            onPointerUp={handleTouchEnd}
+            onPointerCancel={cancelTouch}>
             <Grid level={state.level} highlightPlayer animateObjects={isAnimating && animationEnabled} animationDurationMs={animationMovementDurationMs(animationSpeed)} />
           </div>
 
           <div className="sim-touch-pad">
+            <p className="sim-swipe-hint">스와이프하여 이동 · 두 번 탭하여 대기</p>
             <div className="dpad">
               <button className="dpad-btn dpad-up" onClick={() => push('up')} disabled={disabled} aria-label="위">▲</button>
               <button className="dpad-btn dpad-left" onClick={() => push('left')} disabled={disabled} aria-label="왼쪽">◀</button>

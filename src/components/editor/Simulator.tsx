@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { GameState, Direction } from '../../types';
 import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared, type TurnResult } from '../../engine/turn';
 import {
@@ -26,6 +26,13 @@ interface ActivePlayback {
   turnCount: number;
 }
 
+interface TouchStart {
+  pointerId: number;
+  x: number;
+  y: number;
+  at: number;
+}
+
 export default function Simulator({ gameState, setGameState, onBack, backLabel = '나가기', title }: SimulatorProps) {
   // Keep the existing immediate-play behavior until the player opts in.
   const [animationEnabled, setAnimationEnabled] = useState(false);
@@ -35,6 +42,8 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
   const playbackTimerRef = useRef<number | null>(null);
   const playbackIdRef = useRef(0);
   const activePlaybackRef = useRef<ActivePlayback | null>(null);
+  const touchStartRef = useRef<TouchStart | null>(null);
+  const lastTapRef = useRef<{ x: number; y: number; at: number } | null>(null);
 
   useEffect(() => () => {
     playbackIdRef.current += 1;
@@ -184,6 +193,40 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
 
   const disabled = gameState.status !== 'playing' || isAnimating;
 
+  const handleTouchStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'touch' || disabled) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    touchStartRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp };
+  }, [disabled]);
+
+  const handleTouchEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    if (event.pointerType !== 'touch' || !start || start.pointerId !== event.pointerId) return;
+    touchStartRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= 28) {
+      handleMove(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+      lastTapRef.current = null;
+      return;
+    }
+
+    const previousTap = lastTapRef.current;
+    const isDoubleTap = previousTap
+      && event.timeStamp - previousTap.at <= 320
+      && Math.hypot(event.clientX - previousTap.x, event.clientY - previousTap.y) <= 32;
+    if (isDoubleTap) {
+      lastTapRef.current = null;
+      handleSkip();
+    } else {
+      lastTapRef.current = { x: event.clientX, y: event.clientY, at: event.timeStamp };
+    }
+  }, [handleMove, handleSkip]);
+
+  const cancelTouch = useCallback(() => { touchStartRef.current = null; }, []);
+
   return (
     <div className="simulator">
       <div className="sim-topbar">
@@ -233,7 +276,11 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
       )}
 
       <div className="sim-body">
-        <div className="sim-grid-area">
+        <div
+          className="sim-grid-area"
+          onPointerDown={handleTouchStart}
+          onPointerUp={handleTouchEnd}
+          onPointerCancel={cancelTouch}>
           <Grid
             level={gameState.level}
             highlightPlayer
@@ -243,6 +290,7 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
         </div>
 
         <div className="sim-touch-pad">
+          <p className="sim-swipe-hint">스와이프하여 이동 · 두 번 탭하여 대기</p>
           <div className="dpad">
             <button className="dpad-btn dpad-up" onClick={() => handleMove('up')} disabled={disabled} aria-label="위">▲</button>
             <button className="dpad-btn dpad-left" onClick={() => handleMove('left')} disabled={disabled} aria-label="왼쪽">◀</button>

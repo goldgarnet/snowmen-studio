@@ -20,6 +20,10 @@ interface MapDetailProps {
   map: MapRow;
   onBack: () => void;
   onChanged: (updated?: MapRow) => void;
+  onEditInStudio?: () => void;
+  recording?: boolean;
+  onStartRecording?: () => void;
+  onStopRecording?: () => void;
   backLabel?: string; // 뒤로가기 버튼 문구 (기본 "← 허브로"). 챕터 구성 등에서 재사용.
 }
 
@@ -45,7 +49,9 @@ async function copyText(text: string): Promise<void> {
   if (!copied) throw new Error('클립보드에 복사할 수 없습니다.');
 }
 
-export default function MapDetail({ map: initial, onBack, onChanged, backLabel }: MapDetailProps) {
+export default function MapDetail({
+  map: initial, onBack, onChanged, onEditInStudio, recording = false, onStartRecording, onStopRecording, backLabel,
+}: MapDetailProps) {
   const { profile } = useAuth();
   const [map, setMap] = useState<MapRow>(initial);
   const [busy, setBusy] = useState(false);
@@ -64,6 +70,14 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
 
   const isOwner = profile?.id === map.owner_id;
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1500); };
+  const startRecording = () => {
+    if (onStartRecording) onStartRecording();
+    else setSolutionMode('capture');
+  };
+  const stopRecording = () => {
+    if (recording) onStopRecording?.();
+    else setSolutionMode(null);
+  };
 
   const changeStatus = async (status: MapRow['status']) => {
     setBusy(true);
@@ -135,20 +149,20 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
       moves,
       turn_count: turnCount,
     });
-    setSolutionMode(null);
+    stopRecording();
     setSolToken((t) => t + 1);
     showFlash('풀이가 등록되었습니다');
   };
 
   // Full-screen sub-views: play and register from the same surface, or replay a
   // chosen solution.
-  if (solutionMode === 'capture') {
+  if (recording || solutionMode === 'capture') {
     return (
       <SolutionRecorder
         title={`플레이 · ${map.title || '맵'}`}
         code={map.code}
         onSave={registerSolution}
-        onCancel={() => setSolutionMode(null)}
+        onCancel={stopRecording}
       />
     );
   }
@@ -190,7 +204,7 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
 
             <button
               className="btn btn-primary detail-play"
-              onClick={() => setSolutionMode('capture')}
+              onClick={startRecording}
             >▶ 플레이</button>
             <div className="detail-play-hint">플레이를 진행합니다.</div>
 
@@ -209,7 +223,7 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
               mapOwnerId={map.owner_id}
               reloadToken={solToken}
               onView={(s) => { setViewSolution(s); setSolutionMode('view'); }}
-              onRegister={() => setSolutionMode('capture')}
+              onRegister={startRecording}
             />
 
             {map.comment && (
@@ -284,6 +298,8 @@ export default function MapDetail({ map: initial, onBack, onChanged, backLabel }
           }}
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}
+          secondaryActionLabel="맵 수정"
+          onSecondaryAction={onEditInStudio}
         />
       )}
 

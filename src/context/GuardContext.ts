@@ -6,6 +6,7 @@ import { createContext, useContext } from 'react';
 export interface StudioApi {
   isDirty: () => boolean;
   save: () => Promise<void>;
+  discard: () => void;
 }
 
 export interface GuardValue {

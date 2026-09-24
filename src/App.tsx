@@ -7,15 +7,17 @@ import MapStudio from './components/studio/MapStudio';
 import MapHub from './components/hub/MapHub';
 import MapDetail from './components/hub/MapDetail';
 import ChapterComposer from './components/chapters/ChapterComposer';
+import TestWorkbench from './components/test/TestWorkbench';
 import { getMap } from './api/maps';
 import type { MapRow } from './api/types';
 import './App.css';
 
 type AppRoute =
   | { kind: 'hub' }
-  | { kind: 'studio' }
+  | { kind: 'studio'; mapId?: string; play?: boolean; returnTo?: string }
   | { kind: 'chapters' }
-  | { kind: 'map'; id: string }
+  | { kind: 'test' }
+  | { kind: 'map'; id: string; play?: boolean; returnTo?: string }
   | { kind: 'notFound'; pathname: string };
 
 const tabPath: Record<Tab, string> = {
@@ -24,24 +26,71 @@ const tabPath: Record<Tab, string> = {
   chapters: '/chapters',
 };
 
-function readRoute(pathname: string): AppRoute {
+function readReturnTo(search: string, fallback: string): string {
+  const returnTo = new URLSearchParams(search).get('returnTo');
+  if (!returnTo) return fallback;
+  // Only an in-app absolute path is allowed, so a crafted URL cannot turn the
+  // recorder's exit button into an external redirect.
+  try {
+    const url = new URL(returnTo, window.location.origin);
+    return returnTo.startsWith('/') && url.origin === window.location.origin
+      ? `${url.pathname}${url.search}`
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readRoute(pathname: string, search = ''): AppRoute {
   if (pathname === '/' || pathname === '/hub' || pathname === '/hub/') return { kind: 'hub' };
   if (pathname === '/editor' || pathname === '/editor/') return { kind: 'studio' };
+  if (pathname === '/editor/play' || pathname === '/editor/play/') {
+    return { kind: 'studio', play: true, returnTo: readReturnTo(search, '/editor') };
+  }
+  const editorPlayMatch = pathname.match(/^\/editor\/([^/]+)\/play\/?$/);
+  if (editorPlayMatch) {
+    const mapId = decodeURIComponent(editorPlayMatch[1]);
+    return { kind: 'studio', mapId, play: true, returnTo: readReturnTo(search, `/editor/${encodeURIComponent(mapId)}`) };
+  }
+  const editorMatch = pathname.match(/^\/editor\/([^/]+)\/?$/);
+  if (editorMatch) return { kind: 'studio', mapId: decodeURIComponent(editorMatch[1]) };
   if (pathname === '/chapters' || pathname === '/chapters/') return { kind: 'chapters' };
+  if (pathname === '/test' || pathname === '/test/') return { kind: 'test' };
+  const mapPlayMatch = pathname.match(/^\/maps\/([^/]+)\/play\/?$/);
+  if (mapPlayMatch) {
+    const id = decodeURIComponent(mapPlayMatch[1]);
+    return { kind: 'map', id, play: true, returnTo: readReturnTo(search, `/maps/${encodeURIComponent(id)}`) };
+  }
   const mapMatch = pathname.match(/^\/maps\/([^/]+)\/?$/);
   if (mapMatch) return { kind: 'map', id: decodeURIComponent(mapMatch[1]) };
   return { kind: 'notFound', pathname };
 }
 
 function routePath(route: AppRoute): string {
-  if (route.kind === 'studio') return '/editor';
+  if (route.kind === 'studio') {
+    const path = route.mapId ? `/editor/${encodeURIComponent(route.mapId)}` : '/editor';
+    return route.play ? `${path}/play?${new URLSearchParams({ returnTo: route.returnTo ?? path })}` : path;
+  }
   if (route.kind === 'chapters') return '/chapters';
-  if (route.kind === 'map') return `/maps/${encodeURIComponent(route.id)}`;
+  if (route.kind === 'test') return '/test';
+  if (route.kind === 'map') {
+    const path = `/maps/${encodeURIComponent(route.id)}`;
+    return route.play ? `${path}/play?${new URLSearchParams({ returnTo: route.returnTo ?? path })}` : path;
+  }
   if (route.kind === 'notFound') return route.pathname;
   return '/';
 }
 
-function MapRoute({ id, onBack }: { id: string; onBack: () => void }) {
+function MapRoute({
+  id, onBack, onEditInStudio, recording, onStartRecording, onStopRecording,
+}: {
+  id: string;
+  onBack: () => void;
+  onEditInStudio: () => void;
+  recording: boolean;
+  onStartRecording: () => void;
+  onStopRecording: () => void;
+}) {
   const [map, setMap] = useState<MapRow | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,6 +123,10 @@ function MapRoute({ id, onBack }: { id: string; onBack: () => void }) {
       map={map}
       onBack={onBack}
       onChanged={(updated) => { if (updated) setMap(updated); }}
+      onEditInStudio={onEditInStudio}
+      recording={recording}
+      onStartRecording={onStartRecording}
+      onStopRecording={onStopRecording}
     />
   );
 }
@@ -87,9 +140,14 @@ function NotFoundRoute({ onBack }: { onBack: () => void }) {
   );
 }
 
+function readLocationRoute(location: string): AppRoute {
+  const url = new URL(location, window.location.origin);
+  return readRoute(url.pathname, url.search);
+}
+
 export default function App() {
   const { loading, session, profile, signOut } = useAuth();
-  const [route, setRoute] = useState<AppRoute>(() => readRoute(window.location.pathname));
+  const [route, setRoute] = useState<AppRoute>(() => readRoute(window.location.pathname, window.location.search));
 
   const studioApiRef = useRef<StudioApi | null>(null);
   const [pending, setPending] = useState<(() => void) | null>(null);
@@ -102,7 +160,7 @@ export default function App() {
   }, []);
   const navigate = useCallback((nextRoute: AppRoute, replace = false) => {
     const nextPath = routePath(nextRoute);
-    if (window.location.pathname !== nextPath) {
+    if (`${window.location.pathname}${window.location.search}` !== nextPath) {
       window.history[replace ? 'replaceState' : 'pushState']({}, '', nextPath);
     }
     setRoute(nextRoute);
@@ -112,7 +170,7 @@ export default function App() {
   }, [attempt, navigate]);
 
   useEffect(() => {
-    const onPopState = () => setRoute(readRoute(window.location.pathname));
+    const onPopState = () => setRoute(readRoute(window.location.pathname, window.location.search));
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -121,8 +179,10 @@ export default function App() {
     const title = route.kind === 'studio'
       ? '맵 제작 | Snowmen Studio'
       : route.kind === 'chapters'
-        ? '챕터 구성 | Snowmen Studio'
-        : route.kind === 'map'
+      ? '챕터 구성 | Snowmen Studio'
+        : route.kind === 'test'
+          ? '엔진 테스트 | Snowmen Studio'
+      : route.kind === 'map'
           ? '맵 | Snowmen Studio'
           : route.kind === 'notFound'
             ? '페이지를 찾을 수 없음 | Snowmen Studio'
@@ -137,11 +197,38 @@ export default function App() {
   const runPending = () => { const p = pending; setPending(null); p?.(); };
   const tab: Tab = route.kind === 'studio' ? 'studio' : route.kind === 'chapters' ? 'chapters' : 'hub';
   const content = route.kind === 'studio'
-    ? <MapStudio />
+    ? <MapStudio
+        editMapId={route.mapId}
+        playing={Boolean(route.play)}
+        onEditRouteChange={(mapId) => navigate(mapId ? { kind: 'studio', mapId } : { kind: 'studio' })}
+        onPlayRouteChange={(mapId) => {
+          const returnTo = routePath({ kind: 'studio', mapId: mapId ?? route.mapId });
+          navigate({ kind: 'studio', mapId: mapId ?? route.mapId, play: true, returnTo });
+        }}
+        onExitPlay={() => navigate(readLocationRoute(route.returnTo ?? routePath({ kind: 'studio', mapId: route.mapId })))}
+      />
     : route.kind === 'chapters'
-      ? <ChapterComposer />
+      ? <ChapterComposer
+          onStartMapRecording={(mapId) => {
+            const returnTo = routePath({ kind: 'chapters' });
+            navigate({ kind: 'map', id: mapId, play: true, returnTo });
+          }}
+        />
+      : route.kind === 'test'
+        ? <TestWorkbench />
       : route.kind === 'map'
-        ? <MapRoute key={route.id} id={route.id} onBack={() => navigate({ kind: 'hub' })} />
+        ? <MapRoute
+            key={route.id}
+            id={route.id}
+            onBack={() => navigate({ kind: 'hub' })}
+            onEditInStudio={() => navigate({ kind: 'studio', mapId: route.id })}
+            recording={Boolean(route.play)}
+            onStartRecording={() => {
+              const returnTo = routePath({ kind: 'map', id: route.id });
+              navigate({ kind: 'map', id: route.id, play: true, returnTo });
+            }}
+            onStopRecording={() => navigate(readLocationRoute(route.returnTo ?? routePath({ kind: 'map', id: route.id })))}
+          />
         : route.kind === 'notFound'
           ? <NotFoundRoute onBack={() => navigate({ kind: 'hub' })} />
           : <MapHub onOpenMap={(map) => navigate({ kind: 'map', id: map.id })} />;
@@ -164,7 +251,11 @@ export default function App() {
             </p>
             <div className="modal-actions">
               <button className="btn btn-ghost" disabled={saving} onClick={() => setPending(null)}>취소</button>
-              <button className="btn" disabled={saving} onClick={runPending}>저장 안 함</button>
+              <button
+                className="btn"
+                disabled={saving}
+                onClick={() => { studioApiRef.current?.discard(); runPending(); }}
+              >저장 안 함</button>
               <button
                 className="btn btn-primary"
                 disabled={saving}

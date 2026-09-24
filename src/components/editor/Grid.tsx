@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useRef, useEffect, useId, useLayoutEffect } from 'react';
+import { memo, useState, useCallback, useRef, useEffect, useId, useLayoutEffect, type TouchEvent as ReactTouchEvent } from 'react';
 import { GameObject, Level, Tile } from '../../types';
 import { yellowWallsSolid, orangeWallsSolid } from '../../engine/helpers';
 import './Grid.css';
@@ -43,11 +43,13 @@ interface GridCellProps {
   orangeSolid: boolean;
   highlightPlayer?: boolean;
   thumbnail?: boolean;
+  editorInteractive: boolean;
   isSelected: boolean;
   snowmanFilterId: string;
   goalGradientId: string;
   onMouseDown: (row: number, col: number, button: number, toggleSelection: boolean) => void;
   onMouseEnter: (row: number, col: number) => void;
+  onTouchStart: (row: number, col: number, event: ReactTouchEvent<HTMLDivElement>) => void;
 }
 
 function shallowEqualRecord(a: object | null, b: object | null): boolean {
@@ -85,8 +87,9 @@ function collectMotionPositions(level: Level): Map<string, MotionPosition> {
 // unless that particular cell actually changed.
 const GridCell = memo(function GridCell({
   row, col, tile, obj, cellSize, goalActive, yellowSolid, orangeSolid,
-  highlightPlayer, thumbnail, isSelected, snowmanFilterId, goalGradientId,
+  highlightPlayer, thumbnail, editorInteractive, isSelected, snowmanFilterId, goalGradientId,
   onMouseDown, onMouseEnter,
+  onTouchStart,
 }: GridCellProps) {
   const tileClasses = [
     'grid-cell',
@@ -113,6 +116,7 @@ const GridCell = memo(function GridCell({
         onMouseDown(row, col, event.button, event.ctrlKey || event.metaKey);
       }}
       onMouseEnter={thumbnail ? undefined : () => onMouseEnter(row, col)}
+      onTouchStart={thumbnail || !editorInteractive ? undefined : (event) => onTouchStart(row, col, event)}
       onContextMenu={(event) => event.preventDefault()}
       style={{ width: cellSize, height: cellSize, position: 'relative' }}
     >
@@ -151,11 +155,13 @@ const GridCell = memo(function GridCell({
   prev.orangeSolid === next.orangeSolid &&
   prev.highlightPlayer === next.highlightPlayer &&
   prev.thumbnail === next.thumbnail &&
+  prev.editorInteractive === next.editorInteractive &&
   prev.isSelected === next.isSelected &&
   prev.snowmanFilterId === next.snowmanFilterId &&
   prev.goalGradientId === next.goalGradientId &&
   prev.onMouseDown === next.onMouseDown &&
   prev.onMouseEnter === next.onMouseEnter &&
+  prev.onTouchStart === next.onTouchStart &&
   shallowEqualRecord(prev.tile, next.tile) &&
   shallowEqualRecord(prev.obj, next.obj)
 ));
@@ -169,12 +175,27 @@ export default function Grid({
     interactionRef.current = { onCellClick, onCellDrag, onCellErase, onEdgePaint, onEdgeErase };
   }, [onCellClick, onCellDrag, onCellErase, onEdgePaint, onEdgeErase]);
   const dragButtonRef = useRef<'left-cell' | 'left-edge' | 'right-cell' | 'right-edge' | null>(null);
+  const touchDragRef = useRef(false);
+  const lastTouchCellRef = useRef<{ row: number; col: number } | null>(null);
 
   // Reset drag flags if the mouse is released anywhere (even outside the grid).
   useEffect(() => {
     const onUp = () => { dragButtonRef.current = null; };
     window.addEventListener('mouseup', onUp);
     return () => window.removeEventListener('mouseup', onUp);
+  }, []);
+
+  useEffect(() => {
+    const endTouchDrag = () => {
+      touchDragRef.current = false;
+      lastTouchCellRef.current = null;
+    };
+    window.addEventListener('touchend', endTouchDrag);
+    window.addEventListener('touchcancel', endTouchDrag);
+    return () => {
+      window.removeEventListener('touchend', endTouchDrag);
+      window.removeEventListener('touchcancel', endTouchDrag);
+    };
   }, []);
 
   // Responsive cell sizing: measure the wrapper and fill available space.
@@ -221,6 +242,31 @@ export default function Grid({
       (interactionRef.current.onCellDrag ?? interactionRef.current.onCellClick)?.(row, col);
     }
   }, []);
+
+  // Touch does not emit mouse-enter events consistently, so drive editor drags
+  // from the active touch point. `.grid.editable` uses `touch-action: none` to
+  // block browser gestures, avoiding preventDefault() in React's passive touch
+  // listeners. This preserves desktop mouse behavior while making selection,
+  // movement, and paint drags work on phones and tablets.
+  const handleTouchStart = useCallback((row: number, col: number) => {
+    touchDragRef.current = true;
+    lastTouchCellRef.current = { row, col };
+    interactionRef.current.onCellClick?.(row, col, false);
+  }, []);
+
+  const handleTouchMove = useCallback((event: ReactTouchEvent<HTMLDivElement>) => {
+    if (!touchDragRef.current || !stackRef.current) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const bounds = stackRef.current.getBoundingClientRect();
+    const row = Math.floor((touch.clientY - bounds.top) / cellSize);
+    const col = Math.floor((touch.clientX - bounds.left) / cellSize);
+    if (row < 0 || row >= level.height || col < 0 || col >= level.width) return;
+    const last = lastTouchCellRef.current;
+    if (last?.row === row && last.col === col) return;
+    lastTouchCellRef.current = { row, col };
+    (interactionRef.current.onCellDrag ?? interactionRef.current.onCellClick)?.(row, col);
+  }, [cellSize, level.height, level.width]);
 
   const handleMouseUp = useCallback(() => {
     dragButtonRef.current = null;
@@ -352,6 +398,7 @@ export default function Grid({
     }}>
       <div ref={stackRef} className="grid-stack"
         style={{ position: 'relative', width: gridW, height: gridH }}
+        onTouchMove={handleTouchMove}
         onMouseLeave={(event) => {
           handleMouseUp();
           if (!onGridMouseLeave) return;
@@ -407,11 +454,13 @@ export default function Grid({
                   orangeSolid={orangeSolid}
                   highlightPlayer={highlightPlayer}
                   thumbnail={thumbnail}
+                  editorInteractive={!!onCellClick}
                   isSelected={isSelected}
                   snowmanFilterId={snowmanFilterId}
                   goalGradientId={goalGradientId}
                   onMouseDown={handleMouseDown}
                   onMouseEnter={handleMouseEnter}
+                  onTouchStart={handleTouchStart}
                 />
               );
             })

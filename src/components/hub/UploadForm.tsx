@@ -19,6 +19,8 @@ interface UploadFormProps {
   submitLabel?: string;
   onSubmit: (payload: UploadPayload) => Promise<void>;
   onCancel: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }
 
 function todayStr(): string {
@@ -29,6 +31,7 @@ function todayStr(): string {
 // Shared form for "맵 올리기"(허브) and "허브에 올리기"(제작 탭) and "맵 수정".
 export default function UploadForm({
   title, initial, lockCode, submitLabel = '업로드', onSubmit, onCancel,
+  secondaryActionLabel, onSecondaryAction,
 }: UploadFormProps) {
   const [author, setAuthor] = useState(initial?.author_name ?? '');
   const [code, setCode] = useState(initial?.code ?? '');
@@ -139,6 +142,9 @@ export default function UploadForm({
 
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onCancel} disabled={busy}>취소</button>
+          {secondaryActionLabel && onSecondaryAction && (
+            <button className="btn" onClick={onSecondaryAction} disabled={busy}>{secondaryActionLabel}</button>
+          )}
           <button className="btn btn-primary" onClick={submit} disabled={busy}>
             {busy ? '올리는 중…' : submitLabel}
           </button>

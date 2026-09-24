@@ -17,6 +17,10 @@ import './chapters.css';
 // 스테이지 번호는 저장되지 않고 위치에서 파생된다: "챕터번호-순번" (예: 2-1).
 const stageNo = (ch: ChapterRow, idx: number) => `${ch.number}-${idx + 1}`;
 
+interface ChapterComposerProps {
+  onStartMapRecording?: (mapId: string) => void;
+}
+
 // ---------- 챕터 생성/수정 모달 ----------
 
 interface ChapterFormProps {
@@ -283,7 +287,7 @@ function MapPickerModal({ title, maps, folderNames, placedNos, onPick, onCancel 
 
 // ---------- 메인: 챕터 구성 ----------
 
-export default function ChapterComposer() {
+export default function ChapterComposer({ onStartMapRecording }: ChapterComposerProps) {
   const [chapters, setChapters] = useState<ChapterRow[]>([]);
   const [allStages, setAllStages] = useState<StageRow[]>([]);   // 전 챕터 (배치 표시용)
   const [stages, setStages] = useState<StageRow[]>([]);          // 선택된 챕터의 스테이지
@@ -463,6 +467,7 @@ export default function ChapterComposer() {
         backLabel="← 챕터 구성으로"
         onBack={() => setDetailMap(null)}
         onChanged={onDetailChanged}
+        onStartRecording={() => onStartMapRecording?.(detailMap.id)}
       />
     );
   }
