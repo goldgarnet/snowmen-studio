@@ -214,6 +214,12 @@ function resolvePush(
         if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 1, turnCount);
         return { level, playerMoved: false };
       }
+      // A size-1 ball can combine with a size-2 ball when that front ball is
+      // stopped by a hard backer, including an edge arch it cannot fit through.
+      if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 2) {
+        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 2, turnCount);
+        return { level, playerMoved: false };
+      }
       if (a.isSnowball && a.size === 1 && !b.isWall && !b.isBlock && b.size >= 2) {
         return { level, playerMoved: false };
       }

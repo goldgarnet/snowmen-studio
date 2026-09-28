@@ -8,12 +8,54 @@ import {
   expectStatus,
   type ScenarioDefinition,
 } from '../harness';
+import { decodeLevelCode, encodeLevelCode } from '../../../src/utils/levelCode';
 
 /**
  * Regression cases from the reported rolling/tick bugs. Add one scenario per
  * reported layout; the runner discovers every `*.scenario.ts` file automatically.
  */
 export const scenarios: ScenarioDefinition[] = [
+  defineScenario({
+    name: 'level code preserves a triangle wall with a snowball and a block in the same cells',
+    width: 3,
+    height: 1,
+    setup: (board) => {
+      board
+        .tile(0, 0, { triangle: 'tl' })
+        .snowball(0, 0, 2)
+        .tile(0, 2, { triangle: 'br' })
+        .object(0, 2, 'block', 1);
+    },
+    actions: [],
+    verify: (result) => {
+      const loaded = decodeLevelCode(encodeLevelCode(result.initialLevel));
+      expect(!!loaded, 'expected encoded level to decode');
+      if (!loaded) return;
+      expect(loaded.tiles[0][0].triangle === 'tl', 'expected first triangle wall to survive loading');
+      expectObject(loaded, 0, 0, 'snowball', 2);
+      expect(loaded.tiles[0][2].triangle === 'br', 'expected second triangle wall to survive loading');
+      expectObject(loaded, 0, 2, 'block', 1);
+    },
+  }),
+  defineScenario({
+    name: 'P2 builds a size-2 snowman when a size-1 arch blocks the front size-2 ball',
+    width: 3,
+    height: 5,
+    setup: (board) => {
+      board
+        .player(3, 1, 2)
+        .snowball(2, 1, 1)
+        .snowball(1, 1, 2)
+        .edgeArch(1, 1, 'up', 1);
+    },
+    actions: ['up'],
+    verify: (result) => {
+      expectStatus(result, 'playing');
+      expectObject(result.level, 2, 1, 'player', 2);
+      expectObject(result.level, 1, 1, 'snowman', 2);
+      expectEmpty(result.level, 3, 1);
+    },
+  }),
   defineScenario({
     name: 'height-1 arch stops the rear size-2 ball and lets the front suffix roll',
     width: 12,

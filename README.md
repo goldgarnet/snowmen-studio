@@ -23,6 +23,10 @@ npm run dev
 ## 배포
 처음 사이트를 띄우는 방법은 **[DEPLOY.md](./DEPLOY.md)** 를 그대로 따라 하세요. (Supabase → GitHub → Vercel)
 
+## 엔진 테스트
+
+엔진 시나리오 테스트는 `npm run test:engine`으로 실행합니다. 새 회귀 테스트 작성 방법과 복사 가능한 템플릿은 **[test/README.md](./test/README.md)**를 참고하세요.
+
 ## URL 경로
 - `/` 또는 `/hub` — 맵 허브
 - `/editor` — 맵 제작

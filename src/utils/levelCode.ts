@@ -27,11 +27,13 @@ const EXT_MAGIC = 0b10100101; // 0xA5, 8 bits
 const EXT_INDEX_BITS = 11;    // tile index r*width+c (max 33*33-1 = 1088 < 2048)
 const EXT_COUNT_BITS = 11;
 const EXT_FLAG_BITS = 5;      // orangeButton, orangeWall, isHole, isCrack, isPortal
-// Optional sub-section (after the tile-flag list) carrying triangle-block corners:
+// Optional sub-sections (after the tile-flag list) carrying triangle-block corners,
+// objects resting on triangle-wall tiles, and void cells:
 // [TRIBLOCK_MAGIC(4)] [count(11)] [index(11) + corner(2)]*count. Gated by its own magic
 // so v5 codes written before triangle blocks existed (which have no such section) still
 // decode: after the tile-flag list `pos === bits.length`, so the magic check is skipped.
 const TRIBLOCK_MAGIC = 0b1011; // 4 bits
+const TRIANGLE_OBJECT_MAGIC = 0b0101; // 4 bits
 // Optional board-mask sub-section. Kept separate from the original five v5 flags
 // so every previously generated code keeps the same layout.
 const VOID_MAGIC = 0b0110; // 4 bits
@@ -158,7 +160,8 @@ export function encodeLevelCode(level: Level): string {
       encodeTileV4(bits, tile);
       // Object-slot codes 14/15 are repurposed as tile markers (backward compatible
       // — pre-existing codes never emit them):
-      //   14 = triangle wall (+ 2-bit corner); never co-exists with a resting object.
+      //   14 = triangle wall (+ 2-bit corner); a co-located object is stored in the
+      //        optional triangle-object extension below.
       //   15 = yellow button/wall (+ 2 flag bits + the nested real resting object).
       if (tile.triangle) {
         pushBits(bits, 14, 4);
@@ -192,6 +195,7 @@ export function encodeLevelCode(level: Level): string {
   // Triangle blocks: blocks that carry a mirror corner (stored separately since the
   // base object pass encodes them as ordinary blocks).
   const triBlocks: { idx: number; corner: number }[] = [];
+  const triangleObjects: { idx: number; obj: GameObject }[] = [];
   const voidTiles: number[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
@@ -200,10 +204,13 @@ export function encodeLevelCode(level: Level): string {
       if (obj && obj.type === 'block' && obj.triangleCorner) {
         triBlocks.push({ idx: r * level.width + c, corner: Math.max(0, TRI_CORNERS.indexOf(obj.triangleCorner)) });
       }
+      if (obj && level.tiles[r][c].triangle) {
+        triangleObjects.push({ idx: r * level.width + c, obj });
+      }
     }
   }
 
-  if (special.length > 0 || triBlocks.length > 0 || voidTiles.length > 0) {
+  if (special.length > 0 || triBlocks.length > 0 || triangleObjects.length > 0 || voidTiles.length > 0) {
     pushBits(bits, EXT_MAGIC, 8);
     pushBits(bits, special.length, EXT_COUNT_BITS);
     for (const s of special) {
@@ -216,6 +223,14 @@ export function encodeLevelCode(level: Level): string {
       for (const t of triBlocks) {
         pushBits(bits, t.idx, EXT_INDEX_BITS);
         pushBits(bits, t.corner, 2);
+      }
+    }
+    if (triangleObjects.length > 0) {
+      pushBits(bits, TRIANGLE_OBJECT_MAGIC, 4);
+      pushBits(bits, triangleObjects.length, EXT_COUNT_BITS);
+      for (const triangleObject of triangleObjects) {
+        pushBits(bits, triangleObject.idx, EXT_INDEX_BITS);
+        encodeObject(bits, triangleObject.obj);
       }
     }
     if (voidTiles.length > 0) {
@@ -390,6 +405,24 @@ export function decodeLevelCode(code: string): Level | null {
           if (r < 0 || r >= height || c < 0 || c >= width) continue;
           const obj = objects[r][c];
           if (obj && obj.type === 'block') obj.triangleCorner = TRI_CORNERS[cornerIdx] ?? 'tl';
+        }
+      }
+
+      // Objects that share a cell with a triangle wall cannot be represented in the
+      // base object slot because its marker stores the triangle corner. Restore them
+      // from the optional extension instead.
+      if (pos + 4 <= bits.length && readBits(bits, pos, 4) === TRIANGLE_OBJECT_MAGIC) {
+        pos += 4;
+        const triangleObjectCount = readBits(bits, pos, EXT_COUNT_BITS); pos += EXT_COUNT_BITS;
+        for (let i = 0; i < triangleObjectCount; i++) {
+          const idx = readBits(bits, pos, EXT_INDEX_BITS); pos += EXT_INDEX_BITS;
+          const objType = readBits(bits, pos, 4); pos += 4;
+          const res = decodeRealObject(objType, bits, pos);
+          pos = res.pos;
+          const r = Math.floor(idx / width);
+          const c = idx % width;
+          if (r < 0 || r >= height || c < 0 || c >= width) continue;
+          objects[r][c] = res.obj;
         }
       }
 

@@ -184,9 +184,9 @@ export function getPerpendicularDirs(dir: Direction): [Direction, Direction] {
  *  - Wall / block / tree / laser object at the next cell
  *  - A perpendicular tunnel between `pos` and the next cell (i.e., the rowArch /
  *    columnArch oriented to block the push direction)
+ *  - An edge arch that the object at `pos` is too large to pass
  *  - A triangle wall whose solid leg edge faces the push
  *
- * Edge arches do NOT back force/build, regardless of their height.
  */
 const SOLID_BACKERS = new Set(['wall', 'block', 'tree', 'laser']);
 
@@ -201,6 +201,12 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
 
   const tile = level.tiles[pos.row][pos.col];
   const nextTile = level.tiles[nextPos.row][nextPos.col];
+
+  // An edge arch is a backer only when it actually blocks the object being pushed.
+  // This lets a size-1 ball combine with a size-2 ball stopped at a height-1 arch,
+  // while preserving normal movement through an arch that both balls fit through.
+  const currentObj = level.objects[pos.row][pos.col];
+  if (currentObj && !canPassEdge(level, pos, dir, currentObj)) return true;
 
   // Triangle solid leg edge backs the push like a wall.
   if (tile.triangle && TRI_SOLID[tile.triangle].includes(dir)) return true;
