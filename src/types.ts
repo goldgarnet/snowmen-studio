@@ -58,6 +58,9 @@ export interface Tile {
   // next turn"; not saved in the map code.
   isCrack?: boolean;
   crackArmed?: boolean;
+  // Runtime-only: a snowball rolled across this crack during the current turn. It arms
+  // the crack at the end of the turn exactly as if something were standing on it (Q-16 c).
+  crackRolled?: boolean;
   // Portal: a map must have exactly 0 or 2. An object/player that moves onto a portal
   // (from a non-portal cell) is instantly relocated to the other portal, unless the
   // destination portal already holds an object. Stored as a tile flag (objects rest

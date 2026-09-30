@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { Level, SunDirection, Tile, GameObject, TriangleCorner } from '../../types';
 import { createDefaultTile, createLevel, cloneLevel, deserializeLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
+import { isPlayerInLaserBeam } from '../../engine/turn';
 import Grid from './Grid';
 import './Editor.css';
 
@@ -115,6 +116,8 @@ function hotkeyTitle(hotkey: Hotkey) {
 }
 
 const TRI_LABEL: Record<TriangleCorner, string> = { tl: '◤', tr: '◥', bl: '◣', br: '◢' };
+const TRIANGLE_YELLOW_MSG = '삼각 벽 칸에는 노란 버튼·노란 벽을 함께 둘 수 없습니다';
+const PLAYER_LASER_MSG = '플레이어가 시작하자마자 레이저에 맞는 배치는 만들 수 없습니다';
 
 interface Pos { r: number; c: number; }
 
@@ -185,6 +188,14 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   const [showImportExport, setShowImportExport] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [copyMsg, setCopyMsg] = useState(false);
+  // Short notice shown when a placement is refused (e.g. an unsupported tile combination).
+  const [placeMsg, setPlaceMsg] = useState<string | null>(null);
+  const placeMsgTimerRef = useRef<number | null>(null);
+  const showPlaceMsg = (msg: string) => {
+    setPlaceMsg(msg);
+    if (placeMsgTimerRef.current !== null) window.clearTimeout(placeMsgTimerRef.current);
+    placeMsgTimerRef.current = window.setTimeout(() => setPlaceMsg(null), 2200);
+  };
   const dragLevelRef = useRef<Level | null>(null);
 
   // === Undo / redo stacks ===
@@ -491,14 +502,24 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     if (isNaN(n) || n < DIM_MIN || n > DIM_MAX) setHeightInput(level.height.toString());
   };
 
+  // Q-07: the player must not start inside a laser beam (it would die before the first
+  // move). An edit that newly creates that situation is refused; a level that already
+  // had it (e.g. an imported code) is not blocked edit by edit.
+  const refusesPlayerInBeam = (next: Level, prev: Level) => {
+    if (!isPlayerInLaserBeam(next) || isPlayerInLaserBeam(prev)) return false;
+    showPlaceMsg(PLAYER_LASER_MSG);
+    return true;
+  };
+
   const handleCellClick = (row: number, col: number, toggleSelection = false) => {
     if (selectedTool === 'select') {
       handleSelectStart(row, col, toggleSelection);
       return;
     }
-    pushUndo();
     const newLevel = cloneLevel(level);
     applyTool(newLevel, row, col, selectedTool);
+    if (refusesPlayerInBeam(newLevel, level)) return;
+    pushUndo();
     if (DRAG_TOOLS.includes(selectedTool)) {
       dragLevelRef.current = newLevel;
     }
@@ -514,6 +535,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     const base = dragLevelRef.current ?? level;
     const newLevel = cloneLevel(base);
     applyTool(newLevel, row, col, selectedTool);
+    if (refusesPlayerInBeam(newLevel, base)) return;
     dragLevelRef.current = newLevel;
     setLevel(newLevel);
   };
@@ -522,10 +544,11 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   // arches have their own precise right-click hit area in Grid.
   const eraseDragRef = useRef<Level | null>(null);
   const eraseCell = (row: number, col: number) => {
-    if (eraseDragRef.current === null) pushUndo(); // one undo step per right-drag
     const base = eraseDragRef.current ?? level;
     const newLevel = cloneLevel(base);
     applyTool(newLevel, row, col, 'eraser');
+    if (refusesPlayerInBeam(newLevel, base)) return;
+    if (eraseDragRef.current === null) pushUndo(); // one undo step per right-drag
     eraseDragRef.current = newLevel;
     setLevel(newLevel);
   };
@@ -650,10 +673,14 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
       case 'keyTile':
         tile.isKeyTile = true;
         break;
+      // A triangle wall and a yellow button/wall cannot share a cell: the map code stores
+      // both in the same slot, so the yellow part would silently vanish on save (B-12).
       case 'yellowButton':
+        if (tile.triangle) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.isYellowButton = true;
         break;
       case 'yellowWall':
+        if (tile.triangle) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.isYellowWall = true;
         break;
       case 'orangeButton':
@@ -723,6 +750,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         lv.objects[row][col] = { type: 'laser', size: 1, isMelting: false, laserDirection: laserDir, createdAt: 0 };
         break;
       case 'triangle':
+        if (tile.isYellowButton || tile.isYellowWall) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.triangle = triCorner;
         break;
       case 'eraser':
@@ -1233,6 +1261,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
       </div>
 
       {copyMsg && <div className="toast">클립보드에 복사되었습니다!</div>}
+      {placeMsg && <div className="toast">{placeMsg}</div>}
 
       {showImportExport && (
         <div className="modal-overlay" onClick={() => setShowImportExport(false)}>

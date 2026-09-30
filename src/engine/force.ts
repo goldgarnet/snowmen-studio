@@ -40,14 +40,17 @@ export function applyForce(
     //  - A lone ball left in the origin cell absorbs a snowflake there (→ size 2).
     const [dir1, dir2] = getPerpendicularDirs(dir);
 
-    // A split is one atomic push result. In particular, a size-2 ball resting on
-    // a yellow button must keep that button held while both new halves test their
-    // exits. Removing it first would re-close a yellow wall before a half can
-    // enter the wall cell that was open at the start of the push.
+    // A split is one atomic push result (Q-01: simultaneous judgement). Both halves
+    // test their exits against the SAME pre-split board — the original ball still holds
+    // any button it rests on, and neither half's arrival (e.g. on a button that opens a
+    // wall) is visible to the other half. Only then are both shoves applied, so the
+    // outcome is mirror-symmetric instead of depending on which side is tried first.
     level.objects[pos.row][pos.col] = obj;
 
-    const moved1 = shoveSplitBall(level, pos, dir1, turnCount);
-    const moved2 = shoveSplitBall(level, pos, dir2, turnCount);
+    const plan1 = planSplitShove(level, pos, dir1);
+    const plan2 = planSplitShove(level, pos, dir2);
+    const moved1 = plan1 !== null;
+    const moved2 = plan2 !== null;
 
     if (!moved1 && !moved2) {
       if (!direct) {
@@ -60,8 +63,13 @@ export function applyForce(
         type: 'snowman', size: 1, isMelting: false, createdAt: turnCount,
       };
       level.tiles[pos.row][pos.col].isWarm = false;
+      // Like any new snowman it absorbs a snowflake under it (Q-10).
+      absorbFlake(level, pos);
       return true;
     }
+
+    if (plan1) applySplitShove(level, plan1, turnCount);
+    if (plan2) applySplitShove(level, plan2, turnCount);
 
     // Exactly one side blocked → that half stays in the origin cell as a size-1 ball
     // (absorbing a flake there → size 2). If both moved, the origin stays empty.
@@ -78,39 +86,51 @@ export function applyForce(
   return false;
 }
 
+interface SplitShovePlan {
+  target: Position;
+  // A single size ≤ 1 neighbour shoved one cell further to make room, if any.
+  shoved: { obj: GameObject; to: Position } | null;
+}
+
 /**
- * Shove the freshly-split size-1 ball one cell from `origin` in `dir` (strength 1).
- * Returns true if the ball left the origin cell, false if it can't move (so it must
- * stay in the origin cell). Never builds a snowman.
+ * Decide — without changing the board — whether a freshly-split size-1 ball can leave
+ * `origin` one cell in `dir` (strength 1). Returns null when it must stay in the origin
+ * cell. Never builds a snowman.
  */
-function shoveSplitBall(level: Level, origin: Position, dir: Direction, turnCount: number): boolean {
-  const splitBall: GameObject = { type: 'snowball', size: 1, isMelting: false, createdAt: turnCount };
+function planSplitShove(level: Level, origin: Position, dir: Direction): SplitShovePlan | null {
+  const splitBall: GameObject = { type: 'snowball', size: 1, isMelting: false, createdAt: 0 };
 
   // Can a size-1 ball physically leave origin and cross the edge into the neighbour?
   // (arches / tunnels / triangle legs / solid partitions). canMoveTo ignores whether the
   // neighbour cell is occupied — that is handled explicitly below.
-  if (!canMoveTo(level, origin, dir, splitBall)) return false;
+  if (!canMoveTo(level, origin, dir, splitBall)) return null;
   const target = getNextPos(origin, dir);
-  if (!isInBounds(level, target)) return false;
+  if (!isInBounds(level, target)) return null;
 
   const targetObj = level.objects[target.row][target.col];
-  if (targetObj) {
-    // Occupied: strength-1 can shove ONE pushable object (size ≤ 1, not a wall/tree) into
-    // an empty passable cell beyond. No snowman is ever built by a split shove.
-    if (targetObj.size > 1 || targetObj.type === 'wall' || targetObj.type === 'tree') return false;
-    const beyond = getNextPos(target, dir);
-    if (!isInBounds(level, beyond)) return false;
-    if (level.objects[beyond.row][beyond.col]) return false;
-    if (!canMoveTo(level, target, dir, targetObj)) return false;
-    // Push the neighbour one cell, then move our split ball into the vacated cell.
-    level.objects[beyond.row][beyond.col] = targetObj;
-    level.objects[target.row][target.col] = null;
-    absorbFlake(level, beyond); // the shoved piece grows on snow like any moved object
-  }
+  if (!targetObj) return { target, shoved: null };
 
-  level.objects[target.row][target.col] = splitBall;
-  absorbFlake(level, target);
-  return true;
+  // Occupied: strength-1 can shove ONE pushable object (size ≤ 1, not a wall/tree) into
+  // an empty passable cell beyond. No snowman is ever built by a split shove.
+  if (targetObj.size > 1 || targetObj.type === 'wall' || targetObj.type === 'tree') return null;
+  const beyond = getNextPos(target, dir);
+  if (!isInBounds(level, beyond)) return null;
+  if (level.objects[beyond.row][beyond.col]) return null;
+  if (!canMoveTo(level, target, dir, targetObj)) return null;
+  return { target, shoved: { obj: targetObj, to: beyond } };
+}
+
+function applySplitShove(level: Level, plan: SplitShovePlan, turnCount: number): void {
+  if (plan.shoved) {
+    // Push the neighbour one cell, then move our split ball into the vacated cell.
+    level.objects[plan.shoved.to.row][plan.shoved.to.col] = plan.shoved.obj;
+    level.objects[plan.target.row][plan.target.col] = null;
+    absorbFlake(level, plan.shoved.to); // the shoved piece grows on snow like any moved object
+  }
+  level.objects[plan.target.row][plan.target.col] = {
+    type: 'snowball', size: 1, isMelting: false, createdAt: turnCount,
+  };
+  absorbFlake(level, plan.target);
 }
 
 /**

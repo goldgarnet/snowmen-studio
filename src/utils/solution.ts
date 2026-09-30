@@ -38,6 +38,8 @@ export interface StepState {
   level: Level;
   status: GameStatus;
   turnCount: number;   // number of turns taken (soul cycles are free, not counted)
+  // The last turn's roll was cut off by the tick limit — an endless loop (Q-13).
+  infiniteLoop?: boolean;
   // Runtime-only snapshots for an interactive recorder to animate the most recent
   // turn. Stored solutions remain just the compact move string.
   frames?: TurnFrame[];
@@ -71,6 +73,7 @@ export function advanceSolutionState(state: StepState, move: SolutionMove, captu
     level: result.level,
     status: result.status,
     turnCount: state.turnCount + 1,
+    ...(result.infiniteLoop ? { infiniteLoop: true } : {}),
     ...(captureFrames ? { frames: result.frames } : {}),
   };
 }

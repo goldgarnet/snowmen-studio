@@ -26,6 +26,7 @@
 
 - 눈덩이가 여러 칸 굴러가는 중간에도 버튼, 벽, 레이저, 구멍은 실제 상태 변화를 만들어야 한다.
 - 녹기, 그림자, 턴 수, 금 간 타일 붕괴처럼 “시간이 한 turn 지남”을 뜻하는 효과는 굴림 한 칸마다 반복되면 안 된다.
+  - 굴러 지나간 금 간 타일(Q-16 (c))도 같다: 틱에서는 `crackRolled` 표시만 남기고, 무장은 턴 종료에서 한 번 한다. 그래서 다음 turn에 무너진다.
 
 ## 2. 구현 진입점과 프레임 API
 
@@ -76,15 +77,18 @@ rear                                      front
   0   1   2   3       group[3]이 선두
 ```
 
-각 구성원에는 다음이 필요하다.
+각 공에는 다음이 필요하다.
 
 ```text
-RollingMember
+Ball
   - pos: 현재 격자 좌표
   - obj: 해당 눈덩이 오브젝트 참조
+  - dir: 이 공의 진행 방향 (공마다 따로 가진다)
 ```
 
-그룹 질량은 모든 구성원의 `size` 합이다. 눈송이 흡수, 장애물 그룹 흡수, 아치 분리 뒤에는 다음 충돌 전에 항상 다시 계산한다.
+열차는 따로 저장하지 않는다. 매 틱 "어떤 공의 다음 칸에 다른 굴러가는 공이 있으면 그 공을 따라간다"는 관계로 **선두 + 따라오는 공들**을 다시 묶는다. 공마다 방향이 따로라서 열차가 삼각 벽에서 한 공씩 꺾이고(Q-04), 앞 공이 구멍·레이저로 사라지거나 포털로 이동해도 나머지는 계속 굴러간다(Q-05, Q-06).
+
+그룹 질량은 열차에 속한 모든 공의 `size` 합이다. 눈송이 흡수, 장애물 그룹 흡수, 아치 분리 뒤에는 다음 충돌 전에 항상 다시 계산한다.
 
 ```text
 mass(group) = Σ member.obj.size
@@ -97,45 +101,41 @@ Godot에서는 오브젝트 참조 대신 안정적인 entity ID를 쓰고, 별�
 다음은 현재 엔진의 굴림 tick을 구현 독립적으로 표현한 의사 코드다.
 
 ```text
-while activeGroup is not empty and tickCount < safetyLimit:
-    if this is the initial rolling tick:
-        resolve lead hole/portal
-        emit movement + resolved frames through tick hook
-        continue or stop
+initial tick (the cell the push produced):
+    resolve hole/portal for every ball
+    emit movement + resolved frames through tick hook; drop balls that vanished
 
-    apply triangle reflection only when activeGroup has one ball
+while some ball is moving (or was handed motion) and tickCount < safetyLimit:
+    for each ball on a triangle tile: ball.dir = reflect(ball.dir)
 
-    blockedIndex = first member, scanning rear → front,
-                   that cannot cross its own outgoing terrain boundary
+    for each ball: canAdvance = can cross its own terrain boundary
+                   AND (the ball in its next cell, if rolling, also advances)
+    balls that cannot advance lose their motion (and so do the balls following them)
 
-    if blockedIndex exists:
-        stoppedPrefix = members[0 .. blockedIndex]
-        activeGroup = members[blockedIndex + 1 .. end]
-        if activeGroup is empty: stop
+    group the remaining balls into trains: lead + followers
 
-    inspect cell in front of activeGroup.front
-
-    if empty:
-        shift activeGroup one cell
-    else if it is a triangle block and activeGroup has one ball:
-        deflect through the block to its reflected exit cell
-    else if every consecutive obstacle is a snowball:
-        compare active mass with obstacle mass
-        if active > obstacle and obstacle can shift one cell:
-            shift obstacle group one cell
-            shift active group one cell
-            merge them
-        else if active == obstacle:
-            emit impact frame at the contact state
-            stop this group and start the obstacle group on its next real movement tick
+    for each train (fixed order):
+        inspect cell in front of the lead
+        if empty (and not claimed by another train this tick):
+            plan shift of the whole train
+        else if it is a triangle block and the train is one ball:
+            plan deflect through the block to its reflected exit cell
+        else if every consecutive obstacle (cut at terrain that stops a member) is a
+                stationary snowball:
+            compare train mass with obstacle mass
+            if train > obstacle and obstacle can shift one cell:
+                plan shift of obstacle + train; obstacle balls join with the lead's dir
+            else if train == obstacle:
+                impact: this train stops, obstacle balls start rolling next tick
+            else:
+                stop
         else:
             stop
-    else:
-        stop
 
-    absorb snowflakes at the newly occupied cells
-    resolve rolling lead hole/portal
-    emit movement + resolved frames through tick hook
+    emit an impact frame if any equal-mass handoff happened
+    commit every planned shift together
+    absorb snowflakes, then resolve hole/portal, for every ball that moved
+    emit movement + resolved frames through tick hook; drop balls that vanished
 ```
 
 `safetyLimit`은 현재 `width × height × 4 + 16`이다. 포털과 반사판이 만드는 무한 순환으로부터 엔진을 보호한다.

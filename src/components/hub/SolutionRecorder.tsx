@@ -300,6 +300,7 @@ export default function SolutionRecorder({
         </div>
 
         <div className="sim-notice">
+          {recordedState?.infiniteLoop && '♾️ 무한 루프! 눈덩이가 끝없이 돌다가 멈췄습니다. · '}
           {cleared
             ? '✅ 맵을 클리어했습니다. “풀이 등록”을 누르면 이 플레이가 저장됩니다.'
             : state.status === 'gameover'

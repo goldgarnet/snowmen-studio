@@ -194,18 +194,19 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
   const nextPos = getNextPos(pos, dir);
   if (!isInBounds(level, nextPos)) return true;
 
-  const nextObj = level.objects[nextPos.row][nextPos.col];
-  if (nextObj) {
-    return SOLID_BACKERS.has(nextObj.type);
-  }
-
   const tile = level.tiles[pos.row][pos.col];
   const nextTile = level.tiles[nextPos.row][nextPos.col];
+
+  // Terrain between pos and the next cell is resolved BEFORE whatever object sits in
+  // the next cell. A boundary that stops the object at pos backs it even when a soft
+  // object lies beyond that boundary; otherwise the farther object would mask the
+  // nearer wall (the same "nearest boundary first" rule push.ts applies to A).
+  const currentObj = level.objects[pos.row][pos.col];
+  if (currentObj && !canMoveTo(level, pos, dir, currentObj)) return true;
 
   // An edge arch is a backer only when it actually blocks the object being pushed.
   // This lets a size-1 ball combine with a size-2 ball stopped at a height-1 arch,
   // while preserving normal movement through an arch that both balls fit through.
-  const currentObj = level.objects[pos.row][pos.col];
   if (currentObj && !canPassEdge(level, pos, dir, currentObj)) return true;
 
   // Triangle solid leg edge backs the push like a wall.
@@ -225,5 +226,16 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
     if (tile.isColumnArch || nextTile.isColumnArch) return true;
   }
 
-  return false;
+  const nextObj = level.objects[nextPos.row][nextPos.col];
+  return !!nextObj && SOLID_BACKERS.has(nextObj.type);
+}
+
+/**
+ * A solid (closed) yellow/orange partition encloses its whole cell: nothing enters or
+ * leaves it, its interior is always in shade, and a laser standing inside cannot fire
+ * out of it.
+ */
+export function isClosedPartition(level: Level, pos: Position): boolean {
+  const tile = level.tiles[pos.row][pos.col];
+  return (!!tile.isYellowWall && yellowWallsSolid(level)) || (!!tile.isOrangeWall && orangeWallsSolid(level));
 }

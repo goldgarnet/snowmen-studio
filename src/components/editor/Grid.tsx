@@ -924,6 +924,9 @@ function LaserBeamOverlay({ level, cellSize, yellowSolid, orangeSolid }: {
     for (let col = 0; col < gw; col++) {
       const obj = level.objects[row]?.[col];
       if (!obj || obj.type !== 'laser') continue;
+      // A laser trapped inside a closed partition cannot fire out of it (engine rule).
+      const home = level.tiles[row]?.[col];
+      if ((yellowSolid && home?.isYellowWall) || (orangeSolid && home?.isOrangeWall)) continue;
 
       const dir = (obj as { laserDirection?: string }).laserDirection ?? 'right';
       const [dx, dy] = BEAM_DIRS[dir] ?? [1, 0];

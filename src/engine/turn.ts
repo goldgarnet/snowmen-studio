@@ -9,6 +9,13 @@ export interface TurnResult {
   status: GameStatus;
   /** Ordered engine snapshots for replay/animation. UI may ignore these safely. */
   frames: TurnFrame[];
+  /**
+   * True when a roll this turn never came to rest and was cut off by the tick limit —
+   * an endless loop (for example a ball circling through portals). The rules keep the
+   * current behaviour (the ball stops where the limit hits); the UI may celebrate it
+   * with a special event (Q-13).
+   */
+  infiniteLoop?: boolean;
 }
 
 export type TurnFramePhase = 'movement' | 'resolved' | 'impact' | 'turn-end';
@@ -60,13 +67,22 @@ export function isLevelCleared(level: Level): boolean {
   return !!tile.isGoal && isGoalActive(level);
 }
 
-function applyLaserCheck(level: Level): void {
+/**
+ * Every cell a laser beam currently passes through (the lasers' own cells excluded).
+ * The beam melts every snow object it passes (Q-07: it pierces them) and stops at a
+ * blocker object, a closed partition, the board edge, or after a triangle-wall cell.
+ */
+export function laserBeamCells(level: Level): Position[] {
   const ySolid = yellowWallsSolid(level);
   const oSolid = orangeWallsSolid(level);
+  const cells: Position[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const obj = level.objects[r][c];
       if (!obj || obj.type !== 'laser') continue;
+      // A laser trapped inside a closed partition cannot fire out of it — the wall
+      // encloses the whole cell, exactly as it blocks a beam coming from outside.
+      if ((ySolid && level.tiles[r][c].isYellowWall) || (oSolid && level.tiles[r][c].isOrangeWall)) continue;
       const [dr, dc] = DIR_DELTA[obj.laserDirection ?? 'right'];
       let cr = r + dr;
       let cc = c + dc;
@@ -78,14 +94,61 @@ function applyLaserCheck(level: Level): void {
         // (so it also shields anything trapped inside that cell).
         if (ySolid && level.tiles[cr][cc].isYellowWall) break;
         if (oSolid && level.tiles[cr][cc].isOrangeWall) break;
-        if (hit) hit.size = 0; // kill a non-blocker object the beam passes through
+        cells.push({ row: cr, col: cc });
         if (level.tiles[cr][cc].triangle) break; // triangle stops the beam at this cell
         cr += dr;
         cc += dc;
       }
     }
   }
-  processDeadObjects(level);
+  return cells;
+}
+
+/** True when the player stands in a laser beam — used by the editor to refuse a start position that dies at once. */
+export function isPlayerInLaserBeam(level: Level): boolean {
+  const p = findPlayer(level);
+  if (!p) return false;
+  return laserBeamCells(level).some(cell => cell.row === p.row && cell.col === p.col);
+}
+
+function applyLaserCheck(level: Level): void {
+  const hits = laserBeamCells(level).filter(cell => !!level.objects[cell.row][cell.col]);
+  // Q-08: a laser melts what it hits, so — like any object that disappears completely —
+  // the cell it stood on becomes cool.
+  removeObjects(level, hits, true);
+}
+
+/**
+ * "Turn 0": effects that already hold when a level starts, resolved once before the
+ * first input (Q-07). Lasers are firing from the start, so snow placed in a beam melts
+ * immediately (the editor refuses a player start inside a beam). Mutates `level`.
+ */
+export function applyTurnZero(level: Level): GameStatus {
+  applyLaserCheck(level);
+  if (!findPlayer(level)) return 'gameover';
+  return isLevelCleared(level) ? 'cleared' : 'playing';
+}
+
+/**
+ * Remove every object at `positions` as ONE simultaneous event. All non-player bodies
+ * are cleared first, and only then does a removed player look for a new body, so the
+ * soul can never land in a snowman that is dying in the same event and then hop on from
+ * there (the target is always the surviving snowman nearest the player).
+ */
+function removeObjects(level: Level, positions: Position[], coolTiles: boolean): void {
+  const deadPlayers: Position[] = [];
+  const seen = new Set<string>();
+  for (const pos of positions) {
+    const key = `${pos.row},${pos.col}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const obj = level.objects[pos.row][pos.col];
+    if (!obj) continue;
+    if (coolTiles) level.tiles[pos.row][pos.col].isWarm = false;
+    level.objects[pos.row][pos.col] = null;
+    if (obj.type === 'player') deadPlayers.push(pos);
+  }
+  for (const pos of deadPlayers) soulTransfer(level, pos);
 }
 
 // === v5 mechanics: orange latch, holes, portals, cracked tiles ===
@@ -105,15 +168,13 @@ export function latchOrangeButtons(level: Level): void {
 // hole (e.g. a cracked tile crumbling beneath it) dies — the soul jumps to the nearest
 // snowman, mirroring a full melt.
 export function applyHoles(level: Level): void {
+  const fallen: Position[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
-      if (!level.tiles[r][c].isHole) continue;
-      const obj = level.objects[r][c];
-      if (!obj) continue;
-      level.objects[r][c] = null;
-      if (obj.type === 'player') soulTransfer(level, { row: r, col: c });
+      if (level.tiles[r][c].isHole && level.objects[r][c]) fallen.push({ row: r, col: c });
     }
   }
+  removeObjects(level, fallen, false);
 }
 
 function findPortals(level: Level): Position[] {
@@ -163,14 +224,17 @@ function convertArmedCracks(level: Level): void {
   }
 }
 
-// Arm any cracked tile that is currently covered so it crumbles on the NEXT turn
-// (whether or not the object is still there then).
+// Arm any cracked tile that is currently covered — or that a snowball rolled across
+// during this turn (Q-16 c) — so it crumbles on the NEXT turn (whether or not the object
+// is still there then).
 function armCoveredCracks(level: Level): void {
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isCrack && level.objects[r][c]) {
-        level.tiles[r][c].crackArmed = true;
+      const tile = level.tiles[r][c];
+      if (tile.isCrack && (level.objects[r][c] || tile.crackRolled)) {
+        tile.crackArmed = true;
       }
+      if (tile.crackRolled) delete tile.crackRolled;
     }
   }
 }
@@ -247,9 +311,14 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
 
   const turnCount = nextAge();
   let hadRollingTick = false;
+  let infiniteLoop = false;
   const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount, (tickLevel, phase = 'movement') => {
     if (phase === 'impact') {
       recordFrame(frames, tickLevel, 'impact');
+      return true;
+    }
+    if (phase === 'loop') {
+      infiniteLoop = true;
       return true;
     }
     hadRollingTick = true;
@@ -270,7 +339,15 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
   if (!playerMoved) {
     return { level: newLevel, status: 'playing', frames };
   }
+  const result = finishMovedTurn(newLevel, frames, turnCount, hadRollingTick, portals, portalStartOccupied);
+  if (infiniteLoop) result.infiniteLoop = true;
+  return result;
+}
 
+function finishMovedTurn(
+  newLevel: Level, frames: TurnFrame[], turnCount: number, hadRollingTick: boolean,
+  portals: Position[], portalStartOccupied: boolean[],
+): TurnResult {
   // A non-rolling push is still an observable one-cell movement. Keeping the same
   // movement/resolved pair as rolling ticks lets the presentation layer animate all
   // object movement with one API, rather than treating player/forced moves specially.
@@ -345,7 +422,9 @@ function endOfTurn(level: Level): void {
   convertArmedCracks(level);
   applyHoles(level);
 
-  // 1. Recalculate shadows (if shadow mechanic is enabled)
+  // 1. Recalculate shadows (if shadow mechanic is enabled). With shadows off there is no
+  //    shade at all — not even inside a closed partition, which is drawn as a border and
+  //    lets the sun in (B-11 decision, 9/29).
   if (level.hasShadow) recalcShadows(level);
 
   // 2. Melting / growing
@@ -417,6 +496,11 @@ function processMelting(level: Level): void {
       } else if (obj.type === 'snowball' || obj.type === 'snowman') {
         if (isHeated) {
           obj.size -= 1;
+        } else if (obj.isMelting) {
+          // "Melting" belongs to the body. A vacated body that rests out of the sun cools
+          // down just as a possessed one would, so when the soul returns it gets the
+          // usual one-turn sweat warning instead of shrinking at once (Q-17).
+          obj.isMelting = false;
         }
       }
     }
@@ -424,22 +508,15 @@ function processMelting(level: Level): void {
 }
 
 function processDeadObjects(level: Level): void {
+  // Full melt: every body worn down to 0 disappears at once and its tile becomes cool.
+  const dead: Position[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const obj = level.objects[r][c];
-      if (!obj) continue;
-      if (obj.size <= 0) {
-        // Full melt: tile becomes cool
-        level.tiles[r][c].isWarm = false;
-        if (obj.type === 'player') {
-          level.objects[r][c] = null;
-          soulTransfer(level, { row: r, col: c });
-        } else {
-          level.objects[r][c] = null;
-        }
-      }
+      if (obj && obj.size <= 0) dead.push({ row: r, col: c });
     }
   }
+  removeObjects(level, dead, true);
 }
 
 function soulTransfer(level: Level, playerPos: { row: number; col: number }): void {
