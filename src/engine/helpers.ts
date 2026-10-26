@@ -120,11 +120,11 @@ export function canEnterTile(level: Level, pos: Position, dir: Direction, obj: G
     return false;
   }
 
-  // Hole: the player can never move onto a hole. Other objects may enter (and fall in
-  // — the turn/roll resolver removes them); only the player is blocked here.
-  if (tile.isHole && obj.type === 'player') {
-    return false;
-  }
+  // Hole: anything may enter, including the player (2026-10-26; the player used to be
+  // blocked here). The turn/roll resolver removes whatever stands on a hole
+  // (applyHoles): a player who walks in falls at the turn's hole step, and the soul
+  // jumps to the nearest snowman before the end-of-turn melt, as when a crack crumbles
+  // beneath it (game over if no snowman is left).
 
   return true;
 }

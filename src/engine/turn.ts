@@ -165,8 +165,8 @@ export function latchOrangeButtons(level: Level): void {
 }
 
 // Any object resting on a hole falls in and disappears. A player that ends up on a
-// hole (e.g. a cracked tile crumbling beneath it) dies — the soul jumps to the nearest
-// snowman, mirroring a full melt.
+// hole (it walked in, or a cracked tile crumbled beneath it) dies — the soul jumps to
+// the nearest snowman, mirroring a full melt. The hole stays, and its tile does not cool.
 export function applyHoles(level: Level): void {
   const fallen: Position[] = [];
   for (let r = 0; r < level.height; r++) {
@@ -360,7 +360,8 @@ function finishMovedTurn(
     resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
   }
 
-  // Portal relocation, then holes swallow anything that landed on one.
+  // Portal relocation, then holes swallow anything that landed on one — a player who
+  // walked into a hole too, so its soul moves on before the end-of-turn melt.
   applyPortals(newLevel, portals, portalStartOccupied);
   applyHoles(newLevel);
   latchOrangeButtons(newLevel);

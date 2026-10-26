@@ -49,8 +49,9 @@ export interface Tile {
   // and never reset. NOT saved in the map code (initial state = unpressed); cloneLevel
   // propagates it during play.
   orangePressed?: boolean;
-  // Hole: any object that moves onto this tile falls in and disappears. The player
-  // cannot move onto a hole. No object can be placed on a hole in the editor.
+  // Hole: any object that moves onto this tile falls in and disappears — the player
+  // too (it may walk in; the soul then moves to the nearest snowman, game over if
+  // none). The hole stays. No object can be placed on a hole in the editor.
   isHole?: boolean;
   // Cracked tile: when an object or player steps onto it, the tile turns into a hole
   // one turn later (whether or not the stepper is still there). Warm/cold variants use
