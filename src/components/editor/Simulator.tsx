@@ -9,6 +9,7 @@ import {
   animationFrameDelayMs,
   animationMovementDurationMs,
 } from '../../utils/animation';
+import { soulChangedBody } from '../../utils/level';
 import Grid from './Grid';
 import './Simulator.css';
 
@@ -44,6 +45,10 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
   const activePlaybackRef = useRef<ActivePlayback | null>(null);
   const touchStartRef = useRef<TouchStart | null>(null);
   const lastTapRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  // Set by a turn that moved the soul into another body: the browser's auto-repeat of the
+  // key still held from that turn is ignored until a fresh key press, so walking into a
+  // hole does not walk the new body straight on.
+  const ignoreKeyRepeatRef = useRef(false);
 
   useEffect(() => () => {
     playbackIdRef.current += 1;
@@ -131,12 +136,16 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
 
   const handleMove = useCallback((dir: Direction) => {
     if (gameState.status !== 'playing' || isAnimating) return;
-    commitTurnResult(executeTurn(gameState.level, dir));
+    const result = executeTurn(gameState.level, dir);
+    if (soulChangedBody(gameState.level, result.level)) ignoreKeyRepeatRef.current = true;
+    commitTurnResult(result);
   }, [commitTurnResult, gameState.level, gameState.status, isAnimating]);
 
   const handleSkip = useCallback(() => {
     if (gameState.status !== 'playing' || isAnimating) return;
-    commitTurnResult(executeSkipTurn(gameState.level));
+    const result = executeSkipTurn(gameState.level);
+    if (soulChangedBody(gameState.level, result.level)) ignoreKeyRepeatRef.current = true;
+    commitTurnResult(result);
   }, [commitTurnResult, gameState.level, gameState.status, isAnimating]);
 
   const handleUndo = useCallback(() => {
@@ -176,12 +185,15 @@ export default function Simulator({ gameState, setGameState, onBack, backLabel =
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if (e.key === ' ') e.preventDefault();
+      if (!e.repeat) ignoreKeyRepeatRef.current = false;
+      else if (ignoreKeyRepeatRef.current) return;
       switch (e.key) {
         case 'ArrowUp': case 'w': case 'W': handleMove('up'); break;
         case 'ArrowDown': case 's': case 'S': handleMove('down'); break;
         case 'ArrowLeft': case 'a': case 'A': handleMove('left'); break;
         case 'ArrowRight': case 'd': case 'D': handleMove('right'); break;
-        case ' ': e.preventDefault(); handleSkip(); break;
+        case ' ': handleSkip(); break;
         case 'z': case 'Z': handleUndo(); break;
         case 'r': case 'R': handleReset(); break;
         case 'm': case 'M': handleSoulCycle(); break;

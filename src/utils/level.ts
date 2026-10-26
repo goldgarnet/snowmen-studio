@@ -103,6 +103,24 @@ export function findPlayer(level: Level): Position | null {
   return null;
 }
 
+// Identity of the body that holds the soul. The engine's motionId survives moves and
+// portals, while a soul transfer or footplate swap builds a fresh player object, so the
+// id changes with the body. An untagged player (before the first turn, or right after an
+// M cycle) gets the id the engine is about to give it.
+function playerBodyId(level: Level): string | null {
+  const pos = findPlayer(level);
+  if (!pos) return null;
+  return level.objects[pos.row][pos.col]?.motionId ?? `player:${pos.row}:${pos.col}`;
+}
+
+// True when the soul moved into another body during the turn (hole, crack, laser, melt,
+// footplate). Play screens use it to stop a held key from walking the new body on.
+export function soulChangedBody(before: Level, after: Level): boolean {
+  const from = playerBodyId(before);
+  const to = playerBodyId(after);
+  return from !== null && to !== null && from !== to;
+}
+
 export function serializeLevel(level: Level): string {
   return JSON.stringify(level, null, 2);
 }

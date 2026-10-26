@@ -8,6 +8,7 @@ import {
   SolutionMove,
   StepState,
 } from '../../utils/solution';
+import { soulChangedBody } from '../../utils/level';
 import Grid from '../editor/Grid';
 import {
   ANIMATION_SPEED_STEP,
@@ -84,6 +85,9 @@ export default function SolutionRecorder({
   const [error, setError] = useState<string | null>(null);
   const touchStartRef = useRef<TouchStart | null>(null);
   const lastTapRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  // Same as the Simulator: after a turn that moved the soul into another body, the held
+  // key's auto-repeat is neither played nor recorded until a fresh key press.
+  const ignoreKeyRepeatRef = useRef(false);
 
   const moves = recording.moves;
   const recordedState = recording.states[recording.states.length - 1] ?? null;
@@ -158,6 +162,7 @@ export default function SolutionRecorder({
     if (!recordedState || recordedState.status !== 'playing' || isAnimating) return;
     setError(null);
     const animatedState = advanceSolutionState(recordedState, m, true);
+    if (m !== 'soul' && soulChangedBody(recordedState.level, animatedState.level)) ignoreKeyRepeatRef.current = true;
     const nextState: StepState = {
       level: animatedState.level,
       status: animatedState.status,
@@ -189,12 +194,15 @@ export default function SolutionRecorder({
   useEffect(() => {
     if (!startLevel) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === ' ') e.preventDefault();
+      if (!e.repeat) ignoreKeyRepeatRef.current = false;
+      else if (ignoreKeyRepeatRef.current) return;
       switch (e.key) {
         case 'ArrowUp': case 'w': case 'W': push('up'); break;
         case 'ArrowDown': case 's': case 'S': push('down'); break;
         case 'ArrowLeft': case 'a': case 'A': push('left'); break;
         case 'ArrowRight': case 'd': case 'D': push('right'); break;
-        case ' ': e.preventDefault(); push('wait'); break;
+        case ' ': push('wait'); break;
         case 'z': case 'Z': undo(); break;
         case 'r': case 'R': reset(); break;
         case 'm': case 'M': if (soulEnabled) push('soul'); break;
