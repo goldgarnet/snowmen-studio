@@ -170,11 +170,13 @@ export const scenarios: ScenarioDefinition[] = [
     verify: (r) => { expectEmpty(r.level, 0, 1); },
   }),
   defineScenario({
-    name: 'B-11 (decision 9/29) with shadows on the closed wall cell is shade and the ball survives',
+    // Only the ORANGE wall keeps this rule: a raised yellow wall no longer shades its
+    // cell (see yellow-shade-and-crack-melt.scenario.ts).
+    name: 'B-11 (decision 9/29) with shadows on the closed orange wall cell is shade and the ball survives',
     width: 3, height: 2,
     setup: (b) => {
       b.level.hasShadow = true;
-      b.tile(0, 1, { isYellowWall: true, isWarm: true }).snowball(0, 1, 1).player(1, 0, 2).tile(1, 2, { isYellowButton: true });
+      b.tile(0, 1, { isOrangeWall: true, isWarm: true }).snowball(0, 1, 1).player(1, 0, 2).tile(1, 2, { isOrangeButton: true });
     },
     actions: ['wait'],
     verify: (r) => { expectObject(r.level, 0, 1, 'snowball', 1); },

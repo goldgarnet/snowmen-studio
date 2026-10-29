@@ -423,6 +423,11 @@ function endOfTurn(level: Level): void {
   convertArmedCracks(level);
   applyHoles(level);
 
+  // 0b. Arm cracks covered right now (crumble next turn). This must run BEFORE melting:
+  //     a small snowball that ends the turn on a warm crack melts away below, and the
+  //     crack must still remember it was stepped on.
+  armCoveredCracks(level);
+
   // 1. Recalculate shadows (if shadow mechanic is enabled). With shadows off there is no
   //    shade at all — not even inside a closed partition, which is drawn as a border and
   //    lets the sun in (B-11 decision, 9/29).
@@ -440,9 +445,8 @@ function endOfTurn(level: Level): void {
     recalcShadows(level);
   }
 
-  // 5. Arm cracks now covered (crumble next turn), latch orange buttons, and clear the
-  //    per-turn portal marks.
-  armCoveredCracks(level);
+  // 5. Latch orange buttons and clear the per-turn portal marks. (Cracks were armed in
+  //    step 0b, before anything could melt off them.)
   latchOrangeButtons(level);
   clearTeleportFlags(level);
 }
