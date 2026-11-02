@@ -6,7 +6,7 @@ import { isPlayerInLaserBeam } from '../../engine/turn';
 import Grid from './Grid';
 import './Editor.css';
 
-type EditorTool =
+export type EditorTool =
   | 'select'
   | 'warm'
   | 'cool'
@@ -164,6 +164,16 @@ interface EditorProps {
   level: Level;
   setLevel: (level: Level) => void;
   onHistoryChange?: (history: EditorHistoryState) => void;
+  // 테스트 플레이에 다녀오면 Editor 가 다시 마운트된다. 부모가 들고 있던 실행취소/다시실행
+  // 스택과 고른 도구로 시작하고(initialSession), 바뀔 때마다 부모에 알린다(onSessionChange).
+  initialSession?: EditorSessionState;
+  onSessionChange?: (session: EditorSessionState) => void;
+}
+
+export interface EditorSessionState {
+  undo: Level[];
+  redo: Level[];
+  tool: EditorTool;
 }
 
 export interface EditorHistoryState {
@@ -179,8 +189,8 @@ export interface EditorToolbarApi {
   openImport: () => void;
 }
 
-const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level, setLevel, onHistoryChange }, ref) {
-  const [selectedTool, setSelectedTool] = useState<EditorTool>('select');
+const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level, setLevel, onHistoryChange, initialSession, onSessionChange }, ref) {
+  const [selectedTool, setSelectedTool] = useState<EditorTool>(initialSession?.tool ?? 'select');
   const [terrainFillMode, setTerrainFillMode] = useState<TerrainFillMode | null>('cool');
   const [treeHeight, setTreeHeight] = useState<number>(2);
   const [laserDir, setLaserDir] = useState<'right'|'left'|'up'|'down'>('right');
@@ -199,8 +209,8 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   const dragLevelRef = useRef<Level | null>(null);
 
   // === Undo / redo stacks ===
-  const [undoStack, setUndoStack] = useState<Level[]>([]);
-  const [redoStack, setRedoStack] = useState<Level[]>([]);
+  const [undoStack, setUndoStack] = useState<Level[]>(initialSession?.undo ?? []);
+  const [redoStack, setRedoStack] = useState<Level[]>(initialSession?.redo ?? []);
   // Snapshot the current level as one undo step. Call at the start of each discrete
   // edit gesture (e.g. mousedown), not on every drag frame.
   const pushUndo = useCallback(() => {
@@ -225,6 +235,10 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   useEffect(() => {
     onHistoryChange?.({ canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 });
   }, [onHistoryChange, redoStack.length, undoStack.length]);
+
+  useEffect(() => {
+    onSessionChange?.({ undo: undoStack, redo: redoStack, tool: selectedTool });
+  }, [onSessionChange, redoStack, selectedTool, undoStack]);
 
   // === Selection / move state (used by the 'select' tool) ===
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -477,6 +491,13 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   // Local string state for width/height inputs so users can clear them.
   const [widthInput, setWidthInput] = useState<string>(level.width.toString());
   const [heightInput, setHeightInput] = useState<string>(level.height.toString());
+  // 실행취소·다시 실행 등으로 맵 크기가 바뀌면 입력칸 숫자도 따라간다(크기가 그대로면 입력 중인 빈칸은 둔다).
+  const [shownSize, setShownSize] = useState({ width: level.width, height: level.height });
+  if (shownSize.width !== level.width || shownSize.height !== level.height) {
+    setShownSize({ width: level.width, height: level.height });
+    if (shownSize.width !== level.width) setWidthInput(level.width.toString());
+    if (shownSize.height !== level.height) setHeightInput(level.height.toString());
+  }
 
   // A map dimension may be 1..30 (1-wide/1-tall maps are allowed; the map code stores a
   // dimension of 1 via a reserved 5-bit pattern — see levelCode). Keep the raw text in
@@ -1237,7 +1258,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         <section className="editor-section">
           <button className={`tool-btn eraser-btn-full ${selectedTool === 'eraser' ? 'active' : ''}`}
             onClick={() => selectTool('eraser')}
-            title="단축키: V">
+            title={`단축키: ${hotkeyTitle(TOOL_HOTKEYS.eraser!)}`}>
             <span className="tool-emoji">🧹</span>지우개{hotkeyBadge('eraser')}
           </button>
         </section>

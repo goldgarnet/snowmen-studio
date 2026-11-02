@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:nav": "node test/nav/run.cjs",
     "test:engine": "node test/engine/run.cjs",
     "test:clears": "node test/clears/run.cjs",
     "preview": "vite preview"

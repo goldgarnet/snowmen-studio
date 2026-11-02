@@ -194,18 +194,33 @@ export default function SolutionRecorder({
   useEffect(() => {
     if (!startLevel) return;
     const onKey = (e: KeyboardEvent) => {
+      // Ctrl/⌘+Z 는 에디터처럼 되돌리기(한 수 무르기). 그 밖의 Alt/Ctrl/⌘ 조합은 브라우저·앱 단축키다
+      // (Alt+← = 뒤로가기 등) — 이동으로 기록하지 않는다.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyZ') {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.key === ' ') e.preventDefault();
       if (!e.repeat) ignoreKeyRepeatRef.current = false;
       else if (ignoreKeyRepeatRef.current) return;
       switch (e.key) {
-        case 'ArrowUp': case 'w': case 'W': push('up'); break;
-        case 'ArrowDown': case 's': case 'S': push('down'); break;
-        case 'ArrowLeft': case 'a': case 'A': push('left'); break;
-        case 'ArrowRight': case 'd': case 'D': push('right'); break;
-        case ' ': push('wait'); break;
-        case 'z': case 'Z': undo(); break;
-        case 'r': case 'R': reset(); break;
-        case 'm': case 'M': if (soulEnabled) push('soul'); break;
+        case 'ArrowUp': push('up'); return;
+        case 'ArrowDown': push('down'); return;
+        case 'ArrowLeft': push('left'); return;
+        case 'ArrowRight': push('right'); return;
+        case ' ': push('wait'); return;
+      }
+      // 글자 키는 물리 키(e.code)로 본다 — 한글 입력 상태에서도 W/A/S/D·Z·R·M 이 동작하도록.
+      switch (e.code) {
+        case 'KeyW': push('up'); break;
+        case 'KeyS': push('down'); break;
+        case 'KeyA': push('left'); break;
+        case 'KeyD': push('right'); break;
+        case 'KeyZ': undo(); break;
+        case 'KeyR': reset(); break;
+        case 'KeyM': if (soulEnabled) push('soul'); break;
       }
     };
     window.addEventListener('keydown', onKey);

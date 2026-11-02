@@ -32,13 +32,16 @@ export interface NewMap {
 // created_at is editable (등록일) so it is NOT omitted here.
 export type MapPatch = Partial<Omit<MapRow, 'id' | 'owner_id'>>;
 
-// My saved maps (drafts + my published maps), newest activity first.
+// My saved maps (drafts + my published maps), newest activity first. id is the final
+// tie-break so maps with the same updated_at (e.g. a folder published at once) keep a
+// stable order across requests — page N of the studio list shows the same maps.
 export async function listMyMaps(ownerId: string): Promise<MapRow[]> {
   const { data, error } = await supabase
     .from('maps')
     .select('*')
     .eq('owner_id', ownerId)
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as MapRow[];
 }
@@ -46,14 +49,17 @@ export async function listMyMaps(ownerId: string): Promise<MapRow[]> {
 // All hub (published) maps, standalone and folder members alike. The hub splits them
 // client-side (standalone → main grid; members → grouped under their folder card) so
 // this query stays independent of the folder_id column existing yet (pre-migration
-// safety). Sorted by 생성 날짜(created_at, 등록일), ties by 공개 날짜(published_at).
+// safety). Sorted by 생성 날짜(created_at, 등록일), ties by 공개 날짜(published_at), then id —
+// many maps share both dates, and without a final key the server returns those in a
+// different order per request, so a card could jump to the next hub page on a refetch.
 export async function listPublishedMaps(): Promise<MapRow[]> {
   const { data, error } = await supabase
     .from('maps')
     .select('*')
     .eq('published', true)
     .order('created_at', { ascending: false })
-    .order('published_at', { ascending: false, nullsFirst: false });
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as MapRow[];
 }
@@ -65,7 +71,8 @@ export function compareMapOrder(a: MapRow, b: MapRow): number {
   const ao = a.sort_order ?? Number.MAX_SAFE_INTEGER;
   const bo = b.sort_order ?? Number.MAX_SAFE_INTEGER;
   if (ao !== bo) return ao - bo;
-  return a.created_at.localeCompare(b.created_at);   // ISO timestamps compare lexically
+  const byDate = a.created_at.localeCompare(b.created_at);   // ISO timestamps compare lexically
+  return byDate !== 0 ? byDate : a.id.localeCompare(b.id);  // same date → stable by id
 }
 
 // Published maps that belong to a given folder (shown inside the folder card).
@@ -74,7 +81,8 @@ export async function listMapsInFolder(folderId: string): Promise<MapRow[]> {
     .from('maps')
     .select('*')
     .eq('folder_id', folderId)
-    .eq('published', true);
+    .eq('published', true)
+    .order('id', { ascending: true });
   if (error) throw new Error(error.message);
   return ((data ?? []) as MapRow[]).sort(compareMapOrder);
 }

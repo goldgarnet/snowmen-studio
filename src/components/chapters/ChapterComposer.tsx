@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type Dispatch, type MouseEvent, type SetStateAction } from 'react';
 import type { MapRow, FolderRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import { listPublishedMaps } from '../../api/maps';
@@ -12,6 +12,8 @@ import MapThumbnail from '../hub/MapThumbnail';
 import StarRating from '../hub/StarRating';
 import ConfirmModal from '../common/ConfirmModal';
 import MapDetail from '../hub/MapDetail';
+import * as nav from '../../lib/nav';
+import { chapterUrl, isChapterListUrl, splitUrl } from '../../lib/hubState';
 import './chapters.css';
 
 // 스테이지 번호는 저장되지 않고 위치에서 파생된다: "챕터번호-순번" (예: 2-1).
@@ -181,20 +183,32 @@ function StageEditModal({
 
 type PickerSort = 'accepted' | 'latest';
 
+// 검색·상태 칩·정렬·'미배치만' — 창을 닫았다 다시 열어도 유지한다(챕터 구성 화면에 있는 동안).
+interface PickerPrefs {
+  query: string;
+  status: 'all' | MapRow['status'];
+  sort: PickerSort;
+  unplacedOnly: boolean;   // 아직 어느 챕터에도 배치되지 않은 맵만
+}
+const DEFAULT_PICKER_PREFS: PickerPrefs = { query: '', status: 'all', sort: 'accepted', unplacedOnly: false };
+
 interface MapPickerProps {
   title: string;
   maps: MapRow[];                          // all published maps (standalone + folder members)
   folderNames: Map<string, string>;        // folder_id → 폴더 이름
   placedNos: Map<string, string>;          // map_id → 이미 배치된 스테이지 번호 (전 챕터)
+  prefs: PickerPrefs;
+  onPrefsChange: Dispatch<SetStateAction<PickerPrefs>>;
   onPick: (map: MapRow) => void;
   onCancel: () => void;
 }
 
-function MapPickerModal({ title, maps, folderNames, placedNos, onPick, onCancel }: MapPickerProps) {
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<'all' | MapRow['status']>('all');
-  const [sort, setSort] = useState<PickerSort>('accepted');
-  const [unplacedOnly, setUnplacedOnly] = useState(false); // 아직 어느 챕터에도 배치되지 않은 맵만
+function MapPickerModal({ title, maps, folderNames, placedNos, prefs, onPrefsChange, onPick, onCancel }: MapPickerProps) {
+  const { query, status, sort, unplacedOnly } = prefs;
+  const setQuery = (v: string) => onPrefsChange((p) => ({ ...p, query: v }));
+  const setStatus = (v: PickerPrefs['status']) => onPrefsChange((p) => ({ ...p, status: v }));
+  const setSort = (v: PickerSort) => onPrefsChange((p) => ({ ...p, sort: v }));
+  const setUnplacedOnly = (f: (v: boolean) => boolean) => onPrefsChange((p) => ({ ...p, unplacedOnly: f(p.unplacedOnly) }));
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -293,8 +307,20 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
   const [stages, setStages] = useState<StageRow[]>([]);          // 선택된 챕터의 스테이지
   const [hubMaps, setHubMaps] = useState<MapRow[]>([]);
   const [folders, setFolders] = useState<FolderRow[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 고른 챕터·열어 둔 스테이지 맵은 주소가 정한다: '/chapters?ch=<챕터>&map=<맵>'.
+  // 챕터 고르기 = replace(왼쪽 목록이 늘 보이므로), 스테이지 맵 열기 = push(뒤로 = 같은 챕터 목록).
+  const location = nav.useLocation();
+  const { selectedId, detailMapId } = useMemo(() => {
+    const { params } = splitUrl(location);
+    return { selectedId: params.get('ch') || null, detailMapId: params.get('map') || null };
+  }, [location]);
+  const [stagesFor, setStagesFor] = useState<string | null>(null);  // stages 가 어느 챕터의 것인가
+  const stagesRequestRef = useRef<string | null>(null);
+  const [pickerPrefs, setPickerPrefs] = useState<PickerPrefs>(DEFAULT_PICKER_PREFS);
   const [loading, setLoading] = useState(true);
+  // 조회 실패 — 이때는 주소의 챕터·맵을 '없음'으로 보고 지우지 않는다(일시 오류 한 번에 위치를 잃지 않게).
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [stagesFailedFor, setStagesFailedFor] = useState<string | null>(null);
   const [stagesLoading, setStagesLoading] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -304,7 +330,6 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
   // 맵 선택 모달은 두 용도로 쓴다: 'add' = 새 스테이지 추가, 'swap' = 수정 중인 스테이지의 맵 교체.
   const [pickerMode, setPickerMode] = useState<'add' | 'swap' | null>(null);
   const [deleteStageTarget, setDeleteStageTarget] = useState<StageRow | null>(null);
-  const [detailMap, setDetailMap] = useState<MapRow | null>(null); // 맵 페이지(풀이·댓글)로 열린 스테이지 맵
   const [editingStage, setEditingStage] = useState<{ stage: StageRow; no: string } | null>(null);
   const [editStageMap, setEditStageMap] = useState<MapRow | null>(null); // 수정 모달에서 새로 고른 맵
   const [busy, setBusy] = useState(false);
@@ -317,7 +342,8 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
     try {
       const [chs, all, maps] = await Promise.all([listChapters(), listAllStages(), listPublishedMaps()]);
       setChapters(chs); setAllStages(all); setHubMaps(maps);
-    } catch (e) { console.error(e); }
+      setLoadFailed(false);
+    } catch (e) { console.error(e); setLoadFailed(true); }
     try { setFolders(await listPublishedFolders()); } catch { setFolders([]); }
     setLoading(false);
   }, []);
@@ -325,10 +351,19 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
   useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
 
   const loadStages = useCallback(async (chapterId: string) => {
+    stagesRequestRef.current = chapterId;
     setStagesLoading(true);
-    try { setStages(await listStages(chapterId)); }
-    catch (e) { console.error(e); }
-    finally { setStagesLoading(false); }
+    try {
+      const rows = await listStages(chapterId);
+      // 챕터를 빨리 바꾸면 늦게 온 이전 챕터 응답은 버린다.
+      if (stagesRequestRef.current === chapterId) { setStages(rows); setStagesFor(chapterId); setStagesFailedFor(null); }
+    }
+    catch (e) {
+      console.error(e);
+      // 실패해도 '불러오는 중…' 에 갇히지 않게 이 챕터의 응답으로 치고, 다시 시도를 보인다.
+      if (stagesRequestRef.current === chapterId) { setStages([]); setStagesFor(chapterId); setStagesFailedFor(chapterId); }
+    }
+    finally { if (stagesRequestRef.current === chapterId) setStagesLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -339,6 +374,40 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
   }, [selectedId, loadStages]);
 
   const folderNames = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
+
+  const stagesReady = stagesFor === selectedId && !stagesLoading;
+  const stagesFailed = stagesReady && stagesFailedFor === selectedId;
+  // 스테이지 썸네일·제목으로 연 맵 페이지(풀이·댓글). 스테이지 목록의 맵 행을 그대로 쓴다.
+  const detailMap = detailMapId && stagesFor === selectedId
+    ? stages.find((s) => s.map?.id === detailMapId)?.map ?? null
+    : null;
+  // 주소에 스테이지 맵이 있는데 아직 행을 모름(다시 마운트되어 불러오는 중) — 챕터 목록 대신 자리표시.
+  const detailPending = !!detailMapId && !detailMap && (loading || (!!selectedId && !stagesReady));
+
+  // 주소의 챕터·맵이 없거나 지워졌으면 그 파라미터를 지우고(replace) 목록을 보인다. 불러오는
+  // 동안·조회가 실패한 동안에는 판단하지 않는다. 마지막 챕터 선택은 상단 '챕터 구성' 탭이 기억한다.
+  useEffect(() => {
+    if (loading || loadFailed || !location.startsWith('/chapters')) return;
+    let ch = selectedId;
+    let mapId = detailMapId;
+    if (ch && !chapters.some((c) => c.id === ch)) { ch = null; mapId = null; }
+    else if (mapId && (!ch || (stagesReady && !stagesFailed && !stages.some((s) => s.map?.id === mapId)))) mapId = null;
+    if (ch !== selectedId || mapId !== detailMapId) nav.go(chapterUrl(ch, mapId), { replace: true });
+    nav.rememberListUrl('chapters', chapterUrl(ch));
+  }, [loading, loadFailed, location, selectedId, detailMapId, chapters, stages, stagesReady, stagesFailed]);
+
+  // 목록으로 돌아오면(뒤로·'← 챕터 구성으로'·탭) 그 항목의 스크롤을 되살린다.
+  nav.useScrollRestore(!loading && !!selectedId && stagesReady && !detailMapId);
+
+  const selectChapter = (id: string | null) => nav.go(chapterUrl(id), { replace: true });
+  const stageHref = (mapId: string) => chapterUrl(selectedId, mapId);
+  // 일반 왼쪽 클릭은 화면 안에서 상세로(push), 가운데·Ctrl/⌘·Shift 클릭은 브라우저 기본(새 탭·새 창).
+  const openStageMap = (e: MouseEvent<HTMLAnchorElement>, mapId: string) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    nav.go(stageHref(mapId));
+  };
+  const closeStageMap = () => nav.goBack(chapterUrl(selectedId), (from) => isChapterListUrl(from, selectedId));
 
   // map_id → 배치된 스테이지 번호 (전 챕터). 챕터 번호와 챕터 안 순서로 계산.
   const placedNos = useMemo(() => {
@@ -361,7 +430,7 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
     const row = await insertChapter(p);
     setShowNewChapter(false);
     await refresh();
-    setSelectedId(row.id);
+    selectChapter(row.id);
   };
 
   const doEditChapter = async (p: { number: number; name: string; description: string | null }) => {
@@ -377,7 +446,7 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
     setBusy(true);
     try {
       await deleteChapter(deleteChapterTarget.id);
-      if (selectedId === deleteChapterTarget.id) setSelectedId(null);
+      if (selectedId === deleteChapterTarget.id) selectChapter(null);
       setDeleteChapterTarget(null);
       refresh();
     } catch (e) { alert('삭제 실패: ' + (e as Error).message); }
@@ -446,26 +515,28 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
   };
 
   // 맵 페이지에서 상태/난이도/코멘트 등을 바꾸면 스테이지에 붙은 맵 정보도 즉시 반영한다.
-  // 삭제/비공개(updated 없음) 시엔 페이지를 닫고 목록을 다시 읽는다.
+  // 삭제/비공개(updated 없음) 시엔 목록을 다시 읽는다. 페이지 닫기(뒤로)는 MapDetail 이 바로 이어
+  // 부르는 onBack 한 번뿐이다 — 여기서도 닫으면 history.back() 이 두 번 걸려 챕터 목록을 건너뛴다.
   const onDetailChanged = (updated?: MapRow) => {
     if (updated) {
       setStages((prev) => prev.map((s) => (s.map && s.map.id === updated.id ? { ...s, map: updated } : s)));
-      setDetailMap(updated);
     } else {
-      setDetailMap(null);
       if (selectedId) void loadStages(selectedId);
       listAllStages().then(setAllStages).catch(() => {});
     }
   };
 
   // ---- 맵 페이지 서브모드: 스테이지의 맵을 클릭하면 그 맵의 페이지(풀이·댓글)로 ----
+  if (detailPending) {
+    return <div className="chapters"><div className="hub-empty">맵을 불러오는 중…</div></div>;
+  }
   if (detailMap) {
     return (
       <MapDetail
         key={detailMap.id}
         map={detailMap}
         backLabel="← 챕터 구성으로"
-        onBack={() => setDetailMap(null)}
+        onBack={closeStageMap}
         onChanged={onDetailChanged}
         onStartRecording={() => onStartMapRecording?.(detailMap.id)}
       />
@@ -492,13 +563,13 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
           {loading ? (
             <div className="chapters-side-empty">불러오는 중…</div>
           ) : chapters.length === 0 ? (
-            <div className="chapters-side-empty">아직 챕터가 없습니다.</div>
+            <div className="chapters-side-empty">{loadFailed ? '챕터를 불러오지 못했습니다.' : '아직 챕터가 없습니다.'}</div>
           ) : (
             <div className="chapters-list">
               {chapters.map((ch) => (
                 <button key={ch.id}
                   className={`chapters-item${ch.id === selectedId ? ' active' : ''}`}
-                  onClick={() => setSelectedId(ch.id)}>
+                  onClick={() => selectChapter(ch.id)}>
                   <span className="chapters-item-num">챕터 {ch.number}</span>
                   <span className="chapters-item-name">{ch.name || '이름 없음'}</span>
                   <span className="chapters-item-count">
@@ -513,7 +584,17 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
         {/* ---- 오른쪽: 선택된 챕터 ---- */}
         <section className="chapters-main">
           {!selected ? (
-            <div className="hub-empty">왼쪽에서 챕터를 선택하거나 새 챕터를 만드세요.</div>
+            // 주소에 챕터가 있으면 불러오는 동안·실패했을 때 '챕터를 고르라'는 안내를 띄우지 않는다.
+            selectedId && loading ? (
+              <div className="hub-empty">불러오는 중…</div>
+            ) : loadFailed ? (
+              <div className="hub-empty">
+                챕터 목록을 불러오지 못했습니다.{' '}
+                <button className="btn btn-sm" onClick={() => { void refresh(); }}>다시 시도</button>
+              </div>
+            ) : (
+              <div className="hub-empty">왼쪽에서 챕터를 선택하거나 새 챕터를 만드세요.</div>
+            )
           ) : (
             <>
               <div className="chapter-header">
@@ -528,8 +609,13 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
                 </div>
               </div>
 
-              {stagesLoading ? (
+              {!stagesReady ? (
                 <div className="hub-empty">불러오는 중…</div>
+              ) : stagesFailed ? (
+                <div className="hub-empty">
+                  스테이지를 불러오지 못했습니다.{' '}
+                  <button className="btn btn-sm" onClick={() => { void loadStages(selected.id); }}>다시 시도</button>
+                </div>
               ) : stages.length === 0 ? (
                 <div className="hub-empty">아직 스테이지가 없습니다. <b>스테이지 추가</b>로 허브의 맵을 배치하세요.</div>
               ) : (
@@ -537,21 +623,32 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
                   {stages.map((s, i) => (
                     <div className="stage-row" key={s.id}>
                       <div className="stage-no">{stageNo(selected, i)}</div>
-                      <div
-                        className={`stage-thumb${s.map ? ' stage-thumb-playable' : ''}`}
-                        title={s.map ? '클릭하면 맵 페이지로 이동' : undefined}
-                        onClick={() => s.map && setDetailMap(s.map)}
-                      >
-                        {s.map ? <MapThumbnail code={s.map.code} /> : <div className="stage-thumb-missing">맵 없음</div>}
-                        {s.map && <span className="stage-thumb-play">열기</span>}
-                      </div>
+                      {/* 맵 페이지로 가는 링크 — Tab·Enter 로 열리고 가운데·Ctrl 클릭은 새 탭 */}
+                      {s.map ? (
+                        <a
+                          className="stage-thumb stage-thumb-playable"
+                          href={stageHref(s.map.id)}
+                          title="클릭하면 맵 페이지로 이동"
+                          onClick={(e) => openStageMap(e, s.map!.id)}
+                        >
+                          <MapThumbnail code={s.map.code} />
+                          <span className="stage-thumb-play">열기</span>
+                        </a>
+                      ) : (
+                        <div className="stage-thumb"><div className="stage-thumb-missing">맵 없음</div></div>
+                      )}
                       <div className="stage-fields">
                         <div className="stage-map-line">
-                          <span
-                            className={`stage-map-title${s.map ? ' stage-map-title-playable' : ''}`}
-                            title={s.map ? '클릭하면 맵 페이지로 이동' : undefined}
-                            onClick={() => s.map && setDetailMap(s.map)}
-                          >{s.map?.title || '제목 없음'}</span>
+                          {s.map ? (
+                            <a
+                              className="stage-map-title stage-map-title-playable"
+                              href={stageHref(s.map.id)}
+                              title="클릭하면 맵 페이지로 이동"
+                              onClick={(e) => openStageMap(e, s.map!.id)}
+                            >{s.map.title || '제목 없음'}</a>
+                          ) : (
+                            <span className="stage-map-title">제목 없음</span>
+                          )}
                           {s.map && <span className={`badge badge-${s.map.status}`}>{STATUS_LABEL[s.map.status]}</span>}
                           {s.map?.folder_id && (
                             <span className="badge badge-draft">📁 {folderNames.get(s.map.folder_id) ?? '폴더'}</span>
@@ -638,6 +735,8 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
           maps={hubMaps}
           folderNames={folderNames}
           placedNos={placedNos}
+          prefs={pickerPrefs}
+          onPrefsChange={setPickerPrefs}
           onPick={pickMap}
           onCancel={() => setPickerMode(null)}
         />

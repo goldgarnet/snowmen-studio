@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { compareMapOrder, listPublishedMaps } from '../../api/maps';
 import { listPublishedFolders } from '../../api/folders';
 import type { FolderRow, MapRow, StatusFilter } from '../../api/types';
@@ -7,6 +7,8 @@ import { MEMBER_LOOKUP, useClears } from '../../context/ClearsContext';
 import { MEMBERS } from '../../lib/members';
 import { memberSolveTitle, otherNames, type MemberSolve } from '../../lib/solvedChecks';
 import { boardTotals, buildBoardRows, filterBoardRows, orderHubMaps } from '../../lib/solvedBoard';
+import { getHubCache, setHubCache } from '../../lib/hubState';
+import * as nav from '../../lib/nav';
 import '../hub/hub.css';
 import './solved.css';
 
@@ -33,6 +35,12 @@ interface BoardView {
 
 // 보던 조건(검색 · 거르기)은 맵 상세에 다녀와도 그대로 둔다. 페이지를 새로 열면 처음부터.
 let lastView: BoardView = { query: '', status: 'all', unsolvedOnly: false };
+// 표 스크롤 위치와 마지막으로 연 맵 — 상세 · 다른 탭에 다녀와도 보던 줄로 돌아온다(허브의 '보던 쪽'과 같은 뜻).
+// 표는 .app-main 이 아니라 .board-scroll 안에서 스크롤하므로 nav.useScrollRestore 대신 여기서 기억한다.
+let lastScroll: { top: number; left: number } | null = null;
+let lastOpenedMapId: string | null = null;
+function rememberBoardScroll(el: HTMLElement): void { lastScroll = { top: el.scrollTop, left: el.scrollLeft }; }
+function rememberOpenedMap(id: string): void { lastOpenedMapId = id; }
 
 function BoardCell({ cell, myCheck, busy, onToggle }: {
   cell: MemberSolve;
@@ -73,9 +81,12 @@ function BoardCell({ cell, myCheck, busy, onToggle }: {
 export default function SolvedBoard({ myUserId, mapHref, onOpenMap }: SolvedBoardProps) {
   const clears = useClears();
   const { reload: reloadClears } = clears;
-  const [maps, setMaps] = useState<MapRow[]>([]);
-  const [folders, setFolders] = useState<FolderRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 다시 마운트되면 허브와 같은 목록 캐시로 바로 그리고('불러오는 중…' 없이) 뒤에서 새로 받는다.
+  const [maps, setMaps] = useState<MapRow[]>(() => getHubCache()?.maps ?? []);
+  const [folders, setFolders] = useState<FolderRow[]>(() => getHubCache()?.folders ?? []);
+  const [loading, setLoading] = useState(() => !getHubCache());
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const restoredRef = useRef(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [view, setView] = useState<BoardView>(lastView);
   // '내가 안 푼 맵만'을 켠 채 방금 체크한 맵 — 누르자마자 줄이 사라지지 않게 남겨 둔다 (필터를 다시 켜면 비움).
@@ -84,7 +95,8 @@ export default function SolvedBoard({ myUserId, mapHref, onOpenMap }: SolvedBoar
   // 맵 목록(허브와 같은 API)과 '풀었어요' 체크를 새로 읽는다 — 그새 다른 사람이 체크했을 수 있다.
   // 체크 읽기(reloadClears)는 실패해도 던지지 않고 상태(status · tableMissing)로 알려 준다.
   const load = useCallback(async () => {
-    setLoading(true);
+    const cached = !!getHubCache();
+    if (!cached) setLoading(true);
     setLoadFailed(false);
     try {
       const [, mapList, folderList] = await Promise.all([
@@ -95,9 +107,11 @@ export default function SolvedBoard({ myUserId, mapHref, onOpenMap }: SolvedBoar
       ]);
       setMaps(mapList);
       setFolders(folderList);
+      setHubCache(mapList, folderList);
     } catch (e) {
       console.error(e);
-      setLoadFailed(true);
+      // 캐시로 이미 그리고 있으면 그대로 둔다(잠깐의 오류로 표를 지우지 않는다).
+      if (!cached) setLoadFailed(true);
     }
     setLoading(false);
   }, [reloadClears]);
@@ -124,12 +138,29 @@ export default function SolvedBoard({ myUserId, mapHref, onOpenMap }: SolvedBoar
   const openMap = (e: MouseEvent<HTMLAnchorElement>, mapId: string) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;   // 새 탭 등은 브라우저에 맡긴다
     e.preventDefault();
+    rememberOpenedMap(mapId);
     onOpenMap(mapId);
   };
 
   const missing = clears.status === 'off' && clears.tableMissing;
   const busyLoading = loading || clears.status === 'loading';
   const ready = !missing && !busyLoading && !loadFailed && clears.status === 'ready';
+
+  // 표가 그려지면 한 번, 기억해 둔 표 스크롤과 페이지(.app-main) 스크롤을 되살리고 방금 연 맵 링크에 초점을 준다.
+  const hasTable = ready && visible.length > 0;
+  nav.useScrollRestore(hasTable);
+  useLayoutEffect(() => {
+    if (!hasTable || restoredRef.current) return;
+    restoredRef.current = true;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (lastScroll) { el.scrollTop = lastScroll.top; el.scrollLeft = lastScroll.left; }
+    const id = lastOpenedMapId;
+    if (!id) return;
+    const link = Array.from(el.querySelectorAll<HTMLAnchorElement>('a.board-map-link'))
+      .find((a) => a.getAttribute('href') === mapHref(id));
+    link?.focus({ preventScroll: true });
+  }, [hasTable, mapHref]);
 
   let body: ReactNode;
   if (missing) {
@@ -202,7 +233,11 @@ export default function SolvedBoard({ myUserId, mapHref, onOpenMap }: SolvedBoar
         {visible.length === 0 ? (
           <div className="hub-empty">{emptyText}</div>
         ) : (
-          <div className="board-scroll">
+          <div
+            className="board-scroll"
+            ref={scrollRef}
+            onScroll={(e) => rememberBoardScroll(e.currentTarget)}
+          >
             <table className="board-table" aria-label="맵별 멤버 풀이 현황">
               <thead>
                 <tr>

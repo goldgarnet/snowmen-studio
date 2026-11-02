@@ -20,10 +20,32 @@ function wrapSpoilerIn(ta: HTMLTextAreaElement | null, value: string, setValue: 
   requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + 2, start + 2 + inner.length); });
 }
 
+// 쓰던 새 피드백은 사람·맵별로 이 탭(sessionStorage)에 둔다 — 플레이·풀이 보기·허브에 다녀오거나
+// 새로고침해도 남는다. 등록에 성공하거나 입력칸을 비우면 지운다. 키에 사용자 id 를 넣어, 같은 탭에서
+// 다른 계정으로 다시 로그인하면 앞 사람의 초안이 채워지지 않게 한다.
+const commentDraftKey = (userId: string, mapId: string) => `snowmen-studio:comment-draft:${userId}:${mapId}`;
+
+function readCommentDraft(userId: string, mapId: string): string {
+  try { return sessionStorage.getItem(commentDraftKey(userId, mapId)) ?? ''; }
+  catch { return ''; }
+}
+
+function writeCommentDraft(userId: string, mapId: string, body: string): void {
+  try {
+    if (body) sessionStorage.setItem(commentDraftKey(userId, mapId), body);
+    else sessionStorage.removeItem(commentDraftKey(userId, mapId));
+  } catch {
+    // 초안 보관은 편의 기능 — 저장소가 막혀도 댓글 작성은 된다.
+  }
+}
+
 export default function CommentList({ mapId }: { mapId: string }) {
   const { profile } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
-  const [body, setBody] = useState('');
+  // 첫 응답 전에는 '아직 피드백이 없습니다' 대신 '불러오는 중…' (0개처럼 보이지 않게)
+  const [loaded, setLoaded] = useState(false);
+  const draftUser = profile?.id ?? 'anon';
+  const [body, setBody] = useState(() => readCommentDraft(draftUser, mapId));
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestedDiff, setSuggestedDiff] = useState<number | null>(null);
@@ -42,9 +64,12 @@ export default function CommentList({ mapId }: { mapId: string }) {
   const load = useCallback(async () => {
     try { setComments(await listComments(mapId)); }
     catch (e) { console.error(e); }
+    finally { setLoaded(true); }
   }, [mapId]);
 
   useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
+
+  useEffect(() => { writeCommentDraft(draftUser, mapId, body); }, [draftUser, mapId, body]);
 
   const canSubmit = body.trim().length > 0 || (suggesting && suggestedDiff != null);
 
@@ -98,7 +123,7 @@ export default function CommentList({ mapId }: { mapId: string }) {
 
   return (
     <div className="comments">
-      <h4 className="comments-title">피드백 ({comments.length})</h4>
+      <h4 className="comments-title">피드백{loaded ? ` (${comments.length})` : ''}</h4>
 
       <div className="comment-compose">
         <div className="comment-input-wrap">
@@ -133,7 +158,9 @@ export default function CommentList({ mapId }: { mapId: string }) {
         <button className="btn btn-primary" onClick={submit} disabled={busy || !canSubmit}>등록</button>
       </div>
 
-      {comments.length === 0 ? (
+      {!loaded ? (
+        <div className="comments-empty">불러오는 중…</div>
+      ) : comments.length === 0 ? (
         <div className="comments-empty">아직 피드백이 없습니다.</div>
       ) : (
         <ul className="comment-items">

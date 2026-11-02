@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { buildGameLevel, gameLevelText, gameLevelFileName } from '../../utils/gameLevel';
+import { useEscapeKey } from '../../lib/useEscapeKey';
 
 interface Props {
   /** 맵 코드(base62). 이 문자열 하나가 맵 전체다. */
@@ -25,6 +26,7 @@ export default function GameLevelExport({ code, title, onClose }: Props) {
   const [touched, setTouched] = useState(false);
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  useEscapeKey(onClose);
 
   const text = useMemo(
     () => gameLevelText(buildGameLevel(code, levelNo, title)),

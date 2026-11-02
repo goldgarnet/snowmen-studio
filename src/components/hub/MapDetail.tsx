@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { clearLayer, closeLayer, flashAfterNav, pushLayer, useFlashAfterNav, useLayer, useNavFrom } from '../../lib/nav';
+import { isHubFolderUrl, patchCachedMap, removeCachedMap } from '../../lib/hubState';
 import { useAuth } from '../../context/AuthContext';
 import type { MapRow, SolutionRow } from '../../api/types';
 import { STATUS_LABEL } from '../../api/types';
 import { setReview, updateMap, deleteMap, unpublishMap, registeredToISO, isoToDateStr } from '../../api/maps';
-import { insertSolution } from '../../api/solutions';
+import { insertSolution, listSolutions } from '../../api/solutions';
 import StarRating from './StarRating';
 import StatusControl from './StatusControl';
 import CommentList from './CommentList';
@@ -70,6 +72,13 @@ export default function MapDetail({
   const [solToken, setSolToken] = useState(0); // bump to reload the solution list
   // 게임(snowmen-adventure)에 넣을 레벨 JSON 을 보여주는 모달
   const [showExport, setShowExport] = useState(false);
+  // 풀이 보기는 같은 주소 위의 기록 하나(layer) — 브라우저 뒤로 = 닫기, 앞으로 = 다시 열기.
+  const layer = useLayer();
+  // 폴더에서 연 상세면 뒤로 버튼이 '← 폴더로' (backLabel prop 이 없을 때).
+  const navFrom = useNavFrom();
+  // 부모가 더 새 행을 넘기면(허브 캐시로 먼저 그린 뒤 getMap 응답 등) 그 값으로 바꾼다.
+  const [shownInitial, setShownInitial] = useState(initial);
+  if (initial !== shownInitial) { setShownInitial(initial); setMap(initial); }
 
   const isOwner = profile?.id === map.owner_id;
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1500); };
@@ -81,13 +90,33 @@ export default function MapDetail({
     if (recording) onStopRecording?.();
     else setSolutionMode(null);
   };
+  // 플레이를 끝내고 돌아간 화면(뒤로가기는 비동기)에서 '풀이가 등록되었습니다' 를 띄운다.
+  useFlashAfterNav(`map:${map.id}`, showFlash);
+
+  // 풀이 보기 기록 항목에 섰는데 그 풀이가 메모리에 없으면(새로고침, 다른 화면에 갔다가 뒤로 돌아옴)
+  // 같은 풀이를 다시 연다 — 그 항목은 늘 재생 화면이라 뒤로 한 번 = 상세. 풀이가 없어졌으면 표시를 지운다.
+  const layerSolutionId = layer?.startsWith('solution:') ? layer.slice('solution:'.length) : null;
+  const missingSolutionId = layerSolutionId && viewSolution?.id !== layerSolutionId ? layerSolutionId : null;
+  useEffect(() => {
+    if (!missingSolutionId) return;
+    let active = true;
+    listSolutions(map.id)
+      .then((rows) => {
+        if (!active) return;
+        const row = rows.find((s) => s.id === missingSolutionId);
+        if (row) { setViewSolution(row); setSolutionMode('view'); }
+        else clearLayer();
+      })
+      .catch((e) => { console.error(e); });
+    return () => { active = false; };
+  }, [map.id, missingSolutionId]);
 
   const changeStatus = async (status: MapRow['status']) => {
     setBusy(true);
     try {
       await setReview(map.id, { status });
       const updated = { ...map, status };
-      setMap(updated); onChanged(updated);
+      setMap(updated); onChanged(updated); patchCachedMap(updated);
     } catch (e) { alert('상태 변경 실패: ' + (e as Error).message); }
     finally { setBusy(false); }
   };
@@ -99,7 +128,7 @@ export default function MapDetail({
     try {
       await setReview(map.id, { difficulty: pendingDiff });
       const updated = { ...map, difficulty: pendingDiff };
-      setMap(updated); onChanged(updated);
+      setMap(updated); onChanged(updated); patchCachedMap(updated);
       setPendingDiff(null);
       showFlash('회의 난이도가 반영되었습니다');
     } catch (e) { alert('난이도 변경 실패: ' + (e as Error).message); }
@@ -111,13 +140,13 @@ export default function MapDetail({
       title: p.title, author_name: p.author_name, comment: p.comment,
       author_difficulty: p.difficulty, created_at: registeredToISO(p.registered_on),
     });
-    setMap(updated); onChanged(updated); setEditing(false);
+    setMap(updated); onChanged(updated); patchCachedMap(updated); setEditing(false);
     showFlash('수정되었습니다');
   };
 
   const doDelete = async () => {
     setBusy(true);
-    try { await deleteMap(map.id); onChanged(); onBack(); }
+    try { await deleteMap(map.id); removeCachedMap(map.id); onChanged(); onBack(); }
     catch (e) { alert('삭제 실패: ' + (e as Error).message); setBusy(false); }
   };
 
@@ -125,7 +154,7 @@ export default function MapDetail({
   // 맵 제작), so it drops out of the hub list — return there afterward.
   const doUnpublish = async () => {
     setBusy(true);
-    try { await unpublishMap(map.id); onChanged(); onBack(); }
+    try { await unpublishMap(map.id); removeCachedMap(map.id); onChanged(); onBack(); }
     catch (e) { alert('비공개 전환 실패: ' + (e as Error).message); setBusy(false); }
   };
 
@@ -152,16 +181,21 @@ export default function MapDetail({
       moves,
       turn_count: turnCount,
     });
-    stopRecording();
     setSolToken((t) => t + 1);
-    showFlash('풀이가 등록되었습니다');
+    // 주소로 연 플레이는 돌아간 화면에서, 같은 화면 안 플레이는 바로 안내한다.
+    if (recording) flashAfterNav(`map:${map.id}`, '풀이가 등록되었습니다');
+    else showFlash('풀이가 등록되었습니다');
+    stopRecording();
   };
 
   // Full-screen sub-views: play and register from the same surface, or replay a
   // chosen solution.
+  // key = 맵 코드: 캐시로 먼저 그린 상세에서 플레이를 시작했는데 새로 받은 맵의 배치가 다르면
+  // 새 배치로 다시 시작한다(옛 배치로 클리어한 풀이를 등록하지 않게).
   if (recording || solutionMode === 'capture') {
     return (
       <SolutionRecorder
+        key={map.code}
         title={`플레이 · ${map.title || '맵'}`}
         code={map.code}
         onSave={registerSolution}
@@ -169,13 +203,14 @@ export default function MapDetail({
       />
     );
   }
-  if (solutionMode === 'view' && viewSolution) {
+  if (solutionMode === 'view' && viewSolution && layer === `solution:${viewSolution.id}`) {
     return (
       <SolutionPlayer
+        key={map.code}
         code={map.code}
         solution={viewSolution.moves}
         title={`${viewSolution.author_name}의 풀이`}
-        onClose={() => { setSolutionMode(null); setViewSolution(null); }}
+        onClose={() => closeLayer(() => { setSolutionMode(null); setViewSolution(null); })}
       />
     );
   }
@@ -183,7 +218,7 @@ export default function MapDetail({
   return (
     <div className="map-detail">
       <div className="detail-topbar">
-        <button className="btn" onClick={onBack}>{backLabel ?? '← 허브로'}</button>
+        <button className="btn" onClick={onBack}>{backLabel ?? (isHubFolderUrl(navFrom) ? '← 폴더로' : '← 허브로')}</button>
         {flash && <span className="detail-flash">{flash}</span>}
         {isOwner && (
           <div className="detail-owner-actions">
@@ -228,7 +263,7 @@ export default function MapDetail({
               mapId={map.id}
               mapOwnerId={map.owner_id}
               reloadToken={solToken}
-              onView={(s) => { setViewSolution(s); setSolutionMode('view'); }}
+              onView={(s) => { setViewSolution(s); setSolutionMode('view'); pushLayer(`solution:${s.id}`); }}
               onRegister={startRecording}
               onDeleted={() => { void reloadClears(map.id); }}
             />
@@ -257,7 +292,13 @@ export default function MapDetail({
                     : <span className="detail-muted">미지정</span>}
                 </div>
               </div>
-              <div className="detail-info detail-info-clickable" onClick={copyCode}>
+              <div
+                className="detail-info detail-info-clickable"
+                onClick={copyCode}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void copyCode(); } }}
+              >
                 <div className="detail-mini-label">맵 코드 (복사)</div>
                 <div className="detail-info-code">{map.code.slice(0, 18)}{map.code.length > 18 ? '…' : ''}</div>
               </div>

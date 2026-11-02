@@ -66,11 +66,12 @@ export default function SolutionPlayer({ code, solution, title, onClose }: Solut
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case 'ArrowRight': case 'd': case 'D': setAuto(false); goNext(); break;
-        case 'ArrowLeft': case 'a': case 'A': goPrev(); break;
-        case ' ': e.preventDefault(); setAuto((a) => !a); break;
-      }
+      // Alt/Ctrl/⌘ 조합은 브라우저 단축키(Alt+← = 뒤로가기 등) — 스텝을 넘기지 않는다.
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      // D/A 는 물리 키(e.code)로 본다 — 한글 입력 상태에서도 동작하도록.
+      if (e.key === 'ArrowRight' || e.code === 'KeyD') { setAuto(false); goNext(); }
+      else if (e.key === 'ArrowLeft' || e.code === 'KeyA') goPrev();
+      else if (e.key === ' ') { e.preventDefault(); setAuto((a) => !a); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

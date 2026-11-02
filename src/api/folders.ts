@@ -8,25 +8,27 @@ export interface NewFolder {
 
 export type FolderPatch = Partial<Omit<FolderRow, 'id' | 'owner_id'>>;
 
-// My folders (drafts + published), newest activity first.
+// My folders (drafts + published), newest activity first (id breaks ties → stable pages).
 export async function listMyFolders(ownerId: string): Promise<FolderRow[]> {
   const { data, error } = await supabase
     .from('map_folders')
     .select('*')
     .eq('owner_id', ownerId)
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as FolderRow[];
 }
 
-// All hub (published) folders. Same sort convention as the map hub.
+// All hub (published) folders. Same sort convention as the map hub (id as the final tie-break).
 export async function listPublishedFolders(): Promise<FolderRow[]> {
   const { data, error } = await supabase
     .from('map_folders')
     .select('*')
     .eq('published', true)
     .order('created_at', { ascending: false })
-    .order('published_at', { ascending: false, nullsFirst: false });
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as FolderRow[];
 }

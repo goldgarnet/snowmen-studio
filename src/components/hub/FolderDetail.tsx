@@ -1,18 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import type { FolderRow, MapRow } from '../../api/types';
-import { listMapsInFolder, registeredToISO, isoToDateStr } from '../../api/maps';
+import { listMapsInFolder, registeredToISO, isoToDateStr, compareMapOrder } from '../../api/maps';
 import { updateFolder, deleteFolder, unpublishFolder } from '../../api/folders';
 import MapCard from './MapCard';
 import FolderForm, { FolderFormPayload } from './FolderForm';
 import SpoilerText from './SpoilerText';
 import ConfirmModal from '../common/ConfirmModal';
+import { useScrollRestore } from '../../lib/nav';
+import { focusGridItem, getHubCache, lastOpenedMapId } from '../../lib/hubState';
 
 interface FolderDetailProps {
   folder: FolderRow;
   onBack: () => void;
   onOpenMap: (map: MapRow) => void;
   onChanged: () => void;   // folder meta/publish/delete changed → refresh hub list
+}
+
+// 허브 목록 캐시에 든 이 폴더의 맵(폴더 안 순서). 캐시가 없으면 null.
+function cachedMembers(folderId: string): MapRow[] | null {
+  const cache = getHubCache();
+  return cache ? cache.maps.filter((m) => m.folder_id === folderId).sort(compareMapOrder) : null;
 }
 
 function fullDate(iso: string): string {
@@ -23,8 +31,9 @@ function fullDate(iso: string): string {
 export default function FolderDetail({ folder: initial, onBack, onOpenMap, onChanged }: FolderDetailProps) {
   const { profile } = useAuth();
   const [folder, setFolder] = useState<FolderRow>(initial);
-  const [maps, setMaps] = useState<MapRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 캐시가 있으면 '불러오는 중…' 없이 바로 그리고 listMapsInFolder 로 갱신한다.
+  const [maps, setMaps] = useState<MapRow[]>(() => cachedMembers(initial.id) ?? []);
+  const [loading, setLoading] = useState(() => cachedMembers(initial.id) === null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
@@ -34,14 +43,23 @@ export default function FolderDetail({ folder: initial, onBack, onOpenMap, onCha
   const isOwner = profile?.id === folder.owner_id;
   const showFlash = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 1500); };
 
+  const gridRef = useRef<HTMLDivElement>(null);
+
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!getHubCache()) setLoading(true);
     try { setMaps(await listMapsInFolder(folder.id)); }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [folder.id]);
 
   useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
+
+  // 돌아오면 이 폴더 화면의 스크롤을 되살리고, 방금 연 맵 카드에 초점을 준다.
+  useScrollRestore(!loading, (returned) => {
+    if (!returned) return;
+    const id = lastOpenedMapId();
+    focusGridItem(gridRef.current, maps.findIndex((m) => m.id === id));
+  });
 
   const saveEdit = async (p: FolderFormPayload) => {
     const updated = await updateFolder(folder.id, {
@@ -98,7 +116,7 @@ export default function FolderDetail({ folder: initial, onBack, onOpenMap, onCha
       ) : maps.length === 0 ? (
         <div className="hub-empty">이 폴더에는 아직 맵이 없습니다.</div>
       ) : (
-        <div className="hub-grid">
+        <div className="hub-grid" ref={gridRef}>
           {maps.map((m) => <MapCard key={m.id} map={m} onOpen={onOpenMap} />)}
         </div>
       )}

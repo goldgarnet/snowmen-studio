@@ -1,3 +1,5 @@
+import { useEscapeKey } from '../../lib/useEscapeKey';
+
 interface ConfirmModalProps {
   title: string;
   message: React.ReactNode;
@@ -15,6 +17,8 @@ export default function ConfirmModal({
   title, message, confirmLabel = '확인', cancelLabel = '취소',
   danger, busy, onConfirm, onCancel,
 }: ConfirmModalProps) {
+  // Esc = 취소 (처리 중이면 무시)
+  useEscapeKey(() => { if (!busy) onCancel(); });
   return (
     <div className="modal-backdrop" onClick={() => !busy && onCancel()}>
       <div className="modal unsaved-modal" onClick={(e) => e.stopPropagation()}>

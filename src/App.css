@@ -11,6 +11,9 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  /* 스크롤 위치는 nav.useScrollRestore 가 직접 되살린다. 브라우저의 스크롤 고정(scroll anchoring)을
+     켜 두면 돌아온 뒤 썸네일이 크기를 잡는 순간 복원값을 옮겨 버린다(허브 2쪽 맨 아래 236 → 176). */
+  overflow-anchor: none;
 }
 
 .app-loading {

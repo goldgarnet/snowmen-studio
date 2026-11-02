@@ -12,6 +12,9 @@ import SolvedBoard from './components/solved/SolvedBoard';
 import TestWorkbench from './components/test/TestWorkbench';
 import { getMap } from './api/maps';
 import type { MapRow } from './api/types';
+import * as nav from './lib/nav';
+import { backToHub, getCachedMap, splitUrl } from './lib/hubState';
+import { useEscapeKey } from './lib/useEscapeKey';
 import './App.css';
 
 // 맵 상세를 '푼 맵 현황'에서 열었으면 from = 'solved' (주소 ?from=solved) — 뒤로가기가 현황으로 돌아간다.
@@ -67,7 +70,10 @@ function readRoute(pathname: string, search = ''): AppRoute {
   const mapPlayMatch = pathname.match(/^\/maps\/([^/]+)\/play\/?$/);
   if (mapPlayMatch) {
     const id = decodeURIComponent(mapPlayMatch[1]);
-    return { kind: 'map', id, play: true, returnTo: readReturnTo(search, `/maps/${encodeURIComponent(id)}`) };
+    const returnTo = readReturnTo(search, `/maps/${encodeURIComponent(id)}`);
+    // 현황판에서 연 상세에서 들어온 플레이면 returnTo 에 ?from=solved 가 있다.
+    const fromSolved = new URLSearchParams(returnTo.split('?')[1] ?? '').get('from') === 'solved';
+    return fromSolved ? { kind: 'map', id, play: true, returnTo, from: 'solved' } : { kind: 'map', id, play: true, returnTo };
   }
   const mapMatch = pathname.match(/^\/maps\/([^/]+)\/?$/);
   if (mapMatch) {
@@ -105,14 +111,20 @@ function MapRoute({
   onStartRecording: () => void;
   onStopRecording: () => void;
 }) {
-  const [map, setMap] = useState<MapRow | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 허브에서 연 맵은 목록 캐시의 행으로 바로 그리고, 아래 getMap 응답으로 갱신한다.
+  const [map, setMap] = useState<MapRow | null>(() => getCachedMap(id));
+  const [loading, setLoading] = useState(() => !getCachedMap(id));
+  // 응답을 기다리는 동안 상세에서 바꾼 값(상태·난이도·수정)이 있으면 늦게 온 응답으로 되돌리지 않는다.
+  // 조회가 실패하면 캐시로 그린 상세는 그대로 둔다(캐시가 없으면 아래 '찾을 수 없음').
+  const mapRef = useRef(map);
+  useEffect(() => { mapRef.current = map; });
 
   useEffect(() => {
     let active = true;
+    const requested = mapRef.current;
     void getMap(id)
-      .then((loaded) => { if (active) setMap(loaded); })
-      .catch((error) => { console.error(error); if (active) setMap(null); })
+      .then((loaded) => { if (active && mapRef.current === requested) setMap(loaded); })
+      .catch((error) => { console.error(error); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [id]);
@@ -146,6 +158,12 @@ function MapRoute({
   );
 }
 
+// '푼 맵 현황'에서 연 상세의 뒤로가기 — 바로 앞 기록이 현황판이면 진짜 뒤로(보던 조건·스크롤 그대로),
+// 주소로 바로 들어왔으면 현황판으로 이동한다. 허브의 backToHub 와 같은 규칙.
+function backToSolved(): void {
+  nav.goBack(nav.tabUrl('solved', '/solved'), (from) => splitUrl(from).path.replace(/\/$/, '') === '/solved');
+}
+
 function NotFoundRoute({ onBack }: { onBack: () => void }) {
   return (
     <div className="app-loading">
@@ -153,11 +171,6 @@ function NotFoundRoute({ onBack }: { onBack: () => void }) {
       <button className="btn" onClick={onBack}>허브로</button>
     </div>
   );
-}
-
-function readLocationRoute(location: string): AppRoute {
-  const url = new URL(location, window.location.origin);
-  return readRoute(url.pathname, url.search);
 }
 
 export default function App() {
@@ -176,18 +189,30 @@ export default function App() {
   const navigate = useCallback((nextRoute: AppRoute, replace = false) => {
     const nextPath = routePath(nextRoute);
     if (`${window.location.pathname}${window.location.search}` !== nextPath) {
-      window.history[replace ? 'replaceState' : 'pushState']({}, '', nextPath);
+      // 뒤로 가는 중(두 번 누름)이라 주소를 못 바꿨으면 화면도 그대로 둔다.
+      if (!nav.go(nextPath, { replace })) return;
     }
     setRoute(nextRoute);
   }, []);
   const guardedSetTab = useCallback((t: Tab) => {
-    attempt(() => navigate(readRoute(tabPath[t])));
-  }, [attempt, navigate]);
+    attempt(() => nav.goTab(t, tabPath[t]));
+  }, [attempt]);
 
   useEffect(() => {
-    const onPopState = () => setRoute(readRoute(window.location.pathname, window.location.search));
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    // 뒤로/앞으로(popstate)와 화면이 직접 바꾼 주소(nav) 모두 화면을 따른다. 주소가 바뀌면
+    // 떠 있던 '저장하지 않은 변경사항' 창은 닫는다(언마운트된 스튜디오로 저장하지 않게).
+    let lastUrl = nav.currentUrl();
+    const onLocation = () => {
+      setRoute(readRoute(window.location.pathname, window.location.search));
+      const url = nav.currentUrl();
+      if (url !== lastUrl) { lastUrl = url; setPending(null); }
+    };
+    window.addEventListener('popstate', onLocation);
+    window.addEventListener(nav.LOCATION_EVENT, onLocation);
+    return () => {
+      window.removeEventListener('popstate', onLocation);
+      window.removeEventListener(nav.LOCATION_EVENT, onLocation);
+    };
   }, []);
 
   useEffect(() => {
@@ -207,6 +232,8 @@ export default function App() {
     document.title = title;
   }, [route]);
 
+  useEscapeKey(() => { if (!saving) setPending(null); }, Boolean(pending));
+
   if (loading) return <div className="app-loading">불러오는 중…</div>;
   if (!session) return <LoginScreen />;
   if (!profile) return <div className="app-loading">프로필 준비 중…</div>;
@@ -220,17 +247,17 @@ export default function App() {
     ? <MapStudio
         editMapId={route.mapId}
         playing={Boolean(route.play)}
-        onEditRouteChange={(mapId) => navigate(mapId ? { kind: 'studio', mapId } : { kind: 'studio' })}
+        onEditRouteChange={(mapId, options) => navigate(mapId ? { kind: 'studio', mapId } : { kind: 'studio' }, options?.replace)}
         onPlayRouteChange={(mapId) => {
-          const returnTo = routePath({ kind: 'studio', mapId: mapId ?? route.mapId });
-          navigate({ kind: 'studio', mapId: mapId ?? route.mapId, play: true, returnTo });
+          const returnTo = nav.currentUrl();
+          navigate({ kind: 'studio', mapId: mapId ?? 'new', play: true, returnTo });
         }}
-        onExitPlay={() => navigate(readLocationRoute(route.returnTo ?? routePath({ kind: 'studio', mapId: route.mapId })))}
+        onExitPlay={() => nav.exitTo(route.returnTo ?? routePath({ kind: 'studio', mapId: route.mapId }))}
       />
     : route.kind === 'chapters'
       ? <ChapterComposer
           onStartMapRecording={(mapId) => {
-            const returnTo = routePath({ kind: 'chapters' });
+            const returnTo = nav.currentUrl();
             navigate({ kind: 'map', id: mapId, play: true, returnTo });
           }}
         />
@@ -246,18 +273,19 @@ export default function App() {
         ? <MapRoute
             key={route.id}
             id={route.id}
-            onBack={() => navigate(route.from === 'solved' ? { kind: 'solved' } : { kind: 'hub' })}
+            onBack={route.from === 'solved' ? backToSolved : backToHub}
             backLabel={route.from === 'solved' ? '← 푼 맵 현황으로' : undefined}
             onEditInStudio={() => navigate({ kind: 'studio', mapId: route.id })}
             recording={Boolean(route.play)}
             onStartRecording={() => {
-              const returnTo = routePath({ kind: 'map', id: route.id, from: route.from });
+              // 지금 주소(?from=solved 포함)로 돌아온다 — 플레이 주소의 returnTo 에서 from 을 다시 읽는다.
+              const returnTo = nav.currentUrl();
               navigate({ kind: 'map', id: route.id, play: true, returnTo, from: route.from });
             }}
-            onStopRecording={() => navigate(readLocationRoute(route.returnTo ?? routePath({ kind: 'map', id: route.id })))}
+            onStopRecording={() => nav.exitTo(route.returnTo ?? routePath({ kind: 'map', id: route.id }))}
           />
         : route.kind === 'notFound'
-          ? <NotFoundRoute onBack={() => navigate({ kind: 'hub' })} />
+          ? <NotFoundRoute onBack={backToHub} />
           : <MapHub onOpenMap={(map) => navigate({ kind: 'map', id: map.id })} />;
 
   return (

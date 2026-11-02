@@ -34,6 +34,8 @@
 
 /* ---------- 표 ---------- */
 .board-scroll {
+  /* 표 스크롤은 SolvedBoard 가 직접 되살린다 — 스크롤 고정이 복원값을 옮기지 않게 끈다(.app-main 과 같음). */
+  overflow-anchor: none;
   flex: 0 1 auto;   /* 줄이 적으면 내용만큼, 많으면 남은 높이만큼 — 그 안에서 스크롤 */
   min-height: 0;
   overflow: auto;
