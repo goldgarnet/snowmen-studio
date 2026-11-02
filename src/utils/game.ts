@@ -1,16 +1,19 @@
 import type { Level, GameState } from '../types';
 import { cloneLevel } from './level';
-import { recalcShadows } from '../engine/shadow';
+import { recalcShadows, clearShadows } from '../engine/shadow';
 import { applyTurnZero } from '../engine/turn';
 import { decodeLevelCode } from './levelCode';
 
 // Build a fresh playable GameState from an editor Level (mirrors the v2 App's
-// startSimulation): clone, recompute shadows if the level uses them, then resolve
-// "turn 0" — lasers already fire at the start, so snow placed in a beam melts at once
-// (Q-07). Every play screen starts here, so recordings and playback agree.
+// startSimulation): clone, recompute shadows if the level uses them (with shadows off
+// there is no shade at all, so the tunnel shade the decoder stores is cleared — B-11,
+// B-007), then resolve "turn 0" — lasers already fire at the start, so snow placed in a
+// beam melts at once (Q-07). Every play screen starts here, so recordings and playback
+// agree.
 export function newGameState(level: Level): GameState {
   const simLevel = cloneLevel(level);
   if (simLevel.hasShadow) recalcShadows(simLevel);
+  else clearShadows(simLevel);
   const status = applyTurnZero(simLevel);
   return { level: simLevel, status, turnCount: 0, history: [] };
 }

@@ -1,0 +1,20 @@
+7 7 sun=left shadow=off soul=off
+.    .    .◤   .    .◥   .    .   
+.    .    .g   .    .    .    .   
+.◤   .    .    . P2 .go1 .    .◥  
+.    .    .    .    .G   .    .   
+.◣   .    .    .    .    . o1 .◢o1
+.    .    .    .    ~g   .    .   
+.    .    .◣   .    ~◢   .    .   
+arch top 2 2 1
+arch top 2 3 1
+arch top 2 4 1
+arch top 5 2 1
+arch top 5 3 1
+arch top 5 4 1
+arch left 2 2 1
+arch left 3 2 1
+arch left 4 2 1
+arch left 2 5 1
+arch left 3 5 1
+arch left 4 5 1

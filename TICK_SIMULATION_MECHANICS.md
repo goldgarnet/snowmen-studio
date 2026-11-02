@@ -120,13 +120,16 @@ while some ball is moving (or was handed motion) and tickCount < safetyLimit:
             plan shift of the whole train
         else if it is a triangle block and the train is one ball:
             plan deflect through the block to its reflected exit cell
-        else if every consecutive obstacle (cut at terrain that stops a member) is a
-                stationary snowball:
+        else if every consecutive obstacle (cut at terrain that stops a member; the run
+                turns with the mirror of a member resting in a triangle cell) is a
+                stationary snowball (not rolling, not handed motion this tick, not
+                taken by an earlier train this tick):
             compare train mass with obstacle mass
             if train > obstacle and obstacle can shift one cell:
                 plan shift of obstacle + train; obstacle balls join with the lead's dir
             else if train == obstacle:
-                impact: this train stops, obstacle balls start rolling next tick
+                impact: this train stops, obstacle balls start rolling next tick,
+                        each in the direction the run takes through its cell
             else:
                 stop
         else:
@@ -136,9 +139,13 @@ while some ball is moving (or was handed motion) and tickCount < safetyLimit:
     commit every planned shift together
     absorb snowflakes, then resolve hole/portal, for every ball that moved
     emit movement + resolved frames through tick hook; drop balls that vanished
+    (the hook also judges the goal: the turn is cleared if the player now stands on an
+     active goal — the roll still runs to rest)
 ```
 
 `safetyLimit`은 현재 `width × height × 4 + 16`이다. 포털과 반사판이 만드는 무한 순환으로부터 엔진을 보호한다.
+
+열차는 선두의 읽기 순서(fixed order)로 하나씩 정한다. 앞 열차가 이번 tick에 차지한 칸, 흡수하기로 한 공, 같은 질량으로 운동을 넘긴 공은 뒤 열차에게 빈 칸이나 멈춘 공이 아니다. 그래서 두 열차가 같은 공을 치면 앞 열차만 그 공을 흡수하거나 운동을 넘기고, 뒤 열차는 그 자리에서 멈춘다(B-004, 2026-11-02). 예전에는 두 열차가 같은 공을 둘 다 흡수해 공을 두 번 옮겼고, 그 공이 두 칸에 복제되며 한 열차의 선두 공이 덮어써져 사라졌다.
 
 ## 5. 가장자리 아치에서의 그룹 분리
 
@@ -182,12 +189,33 @@ tick 결과
 | 조건 | 결과 |
 | --- | --- |
 | 장애물 중 눈덩이가 아닌 것이 있음 | 현재 굴림 그룹 정지 |
+| 장애물 중 이번 tick에 이미 움직이는 공이 있음(굴러가는 공, 운동을 넘겨받은 공, 앞 열차가 흡수하는 공) | 현재 굴림 그룹 정지, `impact` 없음(B-004) |
 | 장애물 질량이 더 큼 | 현재 굴림 그룹 정지 |
 | 질량이 같음 | 현재 그룹 정지, 장애물 그룹이 운동을 이어받음 |
 | 현재 질량이 더 큼 + 장애물 전체가 한 칸 이동 가능 | 양 그룹이 한 칸 이동한 뒤 하나의 굴림 그룹으로 병합 |
 | 현재 질량이 더 큼 + 장애물 이동 불가 | 현재 굴림 그룹 정지 |
 
 장애물 그룹은 원래 정지해 있던 물체이므로, 더 무거운 굴림 그룹이 밀 때 하나의 단위로 한 칸 이동할 수 있어야 한다. 반대로 이미 운동 중인 그룹은 5절의 규칙에 따라 경계에서 suffix로 분리될 수 있다.
+
+### 삼각 칸에서 꺾이는 장애물 그룹 (B-001, 2026-11-02)
+
+삼각 벽 칸에 멈춰 있는 공은 열린 변으로 맞는다. 그 공이 나갈 길은 곧은 방향(막힌 변)이 아니라 거울 출구다. 그래서 장애물 그룹은 그 칸에서 반사표대로 방향을 바꿔 출구 쪽으로 이어서 수집한다. 출구에 붙은 공까지 한 묶음이고, 구성원마다 자기 칸을 지나는 방향을 가진다.
+
+```text
+→ 공(1) 이 ◥ 칸의 공을 친다. ◥ 는 오른쪽 → 아래로 꺾는다.
+
+ [1] → [◥1]          그룹 = [◥1, 1]  질량 2
+        [1]          → 질량 1 굴림은 멈추고 아무것도 움직이지 않는다
+
+ [2] → [◥1]          그룹 질량 2 = 2
+        [1]          → 묶음 전체가 다음 tick 아래로 함께 굴러간다
+```
+
+- 출구가 비어 있으면 그룹은 삼각 칸 공 하나이고, 같은 질량이면 그 공이 다음 tick 거울 방향으로 나간다(예전과 같다).
+- 꺾인 묶음은 진행 방향으로 한꺼번에 밀릴 수 없다(삼각 칸 공의 곧은 길이 막힌 변). 그래서 굴림 그룹이 더 무거워도 흡수하지 못하고 멈춘다(예전과 같다).
+- 그 결과 더 무거운 굴림은 삼각 칸 공 혼자는 못 움직이지만, 출구에 공이 붙어 묶음 질량이 같아지면 묶음을 함께 내보낸다. 공을 더 붙이면 오히려 움직이는 셈이라, 더 무거운 굴림의 규칙과 함께 팀 결정을 기다린다(`bugs/B-013`).
+- 출구 쪽에 눈덩이가 아닌 물체가 붙어 있으면 곧은 줄과 같이 굴림 그룹이 그냥 멈춘다(`impact` 없음).
+- 예전에는 곧은 방향으로만 세었다. 그래서 삼각 칸 공 하나(질량 1)가 운동을 받았고, 다음 tick에 꺾여 출구의 공과 다시 같은 질량 충돌을 하면서 붙어 있던 두 공이 요람처럼 운동을 넘겼다. 이 tick 연쇄를 옮긴 구현은 그룹 수집 단계에서 같은 꺾임을 따라야 한다.
 
 ## 7. 한 tick의 환경 반응
 
@@ -199,7 +227,12 @@ tick 결과
 3. 주황 버튼 래치
 4. 현재 버튼/벽 상태를 사용한 전역 레이저 발사
 5. resolved 프레임 복제
+6. 목표 판정 — 영혼을 가진 플레이어가 활성 목표 위면 이 turn은 클리어 (상태 변경 없음)
 ```
+
+6번은 2026-11-02 사용자 결정이다(B-002). 굴러 지나가며 잠시 눌린 초록 버튼도 인정된다. turn 끝에 녹을 눈덩이가 덮은 버튼이 인정되는 것과 같은 원리다. 판정이 2~4번 뒤라서 같은 tick에 레이저·구멍으로 플레이어가 죽으면 죽음이 먼저이고, 버튼을 덮은 공이 그 tick 빔에 녹으면 인정되지 않는다. 클리어가 정해져도 굴림은 자체 정지 조건까지 계속 tick을 진행하고 프레임을 남긴다. 그 turn의 결과는 `cleared`이고, turn 종료 효과(녹기 등)는 없다. 그 뒤 같은 굴림에서 일어난 일은 결과를 바꾸지 않는다.
+
+이 판정은 초록 버튼이 없는 맵에도 적용된다. 그런 맵은 목표가 늘 열려 있어서, 목표 위 공을 밀고 목표로 들어선 turn은 첫 tick에 클리어가 정해진다. 공이 이어서 노란 버튼을 눌러 연 레이저에 플레이어가 맞아도 `cleared`다(B-002 전에는 `gameover`). 같은 순간이 아닌 뒤 tick의 사망까지 클리어보다 먼저로 볼지는 팀 결정을 기다린다(`bugs/B-027`).
 
 노란 벽은 별도 변경 명령이 필요 없는 파생 상태다. 레이저가 실행될 때 `yellowWallsSolid()`가 현재 점유 상태를 읽으므로, 해당 tick에 버튼을 밟은 오브젝트가 바로 벽을 열 수 있다.
 
@@ -231,6 +264,7 @@ tick t의 이동 직후
 | 노란 버튼·노란 벽 | 다음 turn용 금 간 타일 무장 |
 | 주황 버튼 래치·주황 벽 | 최종 클리어 판정 |
 | 레이저·사망·영혼 이전 | UI/풀이 turn 수 처리 |
+| 목표 판정(잠시 눌린 초록 버튼, B-002) | |
 
 일반 이동 뒤 포털 처리, 영혼 발판, 최종 레이저/목표 판정은 기존 `executeTurn()`의 turn 종료 경로에서도 한 번 더 적용된다. 이 보조 처리는 굴림이 아닌 플레이어 이동의 기존 규칙을 보존한다. `justTeleported` 플래그가 굴림 중 포털 이동한 오브젝트의 중복 이동을 막는다.
 
@@ -249,6 +283,8 @@ S(t)에서 모든 이동 의도 계산
 이동 가능한지 여부는 tick 시작 상태에서 판정한다. 버튼을 막 밟아 열린 벽은 현재 tick의 다른 이동 의도에는 소급 적용하지 않고, 환경 반응과 다음 tick의 이동 판정부터 반영하는 것이 결정적이고 순서 의존성이 적다.
 
 레이저는 위치 commit 뒤 확정된 버튼·벽 상태를 스냅샷으로 사용한다. 피격 결과 때문에 버튼이 풀려 벽이 다시 닫혀도, 이미 수집한 해당 tick의 피격은 취소하지 않는다.
+
+한 tick에 열차가 여럿이면 의도를 정해진 순서(선두의 읽기 순서)로 계산하되, 같은 칸이나 같은 공을 두 열차에 배정하지 않는다. 앞 열차가 예약한 칸, 흡수하기로 한 공, 운동을 넘긴 공은 뒤 열차에게 막힌 것으로 본다(4절, B-004). commit 단계에서 한 공을 두 번 옮기면 공이 두 칸에 생기고 다른 공이 덮어써진다. 물체가 자기 좌표를 들고 있는 구현(Godot 등)에서는 같은 공이 한 tick에 두 칸을 대각선으로 가는 모습으로 나타난다.
 
 ## 10. 애니메이션 연결 방법
 
@@ -277,6 +313,8 @@ UI는 프레임을 수정하면 안 된다. 프레임은 엔진 출력이며, �
 재생 중에도 두 화면의 토글은 끌 수 있다. 끄는 순간 남은 프레임 타이머를 취소하고, 같은 입력으로 이미 계산해 둔 최종 `level`·승패 상태로 즉시 이동한다. 풀이 녹화 화면에서는 기록할 이동 문자열도 이미 한 번만 추가된 상태다. turn 수와 undo 기록은 추가하거나 되돌리지 않는다.
 
 재생은 셀마다 멈춰 보이지 않도록 FLIP(First, Last, Invert, Play) 방식으로 그린다. 엔진이 `motionId`라는 저장되지 않는 런타임 ID를 프레임 오브젝트에 유지하면, Grid는 다음 칸에 그려진 같은 오브젝트를 이전 칸만큼 역방향으로 잠시 옮긴 뒤 `movement` 프레임의 기본 150ms(선택한 속도에 따라 변함) 동안 선형 보간으로 제자리까지 이동시킨다. 브라우저가 초기 역방향 transform을 첫 paint 전에 합쳐 버리지 않도록 레이아웃을 한 번 확정한 뒤 transition을 시작한다. 따라서 논리적으로는 여전히 “한 tick = 최대 한 칸”이지만 화면에서는 연속적으로 굴러간다. 포털처럼 한 칸보다 큰 이동과 삼각 블록을 통한 특수 이동은 통과하지 않은 타일을 가로질러 보이지 않도록 즉시 전환한다.
+
+`motionId`는 한 turn의 프레임 안에서 물체마다 하나다. 계속 존재하는 물체만 같은 id를 유지한다. 맵에서 읽은 물체는 첫 turn에 `${type}:${row}:${col}`(처음 칸)을 받고, turn 도중 새로 생긴 물체(쪼개진 반쪽, 새 눈사람, 영혼이 옮겨 간 새 몸)는 처음 기록되는 프레임에서 같은 꼴의 id를 받는다. 그 id가 지금 판의 다른 물체나 그 turn에 이미 쓰인 id와 겹치면 결정적인 꼬리 `~2`, `~3`, …을 붙인다(B-009, 2026-11-02). 예전에는 이웃 공을 밀어낸 쪼개진 반쪽이 밀려난 공의 id를 받아 그 공의 이동이 애니메이션되지 않았다. 또 옛 몸의 id가 만들어진 칸(보통 시작 칸)에 선 눈사람으로 영혼이 옮겨 가면 새 몸이 옛 몸의 id를 받아, `soulChangedBody()`가 몸 바뀜을 놓치고 누르고 있던 방향키가 새 몸을 계속 걷게 했다.
 
 ## 11. Godot 이식 제안
 
@@ -326,5 +364,9 @@ React 구현의 `TurnFrame`은 단순 레벨 스냅샷 중심이다. Godot에서
 5. 터널, 삼각 벽, 삼각 블록, 색상 벽, void, 맵 경계에서 tick 진행이 결정적인가.
 6. 굴림 중 구멍, 포털, 레이저와 영혼 이전이 프레임에 정확히 기록되는가.
 7. 애니메이션을 끈 상태도 마지막 프레임과 최종 `level`이 같은가.
+8. 삼각 칸에 멈춘 공과 그 거울 출구에 붙은 공을 한 묶음으로 세는가(같은 질량이면 묶음 전체가 출구로, 더 무거우면 굴러온 공이 멈춤 — B-001).
+9. 굴림이 마지막 초록 버튼을 지나는 tick에 플레이어가 활성 목표 위면 그 turn이 `cleared`인가. 같은 tick 레이저 사망은 클리어보다 먼저인가(B-002).
+10. 두 열차가 같은 tick에 같은 멈춘 공을 치면 한 열차만 그 공을 흡수하는가. 공이 두 칸에 생기거나 선두 공이 사라지지 않고 눈 질량이 보존되는가(B-004).
+11. 모든 프레임에서 `motionId`가 물체마다 다른가. 쪼개진 반쪽·영혼이 옮겨 간 새 몸이 새 id를 받는가(B-009).
 
 이 문서의 규칙을 변경할 때는 `src/engine/roll.ts`, `src/engine/turn.ts`, 자동 테스트, 그리고 사용자용 알고리즘 문서를 함께 갱신해야 한다.

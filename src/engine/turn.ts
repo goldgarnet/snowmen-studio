@@ -1,6 +1,6 @@
 import { Level, Direction, GameStatus, Position } from '../types';
 import { cloneLevel, findPlayer } from '../utils/level';
-import { recalcShadows } from './shadow';
+import { recalcShadows, clearShadows } from './shadow';
 import { executePush } from './push';
 import { yellowWallsSolid, orangeWallsSolid } from './helpers';
 
@@ -270,7 +270,8 @@ function resolveSoulFootplate(level: Level, pos: Position, ts: number): Position
 
 export function executeSkipTurn(level: Level): TurnResult {
   const newLevel = cloneLevel(level);
-  ensureMotionIds(newLevel);
+  const motionIds = new Set<string>();
+  ensureMotionIds(newLevel, motionIds);
   const frames: TurnFrame[] = [];
   const playerPos = findPlayer(newLevel);
   if (!playerPos) return { level: newLevel, status: 'gameover', frames };
@@ -283,12 +284,12 @@ export function executeSkipTurn(level: Level): TurnResult {
 
   const finalPlayerPos = findPlayer(newLevel);
   if (!finalPlayerPos) {
-    recordFrame(frames, newLevel, 'turn-end');
+    recordFrame(frames, newLevel, 'turn-end', motionIds);
     return { level: newLevel, status: 'gameover', frames };
   }
 
   const finalTile = newLevel.tiles[finalPlayerPos.row][finalPlayerPos.col];
-  recordFrame(frames, newLevel, 'turn-end');
+  recordFrame(frames, newLevel, 'turn-end', motionIds);
   if (finalTile.isGoal && isGoalActive(newLevel)) return { level: newLevel, status: 'cleared', frames };
 
   return { level: newLevel, status: 'playing', frames };
@@ -296,7 +297,8 @@ export function executeSkipTurn(level: Level): TurnResult {
 
 export function executeTurn(level: Level, dir: Direction): TurnResult {
   const newLevel = cloneLevel(level);
-  ensureMotionIds(newLevel);
+  const motionIds = new Set<string>();
+  ensureMotionIds(newLevel, motionIds);
   const frames: TurnFrame[] = [];
   const playerPos = findPlayer(newLevel);
 
@@ -312,9 +314,10 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
   const turnCount = nextAge();
   let hadRollingTick = false;
   let infiniteLoop = false;
+  let clearedWhileRolling = false;
   const { playerMoved } = executePush(newLevel, playerPos, dir, turnCount, (tickLevel, phase = 'movement') => {
     if (phase === 'impact') {
-      recordFrame(frames, tickLevel, 'impact');
+      recordFrame(frames, tickLevel, 'impact', motionIds);
       return true;
     }
     if (phase === 'loop') {
@@ -324,34 +327,47 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     hadRollingTick = true;
     // A rolling tick is a real, observable game state. Preserve the pre-reaction
     // state for animation, then resolve board-wide hazards before another cell moves.
-    recordFrame(frames, tickLevel, 'movement');
+    recordFrame(frames, tickLevel, 'movement', motionIds);
     applyHoles(tickLevel);
     latchOrangeButtons(tickLevel);
     applyLaserCheck(tickLevel);
-    recordFrame(frames, tickLevel, 'resolved');
+    recordFrame(frames, tickLevel, 'resolved', motionIds);
+    // A green button pressed only while a ball rolls across it counts (B-002, user
+    // decision 2026-11-02 — as a cover that will melt at the end of the turn counts). The
+    // goal is judged on this tick's resolved state, after its holes and lasers, as the
+    // end-of-move check is: a death in the same tick comes first, and a soul that moves
+    // onto a snowman standing on an active goal clears (Q-14).
+    if (isLevelCleared(tickLevel)) clearedWhileRolling = true;
     // A laser death ends player control, not inertia. The rolling group keeps its
     // already-committed motion until a terrain/collision rule stops it. `roll.ts`
     // separately verifies that the moving group still exists (for example it may
     // have fallen into a hole), so this hook need not stop for player game over.
+    // A clear does not stop the roll either: the frames run to rest, the turn is won.
     return true;
   });
 
   if (!playerMoved) {
     return { level: newLevel, status: 'playing', frames };
   }
-  const result = finishMovedTurn(newLevel, frames, turnCount, hadRollingTick, portals, portalStartOccupied);
+  // Cleared during the roll: the turn ends there, like the end-of-move clear (no
+  // end-of-turn melt). Whatever the rest of the roll did is presentation only.
+  if (clearedWhileRolling) {
+    recordFrame(frames, newLevel, 'turn-end', motionIds);
+    return { level: newLevel, status: 'cleared', frames, ...(infiniteLoop ? { infiniteLoop: true } : {}) };
+  }
+  const result = finishMovedTurn(newLevel, frames, motionIds, turnCount, hadRollingTick, portals, portalStartOccupied);
   if (infiniteLoop) result.infiniteLoop = true;
   return result;
 }
 
 function finishMovedTurn(
-  newLevel: Level, frames: TurnFrame[], turnCount: number, hadRollingTick: boolean,
-  portals: Position[], portalStartOccupied: boolean[],
+  newLevel: Level, frames: TurnFrame[], motionIds: Set<string>, turnCount: number,
+  hadRollingTick: boolean, portals: Position[], portalStartOccupied: boolean[],
 ): TurnResult {
   // A non-rolling push is still an observable one-cell movement. Keeping the same
   // movement/resolved pair as rolling ticks lets the presentation layer animate all
   // object movement with one API, rather than treating player/forced moves specially.
-  if (!hadRollingTick) recordFrame(frames, newLevel, 'movement');
+  if (!hadRollingTick) recordFrame(frames, newLevel, 'movement', motionIds);
 
   const newPlayerPos = findPlayer(newLevel);
 
@@ -369,18 +385,18 @@ function finishMovedTurn(
   // Lasers fire before the goal is evaluated: stepping onto a goal that sits on a
   // laser beam kills the player (death takes priority over clearing).
   applyLaserCheck(newLevel);
-  if (!hadRollingTick) recordFrame(frames, newLevel, 'resolved');
+  if (!hadRollingTick) recordFrame(frames, newLevel, 'resolved', motionIds);
 
   const afterLaserPos = findPlayer(newLevel);
   if (!afterLaserPos) {
-    recordFrame(frames, newLevel, 'turn-end');
+    recordFrame(frames, newLevel, 'turn-end', motionIds);
     return { level: newLevel, status: 'gameover', frames };
   }
 
   // Survived the laser and standing on an active goal → cleared.
   const goalTile = newLevel.tiles[afterLaserPos.row][afterLaserPos.col];
   if (goalTile.isGoal && isGoalActive(newLevel)) {
-    recordFrame(frames, newLevel, 'turn-end');
+    recordFrame(frames, newLevel, 'turn-end', motionIds);
     return { level: newLevel, status: 'cleared', frames };
   }
 
@@ -388,19 +404,19 @@ function finishMovedTurn(
 
   const finalPlayerPos = findPlayer(newLevel);
   if (!finalPlayerPos) {
-    recordFrame(frames, newLevel, 'turn-end');
+    recordFrame(frames, newLevel, 'turn-end', motionIds);
     return { level: newLevel, status: 'gameover', frames };
   }
 
   const finalTile = newLevel.tiles[finalPlayerPos.row][finalPlayerPos.col];
-  recordFrame(frames, newLevel, 'turn-end');
+  recordFrame(frames, newLevel, 'turn-end', motionIds);
   if (finalTile.isGoal && isGoalActive(newLevel)) return { level: newLevel, status: 'cleared', frames };
 
   return { level: newLevel, status: 'playing', frames };
 }
 
-function recordFrame(frames: TurnFrame[], level: Level, phase: TurnFramePhase): void {
-  ensureMotionIds(level);
+function recordFrame(frames: TurnFrame[], level: Level, phase: TurnFramePhase, motionIds: Set<string>): void {
+  ensureMotionIds(level, motionIds);
   frames.push({ level: cloneLevel(level), phase });
 }
 
@@ -408,11 +424,30 @@ function recordFrame(frames: TurnFrame[], level: Level, phase: TurnFramePhase): 
 // identity that survives those clones to interpolate the same object between frames.
 // The initial position makes an ID deterministic for objects decoded from a map; newly
 // created objects receive an ID at the first frame in which they exist.
-function ensureMotionIds(level: Level): void {
+//
+// Only an object that keeps existing keeps an ID (B-009). `turnIds` holds every ID of
+// this turn: the turn-start board's and each one given out since. A new object whose
+// positional ID is taken — by an object on the board, or by one that was there earlier in
+// the turn — gets a deterministic tail (`~2`, `~3`, …). Without it a split half took the
+// ID of the ball it shoved out of its cell, and the body the soul moved into took the old
+// body's ID when it stood where that ID was made (soulChangedBody missed the change).
+function ensureMotionIds(level: Level, turnIds: Set<string>): void {
+  const onBoard = new Set<string>();
+  for (const row of level.objects) {
+    for (const object of row) if (object?.motionId) onBoard.add(object.motionId);
+  }
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const object = level.objects[r][c];
-      if (object && !object.motionId) object.motionId = `${object.type}:${r}:${c}`;
+      if (!object) continue;
+      if (!object.motionId) {
+        const base = `${object.type}:${r}:${c}`;
+        let id = base;
+        for (let n = 2; turnIds.has(id) || onBoard.has(id); n++) id = `${base}~${n}`;
+        object.motionId = id;
+        onBoard.add(id);
+      }
+      turnIds.add(object.motionId);
     }
   }
 }
@@ -430,8 +465,9 @@ function endOfTurn(level: Level): void {
 
   // 1. Recalculate shadows (if shadow mechanic is enabled). With shadows off there is no
   //    shade at all — not even inside a closed partition, which is drawn as a border and
-  //    lets the sun in (B-11 decision, 9/29).
+  //    lets the sun in (B-11 decision, 9/29), nor in a tunnel cell (B-007).
   if (level.hasShadow) recalcShadows(level);
+  else clearShadows(level);
 
   // 2. Melting / growing
   const sizesBefore = snapshotSizes(level);
@@ -605,10 +641,14 @@ function soulSwapNearest(level: Level, fromPos: Position, ts: number): boolean {
 /**
  * M-key soul cycle: move the soul to the next snowman in reading order (top-left →
  * bottom-right, wrapping). The old body becomes a snowman. Returns a new level, or
- * null if the swap can't happen (no player, or no snowmen to move into).
+ * null if the swap can't happen (the map has the soul cycle off, no player, or no
+ * snowmen to move into).
  * This is a free action — it does not advance the turn.
  */
 export function cycleSoul(level: Level): Level | null {
+  // The map's own setting, checked here and not only by the play screens: a replayed
+  // solution string with an M on a soul-off map does nothing, as in the game (B-008).
+  if (!level.soulSwapEnabled) return null;
   const playerPos = findPlayer(level);
   if (!playerPos) return null;
 

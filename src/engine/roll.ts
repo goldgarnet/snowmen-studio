@@ -195,11 +195,16 @@ function rollBalls(level: Level, initial: Ball[], onTick?: RollTickHook): void {
         continue;
       }
 
+      // The group bends with the mirror of a member resting in a triangle cell (B-001).
       const obstacleGroup = getConsecutiveObjects(level, target, lead.dir);
-      // Balls that are rolling, or that already received a handoff this tick, are not
-      // stationary obstacles for a second train.
+      // Balls that are rolling, that already received a handoff this tick, or that an
+      // earlier train already absorbs this tick are not stationary obstacles for a second
+      // train: a ball is taken by one train per tick. Absorbing it twice moved it twice —
+      // a copy in two cells, with one train's lead overwritten (B-004). The earlier train
+      // in the fixed order wins (B-018).
       const stationarySnow = obstacleGroup.every(m => m.obj.type === 'snowball'
-        && !byCell.has(keyOf(m.pos)) && !pending.some(p => p.obj === m.obj));
+        && !byCell.has(keyOf(m.pos)) && !pending.some(p => p.obj === m.obj)
+        && !merges.some(g => g.obstacle.some(o => o.obj === m.obj)));
       if (!stationarySnow) continue; // non-snow (or already moving) obstacle: the train stops
 
       const rollingMass = massOf(segment.balls);
@@ -207,6 +212,8 @@ function rollBalls(level: Level, initial: Ball[], onTick?: RollTickHook): void {
 
       if (obstacleMass < rollingMass) {
         // A stationary obstacle has no momentum of its own, so it must move as a whole.
+        // (A group that bends at a mirror never can: its triangle member's straight way
+        // out is a solid leg, so the train simply stops, as before.)
         if (!obstacleGroup.every(m => canMoveTo(level, m.pos, lead.dir, m.obj))) continue;
         const front = obstacleGroup[obstacleGroup.length - 1];
         const beyond = getNextPos(front.pos, lead.dir);
@@ -218,9 +225,11 @@ function rollBalls(level: Level, initial: Ball[], onTick?: RollTickHook): void {
 
       if (obstacleMass === rollingMass) {
         // Equal mass transfers motion: this train stops at the contact state and the
-        // stationary group starts rolling on its next real movement tick.
+        // stationary group starts rolling on its next real movement tick. Each member
+        // leaves the way the group runs through its cell — a triangle member out of its
+        // mirror exit, together with the balls touching that exit.
         impact = true;
-        for (const m of obstacleGroup) pending.push({ pos: { ...m.pos }, obj: m.obj, dir: lead.dir });
+        for (const m of obstacleGroup) pending.push({ pos: { ...m.pos }, obj: m.obj, dir: m.dir });
       }
       // Heavier obstacle (or equal-mass handoff): the train stops here.
     }
@@ -334,16 +343,29 @@ function isBallPresent(level: Level, ball: Ball): boolean {
  * The stationary objects directly ahead, up to the first empty cell. The run also ends
  * where terrain stops a member from moving on (a triangle leg, a tunnel side, an arch it
  * cannot pass): an object beyond such a wall is not pressed by this collision (B-06).
+ *
+ * A member resting in a triangle cell is hit through an open edge, and a ball there
+ * would leave by the mirror exit, never straight on (that way is a solid leg). So the run
+ * turns with the mirror and goes on from the exit: touching balls make one group even
+ * around a corner (B-001, 2026-11-02). Counted straight, a ball in a triangle looked
+ * like a lone mass 1, took the motion of an equal-mass hit and handed it to its exit
+ * neighbour a tick later — a cradle the touching group should have stopped. Each member
+ * carries the direction it would move in.
  */
 function getConsecutiveObjects(level: Level, startPos: Position, dir: Direction): Ball[] {
   const result: Ball[] = [];
+  const seen = new Set<string>(); // a run that bends can come back around (a ring of mirrors)
   let pos = startPos;
-  while (isInBounds(level, pos)) {
+  let heading = dir;
+  while (isInBounds(level, pos) && !seen.has(keyOf(pos))) {
     const obj = level.objects[pos.row][pos.col];
     if (!obj) break;
-    result.push({ pos: { ...pos }, obj, dir });
-    if (!canMoveTo(level, pos, dir, obj)) break;
-    pos = getNextPos(pos, dir);
+    seen.add(keyOf(pos));
+    const triangle = level.tiles[pos.row][pos.col].triangle;
+    heading = (triangle ? TRI_DEFLECT[triangle][heading] : undefined) ?? heading;
+    result.push({ pos: { ...pos }, obj, dir: heading });
+    if (!canMoveTo(level, pos, heading, obj)) break;
+    pos = getNextPos(pos, heading);
   }
   return result;
 }

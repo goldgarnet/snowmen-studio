@@ -235,6 +235,12 @@ function resolvePush(
       if (a.isSnowball && a.size === 2 && (b.isWall || b.isBlock)) {
         return doForceA(level, posA, dir, turnCount);
       }
+      // A=s2 snowball, B=s1 snowball held only by terrain (a triangle leg, a tunnel side)
+      // while C is empty: terrain backs B like a wall (B-01, §5.7), so B is forced exactly
+      // as when C is a wall (below) or the player is size 3 (B-006).
+      if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 1 && backedAtB) {
+        return doMoveThenForceB(level, posB, dir, turnCount);
+      }
       if (a.isSnowball && a.size === 2 && (b.isSnowball || b.type === 'snowman')) {
         return { level, playerMoved: false };
       }
@@ -596,7 +602,19 @@ function doBuildSnowman(
   const completedSnowman: GameObject = {
     type: 'snowman', size: snowmanSize, isMelting: false, createdAt: turnCount,
   };
-  if (!canMoveTo(level, posA, dir, completedSnowman)) {
+  // "Completed" includes the snowflake under B, which the new snowman eats at once
+  // (Q-10, pickFlake below): an S1 built on a flake is an S2, too big for a height-1
+  // arch or a tunnel cell; an S2 on a flake is an S3 for a height-2 arch (B-005).
+  const grownSize = level.tiles[posB.row][posB.col].isFlake && snowmanSize < 3 ? snowmanSize + 1 : snowmanSize;
+  if (!canMoveTo(level, posA, dir, { ...completedSnowman, size: grownSize })) {
+    return { level, playerMoved: false };
+  }
+  // The player shapes the snowman from A, one cell behind it, reaching across the same
+  // A→B boundary, so the player must fit through it as well (B-003, user decision
+  // 2026-11-02 — an extension of Q-03): a size-2 player cannot reach through a height-1
+  // arch or into a tunnel cell, and the build is a no-op like the one above.
+  const player = level.objects[playerPos.row][playerPos.col];
+  if (player && !canMoveTo(level, posA, dir, player)) {
     return { level, playerMoved: false };
   }
 

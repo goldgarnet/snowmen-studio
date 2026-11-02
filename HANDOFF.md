@@ -3,6 +3,10 @@
 > 이 문서는 Claude Code 대화를 다른 PC에서 이어가기 위한 **자기완결 컨텍스트**입니다.
 > 새 PC의 Claude Code에는 이전 PC의 `~/.claude` 메모리가 없으므로, 여기 담긴 내용이 곧 컨텍스트입니다.
 > 파일 자체는 이미 새 PC에도 동일하게 복사돼 있다고 가정합니다.
+>
+> ⚠️ **2026-07 기준 인수인계(HEAD `9687122`)입니다 — 엔진 규칙 서술은 낡았습니다.** 엔진 규칙은
+> [`ENGINE_ALGORITHMS.md`](./ENGINE_ALGORITHMS.md)·[`TICK_SIMULATION_MECHANICS.md`](./TICK_SIMULATION_MECHANICS.md)가
+> 최신입니다. 아래 §5에서 `[낡음]` 표시한 줄은 그 뒤 규칙 감사(2026-09)와 수정으로 바뀌었습니다(2026-11-02 표시, bugs/B-010).
 
 ---
 
@@ -112,6 +116,8 @@ snowmen-studio/
 
 ## 5. 엔진 메커니즘 레퍼런스 (매우 중요 — 버그 수정 시 필독)
 
+> ⚠️ 2026-07 기준. 규칙은 `ENGINE_ALGORITHMS.md` 가 최신이다. `[낡음]` 줄은 지금 엔진과 다르다.
+
 엔진은 결정적(deterministic)이어야 함(풀이 재생 재현성). `turn.ts`가 `Date.now()` 대신 **단조 증가 카운터 `nextAge()`** 사용(팀원 커밋). 이걸 깨지 말 것.
 
 ### 타일 vs 오브젝트
@@ -131,11 +137,15 @@ snowmen-studio/
 ### 레이저
 - `applyLaserCheck`(turn.ts)가 매 턴 빔을 쏴 비-blocker 오브젝트를 죽임(size=0 → processDeadObjects 제거). blocker = wall/block/tree/laser. 삼각/solid 노랑벽에서 빔 정지.
 - **executeTurn은 레이저를 골 클리어보다 먼저** 판정 → 레이저 빔 위 골에 진입하면 클리어 아니라 사망(gameover) 우선.
+  **[낡음]** 지금은 사망 → 영혼 이동이고, 옮겨 간 몸이 활성 목표 위면 클리어다(Q-14). 남은 눈사람이 없을 때만 gameover.
 - **굴러가는 눈덩이 + 레이저**: `roll.ts`의 `killIfOnBeam`이 각 굴림 스텝 후 검사. `rollSnowball`/`rollGroup` **시작 시점에도** 검사(push 헬퍼가 시작 칸으로 한 칸 먼저 옮기므로, 그 칸이 빔이면 즉시 소멸).
+  **[낡음]** 지금은 매 tick 턴 훅이 보드 전체 레이저를 쏜다(굴러가는 공만이 아니다, ENGINE_ALGORITHMS 9.6). `killBallsOnBeam`은 훅 없이 부를 때만 쓰는 대체 경로다.
 
 ### 밀기(push.ts) — 공식 로직표
 - **정본 문서**: `../snowmen adventure_push table.xlsx` (상위 폴더). 이번 세션에 **엔진에 맞게 갱신함**(플레이어1/2의 "size1/size2 눈덩이 vs 벽/블록, C 있음 → A FORCED" 행이 예전엔 nothing이었음).
+  **[낡음]** 지금 정본은 `src/engine/push.ts` 코드다(adventure `CLAUDE.md` §6). 규칙 설명은 ENGINE_ALGORITHMS 5절.
 - 핵심: 눈덩이가 **못 움직이게 backing되면 FORCED** — size1→눈꽃, size2→쪼개짐(→ size1 눈사람). **블록도 벽처럼 backing** 함.
+  **[낡음]** size1 눈사람은 쪼개진 두 반쪽이 양쪽 다 막힌 **직접** 힘에서만 생긴다. 간접 힘은 눈사람을 만들지 않고, 쪼개진 반쪽이 이웃을 밀어낼 때도 눈사람은 없다(Q-02, ENGINE_ALGORITHMS 7.2·8절).
 - "밀기 파워 사다리": 플레이어1은 블록도 못 밈(눈덩이 부서짐), 플레이어2는 단일블록(뒤 빈칸)은 밀지만 막힌 블록엔 눈덩이 부서짐, 플레이어3은 size1 3연쇄까지 밀어냄.
 - 눈덩이 vs 노랑벽(solid): `getObjAt`가 노랑벽을 벽으로 취급 → 눈덩이 눌러 눈꽃.
 

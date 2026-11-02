@@ -2,6 +2,18 @@ import { Level } from '../types';
 import { getObjectHeight, getDirectionDelta, getOppositeDirection, isInBounds } from '../utils/level';
 import { yellowWallsSolid, orangeWallsSolid } from './helpers';
 
+/**
+ * With shadows off there is no shade at all (B-11 decision, 9/29) — tunnel cells
+ * included. The decoder and the editor's tunnel brush store tunnels as shaded, which only
+ * holds on maps with shadows on; left alone, those cells kept their shade on maps with
+ * shadows off (B-007).
+ */
+export function clearShadows(level: Level): void {
+  for (const row of level.tiles) {
+    for (const tile of row) tile.isShade = false;
+  }
+}
+
 export function recalcShadows(level: Level): void {
   // A solid (active) orange wall is a partition that fully encloses its cell, so
   // whatever is trapped inside is permanently in shade. A raised YELLOW wall does not
