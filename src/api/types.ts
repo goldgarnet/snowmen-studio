@@ -61,9 +61,26 @@ export interface SolutionRow {
   created_at: string;
 }
 
+// '풀었어요' 체크 한 줄 = 한 사람이 한 맵을 풀었다고 표시함 (기본키 map_id + user_id).
+export interface ClearRow {
+  map_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 export const STATUS_LABEL: Record<MapStatus, string> = {
   pending: '검토중',
   accepted: '채택',
   held: '보류',
   rejected: '반려',
 };
+
+// 상태 필터 칩 (전체 + 회의 결정 4가지) — 맵 허브와 '푼 맵 현황'이 같이 쓴다.
+export type StatusFilter = 'all' | MapStatus;
+export const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'pending', label: '검토중' },
+  { key: 'accepted', label: '채택' },
+  { key: 'held', label: '보류' },
+  { key: 'rejected', label: '반려' },
+];

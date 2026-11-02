@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useClears } from '../../context/ClearsContext';
+import { isSolvedByMe } from '../../lib/solvedChecks';
 import { listPublishedMaps, insertMap, fetchAllForBackup, registeredToISO } from '../../api/maps';
 import { listPublishedFolders } from '../../api/folders';
-import type { MapRow, MapStatus, FolderRow } from '../../api/types';
-import { STATUS_LABEL } from '../../api/types';
+import type { MapRow, FolderRow, StatusFilter } from '../../api/types';
+import { STATUS_LABEL, STATUS_FILTERS } from '../../api/types';
 import MapCard from './MapCard';
 import MapDetail from './MapDetail';
 import FolderCard from './FolderCard';
@@ -13,15 +15,6 @@ import Pagination from '../common/Pagination';
 import './hub.css';
 
 const PAGE_SIZE = 8; // 4 columns × 2 rows
-
-type Filter = 'all' | MapStatus;
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all', label: '전체' },
-  { key: 'pending', label: '검토중' },
-  { key: 'accepted', label: '채택' },
-  { key: 'held', label: '보류' },
-  { key: 'rejected', label: '반려' },
-];
 
 interface MapHubProps {
   onOpenMap?: (map: MapRow) => void;
@@ -53,11 +46,18 @@ function buildBackupText(maps: MapRow[]): string {
 
 export default function MapHub({ onOpenMap }: MapHubProps) {
   const { profile } = useAuth();
+  const clears = useClears();
+  const { reload: reloadClears } = clears;
+  const myUserId = profile?.id ?? null;
   const [maps, setMaps] = useState<MapRow[]>([]); // all published maps (standalone + members)
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<StatusFilter>('all');
   const [query, setQuery] = useState('');
+  // '내가 안 푼 맵': 내 칩이 빈 맵만 (풀이를 등록한 맵은 푼 것). 켠 채 방금 체크한 카드는 keep 에 넣어
+  // 바로 사라지지 않게 둔다 — 버튼을 다시 누르면 빠진다 (푼 맵 현황의 같은 거르기와 같은 동작).
+  const [unsolvedOnly, setUnsolvedOnly] = useState(false);
+  const [keep, setKeep] = useState<ReadonlySet<string>>(() => new Set());
   const [showUpload, setShowUpload] = useState(false);
   const [selected, setSelected] = useState<MapRow | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<FolderRow | null>(null);
@@ -65,12 +65,15 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    // '풀었어요' 체크도 허브에 올 때마다 새로 읽는다 (다른 사람 체크 반영). 맵 목록과 따로 돌고,
+    // 테이블이 없으면 스스로 기능을 숨긴다.
+    void reloadClears();
     try { setMaps(await listPublishedMaps()); }
     catch (e) { console.error(e); }
     // Folder table may not exist yet (pre-migration); degrade gracefully to empty.
     try { setFolders(await listPublishedFolders()); } catch (e) { console.error(e); setFolders([]); }
     setLoading(false);
-  }, []);
+  }, [reloadClears]);
 
   useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
 
@@ -89,8 +92,11 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
 
   // Unified list of hub entries — standalone maps + folder cards — newest first.
   // Folders have no single review status, so they show only under the '전체' filter.
+  // '내가 안 푼 맵'을 켜면 내가 푼 맵을 빼고, 폴더는 안 푼 맵이 하나라도 있을 때만 남긴다.
+  const mineOnly = unsolvedOnly && clears.status === 'ready';
   const entries = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const hidden = (m: MapRow) => mineOnly && !keep.has(m.id) && isSolvedByMe(clears.summarize(m.id), myUserId);
     type Entry =
       | { kind: 'map'; map: MapRow; date: string; pub: string }
       | { kind: 'folder'; folder: FolderRow; date: string; pub: string };
@@ -98,11 +104,13 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
     for (const m of standaloneMaps) {
       if (filter !== 'all' && m.status !== filter) continue;
       if (q && !`${m.title ?? ''} ${m.author_name ?? ''}`.toLowerCase().includes(q)) continue;
+      if (hidden(m)) continue;
       list.push({ kind: 'map', map: m, date: m.created_at, pub: m.published_at ?? '' });
     }
     if (filter === 'all') {
       for (const f of folders) {
         if (q && !`${f.name ?? ''} ${f.author_name ?? ''}`.toLowerCase().includes(q)) continue;
+        if (mineOnly && (mapsByFolder.get(f.id) ?? []).every(hidden)) continue;
         list.push({ kind: 'folder', folder: f, date: f.created_at, pub: f.published_at ?? '' });
       }
     }
@@ -112,7 +120,7 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
     list.sort((a, b) =>
       a.date < b.date ? 1 : a.date > b.date ? -1 : a.pub < b.pub ? 1 : a.pub > b.pub ? -1 : 0);
     return list;
-  }, [standaloneMaps, folders, filter, query]);
+  }, [standaloneMaps, folders, filter, query, mineOnly, keep, clears, myUserId, mapsByFolder]);
 
   // 통계는 폴더 안에 든 맵까지 포함한 전체 공개 맵(maps) 기준으로 센다.
   // (그리드에 낱개로 보이지 않는 폴더 멤버도 엄연히 허브에 올라온 맵이므로.)
@@ -230,7 +238,7 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
 
       <div className="hub-toolbar">
         <div className="hub-filters">
-          {FILTERS.map((f) => (
+          {STATUS_FILTERS.map((f) => (
             <button
               key={f.key}
               className={`chip${filter === f.key ? ' active' : ''}`}
@@ -239,6 +247,21 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
               {f.label}
             </button>
           ))}
+          {/* 상태(하나만 고름)와 따로 켜고 끄는 거르기 — 구분선으로 나눠 둔다. 체크 기능이 꺼져 있으면 숨김. */}
+          {clears.status === 'ready' && (
+            <span className="hub-filter-mine">
+              <span className="hub-filter-sep" aria-hidden="true" />
+              <button
+                type="button"
+                className={`chip${unsolvedOnly ? ' active' : ''}`}
+                aria-pressed={unsolvedOnly}
+                title="내 칩이 빈 맵만 봅니다 (풀이를 등록한 맵은 푼 것으로 칩니다)"
+                onClick={() => { setKeep(new Set()); setUnsolvedOnly((v) => !v); setPage(1); }}
+              >
+                내가 안 푼 맵
+              </button>
+            </span>
+          )}
         </div>
         <input
           className="field-input hub-search"
@@ -252,14 +275,23 @@ export default function MapHub({ onOpenMap }: MapHubProps) {
         <div className="hub-empty">불러오는 중…</div>
       ) : entries.length === 0 ? (
         <div className="hub-empty">
-          {standaloneMaps.length === 0 && folders.length === 0 ? '아직 업로드된 맵이 없습니다. 첫 맵을 올려보세요!' : '조건에 맞는 맵이 없습니다.'}
+          {standaloneMaps.length === 0 && folders.length === 0
+            ? '아직 업로드된 맵이 없습니다. 첫 맵을 올려보세요!'
+            : mineOnly && filter === 'all' && !query.trim()
+              ? '안 푼 맵이 없어요. 허브의 맵을 모두 풀었어요!'
+              : '조건에 맞는 맵이 없습니다.'}
         </div>
       ) : (
         <>
           <div className="hub-grid">
             {paged.map((e) => e.kind === 'folder'
               ? <FolderCard key={`f-${e.folder.id}`} folder={e.folder} maps={mapsByFolder.get(e.folder.id) ?? []} onOpen={setSelectedFolder} />
-              : <MapCard key={`m-${e.map.id}`} map={e.map} onOpen={openMap} />)}
+              : <MapCard
+                  key={`m-${e.map.id}`}
+                  map={e.map}
+                  onOpen={openMap}
+                  onToggleMine={mineOnly ? (id) => setKeep((k) => new Set(k).add(id)) : undefined}
+                />)}
           </div>
           <Pagination page={visiblePage} pageCount={pageCount} onChange={setPage} />
         </>

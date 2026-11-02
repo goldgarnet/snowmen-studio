@@ -15,6 +15,8 @@ import SolutionRecorder from './SolutionRecorder';
 import SolutionPlayer from './SolutionPlayer';
 import SolutionList from './SolutionList';
 import GameLevelExport from '../common/GameLevelExport';
+import SolvedPanel from './SolvedPanel';
+import { useClears } from '../../context/ClearsContext';
 
 interface MapDetailProps {
   map: MapRow;
@@ -53,6 +55,7 @@ export default function MapDetail({
   map: initial, onBack, onChanged, onEditInStudio, recording = false, onStartRecording, onStopRecording, backLabel,
 }: MapDetailProps) {
   const { profile } = useAuth();
+  const { reloadMap: reloadClears } = useClears();
   const [map, setMap] = useState<MapRow>(initial);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -218,12 +221,16 @@ export default function MapDetail({
               <button className="btn" onClick={copyCode}>맵 코드만 복사</button>
             </div>
 
+            {/* 푼 사람 칩 — 내 이름 칩을 눌러 체크 (map_clears 테이블이 없으면 숨김) */}
+            <SolvedPanel mapId={map.id} />
+
             <SolutionList
               mapId={map.id}
               mapOwnerId={map.owner_id}
               reloadToken={solToken}
               onView={(s) => { setViewSolution(s); setSolutionMode('view'); }}
               onRegister={startRecording}
+              onDeleted={() => { void reloadClears(map.id); }}
             />
 
             {map.comment && (

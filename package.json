@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:engine": "node test/engine/run.cjs",
+    "test:clears": "node test/clears/run.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

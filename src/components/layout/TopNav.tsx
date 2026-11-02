@@ -1,7 +1,8 @@
+import { useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import './TopNav.css';
 
-export type Tab = 'studio' | 'hub' | 'chapters';
+export type Tab = 'studio' | 'hub' | 'solved' | 'chapters';
 
 interface TopNavProps {
   tab: Tab;
@@ -12,6 +13,15 @@ interface TopNavProps {
 
 export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps) {
   const { theme, toggle } = useTheme();
+  const tabsRef = useRef<HTMLElement>(null);
+
+  // 좁은 화면에서 탭 줄이 가로로 밀려 있으면 지금 탭이 보이게 한다 (다 들어가면 아무 일 없음).
+  useEffect(() => {
+    const nav = tabsRef.current;
+    if (!nav || nav.scrollWidth <= nav.clientWidth) return;
+    nav.querySelector('button.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
+
   return (
     <header className="topnav">
       <div className="topnav-brand">
@@ -19,8 +29,9 @@ export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps)
         <div className="topnav-name">Snowmen <span>Studio</span></div>
       </div>
 
-      <nav className="topnav-tabs">
+      <nav className="topnav-tabs" ref={tabsRef}>
         <button className={tab === 'hub' ? 'active' : ''} onClick={() => setTab('hub')}>맵 허브</button>
+        <button className={tab === 'solved' ? 'active' : ''} onClick={() => setTab('solved')}>푼 맵 현황</button>
         <button className={tab === 'studio' ? 'active' : ''} onClick={() => setTab('studio')}>맵 제작</button>
         <button className={tab === 'chapters' ? 'active' : ''} onClick={() => setTab('chapters')}>챕터 구성</button>
       </nav>

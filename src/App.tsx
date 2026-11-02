@@ -1,27 +1,34 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { GuardContext, StudioApi } from './context/GuardContext';
+import ClearsProvider from './context/ClearsProvider';
 import LoginScreen from './components/auth/LoginScreen';
 import TopNav, { Tab } from './components/layout/TopNav';
 import MapStudio from './components/studio/MapStudio';
 import MapHub from './components/hub/MapHub';
 import MapDetail from './components/hub/MapDetail';
 import ChapterComposer from './components/chapters/ChapterComposer';
+import SolvedBoard from './components/solved/SolvedBoard';
 import TestWorkbench from './components/test/TestWorkbench';
 import { getMap } from './api/maps';
 import type { MapRow } from './api/types';
 import './App.css';
 
+// 맵 상세를 '푼 맵 현황'에서 열었으면 from = 'solved' (주소 ?from=solved) — 뒤로가기가 현황으로 돌아간다.
+type MapFrom = 'solved';
+
 type AppRoute =
   | { kind: 'hub' }
+  | { kind: 'solved' }
   | { kind: 'studio'; mapId?: string; play?: boolean; returnTo?: string }
   | { kind: 'chapters' }
   | { kind: 'test' }
-  | { kind: 'map'; id: string; play?: boolean; returnTo?: string }
+  | { kind: 'map'; id: string; play?: boolean; returnTo?: string; from?: MapFrom }
   | { kind: 'notFound'; pathname: string };
 
 const tabPath: Record<Tab, string> = {
   hub: '/',
+  solved: '/solved',
   studio: '/editor',
   chapters: '/chapters',
 };
@@ -43,6 +50,7 @@ function readReturnTo(search: string, fallback: string): string {
 
 function readRoute(pathname: string, search = ''): AppRoute {
   if (pathname === '/' || pathname === '/hub' || pathname === '/hub/') return { kind: 'hub' };
+  if (pathname === '/solved' || pathname === '/solved/') return { kind: 'solved' };
   if (pathname === '/editor' || pathname === '/editor/') return { kind: 'studio' };
   if (pathname === '/editor/play' || pathname === '/editor/play/') {
     return { kind: 'studio', play: true, returnTo: readReturnTo(search, '/editor') };
@@ -62,7 +70,10 @@ function readRoute(pathname: string, search = ''): AppRoute {
     return { kind: 'map', id, play: true, returnTo: readReturnTo(search, `/maps/${encodeURIComponent(id)}`) };
   }
   const mapMatch = pathname.match(/^\/maps\/([^/]+)\/?$/);
-  if (mapMatch) return { kind: 'map', id: decodeURIComponent(mapMatch[1]) };
+  if (mapMatch) {
+    const id = decodeURIComponent(mapMatch[1]);
+    return new URLSearchParams(search).get('from') === 'solved' ? { kind: 'map', id, from: 'solved' } : { kind: 'map', id };
+  }
   return { kind: 'notFound', pathname };
 }
 
@@ -71,21 +82,24 @@ function routePath(route: AppRoute): string {
     const path = route.mapId ? `/editor/${encodeURIComponent(route.mapId)}` : '/editor';
     return route.play ? `${path}/play?${new URLSearchParams({ returnTo: route.returnTo ?? path })}` : path;
   }
+  if (route.kind === 'solved') return '/solved';
   if (route.kind === 'chapters') return '/chapters';
   if (route.kind === 'test') return '/test';
   if (route.kind === 'map') {
     const path = `/maps/${encodeURIComponent(route.id)}`;
-    return route.play ? `${path}/play?${new URLSearchParams({ returnTo: route.returnTo ?? path })}` : path;
+    if (route.play) return `${path}/play?${new URLSearchParams({ returnTo: route.returnTo ?? path })}`;
+    return route.from ? `${path}?${new URLSearchParams({ from: route.from })}` : path;
   }
   if (route.kind === 'notFound') return route.pathname;
   return '/';
 }
 
 function MapRoute({
-  id, onBack, onEditInStudio, recording, onStartRecording, onStopRecording,
+  id, onBack, backLabel, onEditInStudio, recording, onStartRecording, onStopRecording,
 }: {
   id: string;
   onBack: () => void;
+  backLabel?: string;   // 뒤로가기 버튼 문구 (없으면 허브로)
   onEditInStudio: () => void;
   recording: boolean;
   onStartRecording: () => void;
@@ -112,7 +126,7 @@ function MapRoute({
     return (
       <div className="app-loading">
         <p>맵을 찾을 수 없거나 접근 권한이 없습니다.</p>
-        <button className="btn" onClick={onBack}>허브로</button>
+        <button className="btn" onClick={onBack}>{backLabel ?? '허브로'}</button>
       </div>
     );
   }
@@ -122,6 +136,7 @@ function MapRoute({
       key={map.id}
       map={map}
       onBack={onBack}
+      backLabel={backLabel}
       onChanged={(updated) => { if (updated) setMap(updated); }}
       onEditInStudio={onEditInStudio}
       recording={recording}
@@ -178,6 +193,8 @@ export default function App() {
   useEffect(() => {
     const title = route.kind === 'studio'
       ? '맵 제작 | Snowmen Studio'
+      : route.kind === 'solved'
+        ? '푼 맵 현황 | Snowmen Studio'
       : route.kind === 'chapters'
       ? '챕터 구성 | Snowmen Studio'
         : route.kind === 'test'
@@ -195,7 +212,10 @@ export default function App() {
   if (!profile) return <div className="app-loading">프로필 준비 중…</div>;
 
   const runPending = () => { const p = pending; setPending(null); p?.(); };
-  const tab: Tab = route.kind === 'studio' ? 'studio' : route.kind === 'chapters' ? 'chapters' : 'hub';
+  const tab: Tab = route.kind === 'studio' ? 'studio'
+    : route.kind === 'chapters' ? 'chapters'
+      : route.kind === 'solved' || (route.kind === 'map' && route.from === 'solved') ? 'solved'
+        : 'hub';
   const content = route.kind === 'studio'
     ? <MapStudio
         editMapId={route.mapId}
@@ -216,16 +236,23 @@ export default function App() {
         />
       : route.kind === 'test'
         ? <TestWorkbench />
+      : route.kind === 'solved'
+        ? <SolvedBoard
+            myUserId={profile.id}
+            mapHref={(id) => routePath({ kind: 'map', id, from: 'solved' })}
+            onOpenMap={(id) => navigate({ kind: 'map', id, from: 'solved' })}
+          />
       : route.kind === 'map'
         ? <MapRoute
             key={route.id}
             id={route.id}
-            onBack={() => navigate({ kind: 'hub' })}
+            onBack={() => navigate(route.from === 'solved' ? { kind: 'solved' } : { kind: 'hub' })}
+            backLabel={route.from === 'solved' ? '← 푼 맵 현황으로' : undefined}
             onEditInStudio={() => navigate({ kind: 'studio', mapId: route.id })}
             recording={Boolean(route.play)}
             onStartRecording={() => {
-              const returnTo = routePath({ kind: 'map', id: route.id });
-              navigate({ kind: 'map', id: route.id, play: true, returnTo });
+              const returnTo = routePath({ kind: 'map', id: route.id, from: route.from });
+              navigate({ kind: 'map', id: route.id, play: true, returnTo, from: route.from });
             }}
             onStopRecording={() => navigate(readLocationRoute(route.returnTo ?? routePath({ kind: 'map', id: route.id })))}
           />
@@ -235,12 +262,15 @@ export default function App() {
 
   return (
     <GuardContext.Provider value={{ register, attempt }}>
-      <div className="app">
-        <TopNav tab={tab} setTab={guardedSetTab} userName={profile.name} onLogout={() => attempt(signOut)} />
-        <main className="app-main">
-          {content}
-        </main>
-      </div>
+      {/* '풀었어요' 체크 상태 — 허브 카드와 맵 상세가 같이 본다. 계정이 바뀌면 새로 읽는다. */}
+      <ClearsProvider key={profile.id} userId={profile.id}>
+        <div className="app">
+          <TopNav tab={tab} setTab={guardedSetTab} userName={profile.name} onLogout={() => attempt(signOut)} />
+          <main className="app-main">
+            {content}
+          </main>
+        </div>
+      </ClearsProvider>
 
       {pending && (
         <div className="modal-backdrop" onClick={() => !saving && setPending(null)}>

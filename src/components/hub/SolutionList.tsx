@@ -9,6 +9,7 @@ interface SolutionListProps {
   reloadToken: number;            // bump to force a reload after a register/delete elsewhere
   onView: (sol: SolutionRow) => void;
   onRegister: () => void;
+  onDeleted?: () => void;         // 풀이를 지운 뒤 ('풀이 등록' 자동 표시 갱신용)
 }
 
 function formatWhen(iso: string): string {
@@ -30,7 +31,7 @@ function sortSolutions(list: SolutionRow[], ownerId: string): SolutionRow[] {
   });
 }
 
-export default function SolutionList({ mapId, mapOwnerId, reloadToken, onView, onRegister }: SolutionListProps) {
+export default function SolutionList({ mapId, mapOwnerId, reloadToken, onView, onRegister, onDeleted }: SolutionListProps) {
   const { profile } = useAuth();
   const [sols, setSols] = useState<SolutionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +49,7 @@ export default function SolutionList({ mapId, mapOwnerId, reloadToken, onView, o
   const remove = async (id: string) => {
     if (!confirm('이 풀이를 삭제할까요?')) return;
     setBusyId(id);
-    try { await deleteSolution(id); await load(); }
+    try { await deleteSolution(id); await load(); onDeleted?.(); }
     catch (e) { alert('삭제 실패: ' + (e as Error).message); }
     finally { setBusyId(null); }
   };
