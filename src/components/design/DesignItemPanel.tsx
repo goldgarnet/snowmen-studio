@@ -118,9 +118,9 @@ export default function DesignItemPanel({
         </section>
 
         <section className="dw-sec">
-          <h3>지킬 것</h3>
+          <h3>참고 사항</h3>
           {placement && <p className="dw-place"><b>그리는 위치</b> {placement}</p>}
-          <EditableBlock label="지킬 것" placeholder="한 줄에 하나씩 적어 주세요." rows={5} value={item.rules} onSave={(rules) => onPatch({ rules })}>
+          <EditableBlock label="참고 사항" placeholder="한 줄에 하나씩 적어 주세요." rows={5} value={item.rules} onSave={(rules) => onPatch({ rules })}>
             <ul className="dw-rules">{textLines(item.rules).map((line) => <li key={line}>{line}</li>)}</ul>
           </EditableBlock>
           <p className="dw-common">모든 그림 공통: PNG · sRGB · 투명 여백 자르지 않기 · 그림자 넣지 않기(엔진이 그림)</p>

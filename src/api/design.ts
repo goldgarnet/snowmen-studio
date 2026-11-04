@@ -98,7 +98,7 @@ export interface DesignItem {
   assignee: string;
   status: DesignStatus;
   description: string;   // 무엇을 그리는지
-  rules: string;         // 지킬 것 (줄마다 하나)
+  rules: string;         // 참고 사항 (줄마다 하나)
   ideas: string;         // 참고 아이디어 (쉼표로 구분)
   is_new: boolean;       // 게임에 아직 그림 자리가 없는 항목
   split: boolean;        // 가이드와 채색을 나눠 맡는 항목. 이때 assignee 가 채색 담당
