@@ -14,6 +14,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# game data — this repo is public, the .pck lives in the private game-preview bucket
+public/game-preview/*.pck
+public/game-preview/*.wasm
+
 # logs
 *.log
 npm-debug.log*

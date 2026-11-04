@@ -6,15 +6,16 @@ import ConfirmModal from '../common/ConfirmModal';
 import DesignBoard, { type BoardActions, type BoardRows } from './DesignBoard';
 import DesignItemPanel from './DesignItemPanel';
 import DesignNow from './DesignNow';
+import DesignPreview from './DesignPreview';
 import DesignTimeline from './DesignTimeline';
 import DesignViewer from './DesignViewer';
 import './design.css';
 
-// 디자인 작업 공간 — 항목 보드와 타임라인. 로그인한 팀원 전원이 함께 고친다.
+// 디자인 작업 공간 — 항목 보드, 타임라인, 게임에서 보기. 로그인한 팀원 전원이 함께 고친다.
 //   · 바꾼 내용은 화면에 먼저 반영하고 저장한다. 저장에 실패하면 오류를 띄우고 서버 값으로 되돌린다.
 //   · 다른 사람이 고친 내용은 이 창으로 돌아올 때 다시 읽어 온다.
 
-type View = 'board' | 'timeline';
+type View = 'board' | 'timeline' | 'preview';
 let lastView: View = 'board';   // 다른 탭에 다녀와도 보던 화면으로
 
 const OPEN_KEY = 'snowmen-design-open-groups';
@@ -440,12 +441,13 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
         <div className="dw-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={view === 'board'} className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>보드</button>
           <button type="button" role="tab" aria-selected={view === 'timeline'} className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}>타임라인</button>
+          <button type="button" role="tab" aria-selected={view === 'preview'} className={view === 'preview' ? 'active' : ''} onClick={() => setView('preview')}>게임에서 보기</button>
         </div>
       </div>
 
-      {data && !notInstalled && <DesignNow tasks={sortedTasks} today={today} who={who} />}
+      {data && !notInstalled && view !== 'preview' && <DesignNow tasks={sortedTasks} today={today} who={who} />}
 
-      {!notInstalled && (
+      {!notInstalled && view !== 'preview' && (
         <div className="dw-toolbar">
           <input
             type="search"
@@ -494,6 +496,8 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
         </div>
       ) : !data ? (
         !error && <div className="dw-empty"><p>불러오는 중…</p></div>
+      ) : view === 'preview' ? (
+        <DesignPreview files={data.files} images={data.images} />
       ) : view === 'board' ? (
         <DesignBoard
           rows={rows}

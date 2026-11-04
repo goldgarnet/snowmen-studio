@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>게임 미리보기</title>
+<style>
+html, body { margin: 0; height: 100%; background: #20242f; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; outline: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0"></canvas>
+<script src="index.js"></script>
+<script>
+// /design 의 '게임에서 보기' 가 띄우는 Godot 웹 빌드 껍데기.
+//   · 엔진(index.js · engine.wgz)은 내용 없는 Godot 원본이라 여기 둔다.
+//   · 게임 데이터(.pck)는 비공개 저장소에 있고, 로그인한 부모 창이 받아 넘겨 준다.
+//   · 그림과 명령은 부모 창이 postMessage 로 보내고 게임은 window.snowmenPreview 로 받는다.
+const toParent = (m) => window.parent.postMessage({ from: 'game-preview', ...m }, location.origin);
+
+// 44MB 엔진을 gzip 으로 보관한다(9MB). Godot 이 받아 가는 순간 그 자리에서 푼다.
+const plainFetch = window.fetch.bind(window);
+window.fetch = (url, init) => (String(url).endsWith('.wasm')
+  ? plainFetch('engine.wgz').then((r) => new Response(
+    r.body.pipeThrough(new DecompressionStream('gzip')),
+    { headers: { 'Content-Type': 'application/wasm' } },
+  ))
+  : plainFetch(url, init));
+
+const images = new Map();
+const early = [];
+let send = null;
+const deliver = (m) => {
+  const text = JSON.stringify(m);
+  if (send) send(text); else early.push(text);
+};
+
+window.snowmenPreview = {
+  attach(callback) {
+    send = callback;
+    early.splice(0).forEach((text) => send(text));
+    toParent({ type: 'ready' });
+  },
+  take(key) {
+    const bytes = images.get(key);
+    images.delete(key);
+    return bytes ?? new ArrayBuffer(0);
+  },
+  result(key, ok) { toParent({ type: 'result', key, ok }); },
+  report(text) { toParent({ type: 'report', ...JSON.parse(text) }); },
+};
+
+async function boot(pck) {
+  const engine = new Engine({
+    args: ['--main-pack', 'game.pck', '--windowed'],
+    canvasResizePolicy: 2,
+    ensureCrossOriginIsolationHeaders: false,
+    executable: 'index',
+    focusCanvas: true,
+    onExit: () => toParent({ type: 'exit' }),
+  });
+  try {
+    await engine.init('index');
+    await engine.preloadFile(new Uint8Array(pck), 'game.pck');
+    await engine.start();
+  } catch (e) {
+    toParent({ type: 'error', message: String(e) });
+  }
+}
+
+window.addEventListener('message', (e) => {
+  if (e.origin !== location.origin || e.source !== window.parent) return;
+  const m = e.data;
+  if (m.type === 'boot') void boot(m.pck);
+  if (m.type === 'art') {
+    images.set(m.key, m.bytes);
+    deliver({ cmd: 'art', key: m.key });
+  }
+  if (m.type === 'cmd') deliver(m.message);
+});
+window.addEventListener('focus', () => document.getElementById('canvas').focus());
+toParent({ type: 'loaded' });
+</script>
+</body>
+</html>

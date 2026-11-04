@@ -272,6 +272,13 @@ export const insertComment = (row: Pick<DesignComment, 'image_id' | 'author_name
   insertRow<DesignComment>('design_comments', row);
 export const deleteComment = (id: string) => deleteRow('design_comments', id);
 
+/** 게임 데이터. 게임 내용이 들어 있어 로그인한 사람만 받는 비공개 저장소에 둔다. */
+export async function downloadGamePack(): Promise<ArrayBuffer> {
+  const { data, error } = await supabase.storage.from('game-preview').download('index.pck');
+  if (error) throw error;
+  return data.arrayBuffer();
+}
+
 export function imageUrl(path: string): string {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }

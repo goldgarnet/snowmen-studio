@@ -1,3 +1,4 @@
+import type { DesignFile, DesignImage } from '../api/design';
 // 디자인 작업 공간의 순수 로직 — 순서 바꾸기, 그림 규격 검사, 타임라인 날짜 계산.
 // 화면과 DB 를 모르므로 test/design/run.cjs 가 그대로 불러와 검사한다.
 
@@ -205,3 +206,36 @@ export function timelineRange(tasks: { start_date: string; end_date: string }[],
   const weeks = Math.ceil((diffDays(from, max) + 1) / 7) + 1;
   return { from, weeks };
 }
+
+// ── 게임에서 보기 ─────────────────────────────────────────────────────────────
+
+export interface PreviewArt {
+  key: string;
+  fileName: string;
+  imageId: string;
+  path: string;
+  sizeNote: string | null;
+}
+
+const IMAGE_FILE = /\.(png|webp|jpe?g)$/i;
+
+/** 게임은 파일명에서 확장자를 뺀 값으로 그림을 찾는다. ch3/tile_cold.png → ch3/tile_cold */
+export const artKey = (fileName: string) => fileName.trim().replace(/\.[^./]+$/, '');
+
+/** 파일명마다 가장 최근에 올린 그림 한 장. images 는 최신순이다. */
+export function previewArt(files: DesignFile[], images: DesignImage[]): PreviewArt[] {
+  const slots = new Map(files.map((f) => [f.id, f]));
+  const art = new Map<string, PreviewArt>();
+  for (const image of images) {
+    const slot = image.file_id ? slots.get(image.file_id) : undefined;
+    const fileName = (slot?.file_name ?? '').trim();
+    if (!slot || !IMAGE_FILE.test(fileName)) continue;
+    const key = artKey(fileName);
+    if (art.has(key)) continue;
+    art.set(key, { key, fileName, imageId: image.id, path: image.path, sizeNote: sizeProblem(slot, image.width, image.height) });
+  }
+  return [...art.values()];
+}
+
+/** ch3/tile_cold → 3. 챕터 공용 그림이면 0. */
+export const artChapter = (key: string) => Number(/^ch(\d+)\//.exec(key)?.[1] ?? 0);

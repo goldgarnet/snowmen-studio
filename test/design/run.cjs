@@ -137,4 +137,30 @@ test('타임라인 범위는 모든 일정을 담는다', () => {
   assert.ok(d.addDays(r.from, r.weeks * 7) > '2027-03-31');
   assert.equal(d.mondayOf(r.from), r.from);
 });
+
+test('게임 키는 파일명에서 확장자만 뺀다', () => {
+  assert.equal(d.artKey('ch3/tile_cold.png'), 'ch3/tile_cold');
+  assert.equal(d.artKey(' player_1_down.PNG '), 'player_1_down');
+});
+test('게임에는 파일명마다 가장 최근 그림만 넣는다', () => {
+  const files = [
+    { id: 'a', file_name: 'wall.png' },
+    { id: 'b', file_name: 'cut_intro.ogv' },
+    { id: 'c', file_name: '' },
+  ];
+  const images = [
+    { id: 'new', file_id: 'a', path: 'n' },
+    { id: 'old', file_id: 'a', path: 'o' },
+    { id: 'video', file_id: 'b', path: 'v' },
+    { id: 'noname', file_id: 'c', path: 'x' },
+    { id: 'draft', file_id: null, path: 'd' },
+  ];
+  assert.deepEqual(d.previewArt(files, images), [{ key: 'wall', fileName: 'wall.png', imageId: 'new', path: 'n', sizeNote: null }]);
+  const sized = d.previewArt([{ id: 'a', file_name: 'wall.png', canvas_w: 288, canvas_h: 384 }], [{ id: 'i', file_id: 'a', path: 'p', width: 1254, height: 1254 }]);
+  assert.match(sized[0].sizeNote, /1254 × 1254/);
+});
+test('챕터 폴더 번호 읽기', () => {
+  assert.equal(d.artChapter('ch3/tile_cold'), 3);
+  assert.equal(d.artChapter('tile_cold'), 0);
+});
 console.log(`design: ${passed}개 통과`);
