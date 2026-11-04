@@ -10,6 +10,7 @@ import MapDetail from './components/hub/MapDetail';
 import ChapterComposer from './components/chapters/ChapterComposer';
 import SolvedBoard from './components/solved/SolvedBoard';
 import TestWorkbench from './components/test/TestWorkbench';
+import DesignWorkspace from './components/design/DesignWorkspace';
 import { getMap } from './api/maps';
 import type { MapRow } from './api/types';
 import * as nav from './lib/nav';
@@ -25,6 +26,7 @@ type AppRoute =
   | { kind: 'solved' }
   | { kind: 'studio'; mapId?: string; play?: boolean; returnTo?: string }
   | { kind: 'chapters' }
+  | { kind: 'design' }
   | { kind: 'test' }
   | { kind: 'map'; id: string; play?: boolean; returnTo?: string; from?: MapFrom }
   | { kind: 'notFound'; pathname: string };
@@ -34,6 +36,7 @@ const tabPath: Record<Tab, string> = {
   solved: '/solved',
   studio: '/editor',
   chapters: '/chapters',
+  design: '/design',
 };
 
 function readReturnTo(search: string, fallback: string): string {
@@ -66,6 +69,7 @@ function readRoute(pathname: string, search = ''): AppRoute {
   const editorMatch = pathname.match(/^\/editor\/([^/]+)\/?$/);
   if (editorMatch) return { kind: 'studio', mapId: decodeURIComponent(editorMatch[1]) };
   if (pathname === '/chapters' || pathname === '/chapters/') return { kind: 'chapters' };
+  if (pathname === '/design' || pathname === '/design/') return { kind: 'design' };
   if (pathname === '/test' || pathname === '/test/') return { kind: 'test' };
   const mapPlayMatch = pathname.match(/^\/maps\/([^/]+)\/play\/?$/);
   if (mapPlayMatch) {
@@ -90,6 +94,7 @@ function routePath(route: AppRoute): string {
   }
   if (route.kind === 'solved') return '/solved';
   if (route.kind === 'chapters') return '/chapters';
+  if (route.kind === 'design') return '/design';
   if (route.kind === 'test') return '/test';
   if (route.kind === 'map') {
     const path = `/maps/${encodeURIComponent(route.id)}`;
@@ -222,6 +227,8 @@ export default function App() {
         ? '푼 맵 현황 | Snowmen Studio'
       : route.kind === 'chapters'
       ? '챕터 구성 | Snowmen Studio'
+        : route.kind === 'design'
+          ? '디자인 작업 | Snowmen Studio'
         : route.kind === 'test'
           ? '엔진 테스트 | Snowmen Studio'
       : route.kind === 'map'
@@ -241,6 +248,7 @@ export default function App() {
   const runPending = () => { const p = pending; setPending(null); p?.(); };
   const tab: Tab = route.kind === 'studio' ? 'studio'
     : route.kind === 'chapters' ? 'chapters'
+    : route.kind === 'design' ? 'design'
       : route.kind === 'solved' || (route.kind === 'map' && route.from === 'solved') ? 'solved'
         : 'hub';
   const content = route.kind === 'studio'
@@ -261,6 +269,8 @@ export default function App() {
             navigate({ kind: 'map', id: mapId, play: true, returnTo });
           }}
         />
+      : route.kind === 'design'
+        ? <DesignWorkspace userName={profile.name} />
       : route.kind === 'test'
         ? <TestWorkbench />
       : route.kind === 'solved'

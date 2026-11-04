@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import './TopNav.css';
 
-export type Tab = 'studio' | 'hub' | 'solved' | 'chapters';
+export type Tab = 'studio' | 'hub' | 'solved' | 'chapters' | 'design';
 
 interface TopNavProps {
   tab: Tab;
@@ -34,6 +34,7 @@ export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps)
         <button className={tab === 'solved' ? 'active' : ''} onClick={() => setTab('solved')}>푼 맵 현황</button>
         <button className={tab === 'studio' ? 'active' : ''} onClick={() => setTab('studio')}>맵 제작</button>
         <button className={tab === 'chapters' ? 'active' : ''} onClick={() => setTab('chapters')}>챕터 구성</button>
+        <button className={tab === 'design' ? 'active' : ''} onClick={() => setTab('design')}>디자인 작업</button>
       </nav>
 
       <div className="topnav-user">
