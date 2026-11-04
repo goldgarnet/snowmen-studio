@@ -3,6 +3,8 @@ import { useAuth } from './context/AuthContext';
 import { GuardContext, StudioApi } from './context/GuardContext';
 import ClearsProvider from './context/ClearsProvider';
 import LoginScreen from './components/auth/LoginScreen';
+import PendingApproval from './components/auth/PendingApproval';
+import SignupRequests from './components/auth/SignupRequests';
 import TopNav, { Tab } from './components/layout/TopNav';
 import MapStudio from './components/studio/MapStudio';
 import MapHub from './components/hub/MapHub';
@@ -16,6 +18,7 @@ import type { MapRow } from './api/types';
 import * as nav from './lib/nav';
 import { backToHub, getCachedMap, splitUrl } from './lib/hubState';
 import { useEscapeKey } from './lib/useEscapeKey';
+import { SIGNUP_APPROVER_ID } from './lib/members';
 import { readWorkspace, saveWorkspace, workspaceHome } from './lib/workspace';
 import './App.css';
 
@@ -257,6 +260,7 @@ export default function App() {
   if (loading) return <div className="app-loading">불러오는 중…</div>;
   if (!session) return <LoginScreen />;
   if (!profile) return <div className="app-loading">프로필 준비 중…</div>;
+  if (profile.approved === false) return <PendingApproval />;
 
   const runPending = () => { const p = pending; setPending(null); p?.(); };
   const tab: Tab = route.kind === 'studio' ? 'studio'
@@ -316,7 +320,7 @@ export default function App() {
       {/* '풀었어요' 체크 상태 — 허브 카드와 맵 상세가 같이 본다. 계정이 바뀌면 새로 읽는다. */}
       <ClearsProvider key={profile.id} userId={profile.id}>
         <div className="app">
-          <TopNav tab={tab} setTab={guardedSetTab} userName={profile.name} onLogout={() => attempt(signOut)} />
+          <TopNav tab={tab} setTab={guardedSetTab} userName={profile.name} actions={profile.id === SIGNUP_APPROVER_ID ? <SignupRequests /> : null} onLogout={() => attempt(signOut)} />
           <main className="app-main">
             {content}
           </main>

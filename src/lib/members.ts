@@ -10,6 +10,9 @@
 //  · 2026-11-02 사용자 확정: 아래 7개 계정만. (vksthdud01 — 이름이 '홍은기'인 둘째 계정 — 은 넣지 않음)
 // ============================================================
 
+/** 가입 신청을 승인하는 계정(luffy84). 실제 권한은 DB 의 is_signup_approver 가 정한다. */
+export const SIGNUP_APPROVER_ID = 'b807cfa1-b912-4a27-a0a5-af2a302e4577';
+
 export interface Member {
   /** 전체 이름 (칩 툴팁에 보임) */
   name: string;

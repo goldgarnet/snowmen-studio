@@ -16,6 +16,7 @@ interface AuthValue {
   signUp: (username: string, password: string, name: string) => Promise<void>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -49,12 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const meta = session.user.user_metadata ?? {};
     const username = (meta.username as string) ?? session.user.email?.split('@')[0] ?? 'user';
     const name = (meta.name as string) ?? username;
-    const { data: created } = await supabase
+    const { data: created, error } = await supabase
       .from('profiles')
       .insert({ id: uid, username, name })
       .select()
       .maybeSingle();
     if (created) setProfile(created as Profile);
+    else if (error?.code === '23503') await supabase.auth.signOut();   // 가입이 거절되어 지워진 계정
   }, []);
 
   useEffect(() => {
@@ -108,6 +110,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }, []);
 
+  // 승인 대기 화면이 다시 읽는다. 내 줄이 없어졌으면 가입이 거절된 것이다.
+  const refreshProfile = useCallback(async () => {
+    const uid = session?.user.id;
+    if (!uid) return;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+    if (error) return;
+    if (data) setProfile(data as Profile);
+    else await signOut();
+  }, [session, signOut]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -119,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signIn,
         signOut,
+        refreshProfile,
       }}
     >
       {children}

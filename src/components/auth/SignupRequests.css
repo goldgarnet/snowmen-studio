@@ -1,0 +1,8 @@
+.signup-requests { width: min(460px, calc(100vw - 32px)); }
+.signup-requests ul { display: flex; flex-direction: column; gap: 2px; margin: 0 0 12px; padding: 0; max-height: 50vh; overflow-y: auto; list-style: none; }
+.signup-requests li { display: flex; align-items: center; gap: 6px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.signup-requests li div { flex: 1; min-width: 0; }
+.signup-requests li b { display: block; font-size: 15px; font-weight: 700; color: var(--text); }
+.signup-requests li span { display: block; overflow: hidden; font-size: 13px; color: var(--text-dim); text-overflow: ellipsis; white-space: nowrap; }
+.signup-none { margin: 0 0 12px; font-size: 14px; color: var(--text-dim); }
+.signup-error { margin: 0 0 10px; font-size: 13px; color: var(--status-rejected); }

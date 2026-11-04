@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import './TopNav.css';
 
@@ -9,9 +9,10 @@ interface TopNavProps {
   setTab: (t: Tab) => void;
   userName: string;
   onLogout: () => void;
+  actions?: ReactNode;
 }
 
-export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps) {
+export default function TopNav({ tab, setTab, userName, onLogout, actions }: TopNavProps) {
   const { theme, toggle } = useTheme();
   const tabsRef = useRef<HTMLElement>(null);
 
@@ -43,6 +44,7 @@ export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps)
       </nav>
 
       <div className="topnav-user">
+        {actions}
         <button className="btn btn-ghost btn-sm" onClick={() => setTab(tab === 'design' ? 'hub' : 'design')}>
           {tab === 'design' ? '게임 제작으로' : '디자인으로'}
         </button>

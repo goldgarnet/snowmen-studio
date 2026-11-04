@@ -7,6 +7,7 @@ export interface Profile {
   username: string;
   name: string;
   created_at: string;
+  approved?: boolean;   // 가입 승인 여부. 승인제 SQL 을 돌리기 전에는 값이 없다.
 }
 
 export interface FolderRow {

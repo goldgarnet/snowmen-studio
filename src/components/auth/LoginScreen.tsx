@@ -125,14 +125,14 @@ export default function LoginScreen() {
           {error && <div className="login-error">{error}</div>}
 
           <button className="btn btn-primary login-submit" type="submit" disabled={busy || !configured}>
-            {busy ? '처리 중…' : mode === 'login' ? '로그인' : '가입하고 시작하기'}
+            {busy ? '처리 중…' : mode === 'login' ? '로그인' : '가입 신청하기'}
           </button>
         </form>
 
         <p className="login-hint">
           {mode === 'login'
-            ? '계정이 없나요? 위 회원가입 탭을 눌러 아이디·비밀번호·이름만으로 가입하세요.'
-            : '팀 내부용입니다. 별도 이메일 인증 없이 바로 사용할 수 있어요.'}
+            ? '계정이 없나요? 위 회원가입 탭에서 가입을 신청하세요. 승인 후 사용할 수 있습니다.'
+            : '팀 내부용입니다. 가입을 신청하면 김정훈 님이 승인한 뒤 사용할 수 있습니다.'}
         </p>
       </div>
     </div>
