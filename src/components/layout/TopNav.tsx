@@ -43,7 +43,7 @@ export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps)
       </nav>
 
       <div className="topnav-user">
-        <button className="btn btn-sm" onClick={() => setTab(tab === 'design' ? 'hub' : 'design')}>
+        <button className="btn btn-ghost btn-sm" onClick={() => setTab(tab === 'design' ? 'hub' : 'design')}>
           {tab === 'design' ? '게임 제작으로' : '디자인으로'}
         </button>
         <button

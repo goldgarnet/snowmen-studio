@@ -48,15 +48,43 @@ test('빈 묶음으로 옮기면 번호가 그대로여도 묶음 변경을 저�
   assert.deepEqual(order(r.next, 'g3'), ['a']);
   assert.deepEqual(r.changed.map((i) => [i.id, i.group_id]), [['a', 'g3']]);
 });
-test('제작 크기는 줄마다 첫 크기만 캔버스로 본다', () => {
-  assert.deepEqual(d.canvasSizes('256 × 288 px · 본체 150 × 166 px\n320 x 448 px'), [{ w: 256, h: 288 }, { w: 320, h: 448 }]);
+test('그림 크기 검사', () => {
+  const slot = { canvas_w: 256, canvas_h: 288, body_w: 150, body_h: 166, bottom_px: 110, placement: 'stand' };
+  assert.equal(d.sizeProblem(slot, 256, 288), null);
+  assert.match(d.sizeProblem(slot, 512, 512), /512 × 512/);
+  assert.equal(d.sizeProblem({ ...slot, canvas_w: null }, 1, 1), null);
+  assert.equal(d.sizeProblem(slot, null, null), null);
 });
-test('그림 검사', () => {
-  const item = { file_name: 'ch1/tile_cold.png', spec: '256 × 256 px (칸 전체)' };
-  assert.deepEqual(d.imageWarnings(item, 'tile_cold.png', 256, 256), []);
-  assert.equal(d.imageWarnings(item, 'tile.png', 256, 256).length, 1);
-  assert.equal(d.imageWarnings(item, 'tile_cold.png', 512, 512).length, 1);
-  assert.deepEqual(d.imageWarnings({ file_name: '', spec: '' }, 'a.png', 1, 1), []);
+test('본체 상자: 서 있는 것은 아래 여백 위, 표식은 가운데', () => {
+  const stand = { canvas_w: 256, canvas_h: 288, body_w: 150, body_h: 166, bottom_px: 110, placement: 'stand' };
+  assert.deepEqual(d.bodyBox(stand), { x: 53, y: 12, w: 150, h: 166 });
+  assert.deepEqual(d.bodyBox({ ...stand, canvas_h: 256, body_w: 154, body_h: 132, placement: 'mark' }), { x: 51, y: 62, w: 154, h: 132 });
+  assert.deepEqual(d.bodyBox({ canvas_w: 288, canvas_h: 384, body_w: 256, body_h: 325, bottom_px: null, placement: 'solid' }), { x: 16, y: 59, w: 256, h: 325 });
+  assert.equal(d.bodyBox({ ...stand, body_w: null }), null);
+});
+test('항목 줄에 놓은 그림의 칸 찾기', () => {
+  const slots = [{ id: 'a', file_name: 'x_down.png' }, { id: 'b', file_name: 'x_up.png' }];
+  assert.equal(d.slotForDrop(slots, new Set(), 'x_up.png').id, 'b');
+  assert.equal(d.slotForDrop(slots, new Set(['a']), 'other.png').id, 'b');
+  assert.equal(d.slotForDrop(slots, new Set(['a', 'b']), 'other.png').id, 'a');
+  assert.equal(d.slotForDrop([], new Set(), 'x.png'), null);
+});
+test('업로드 뒤 상태', () => {
+  assert.equal(d.statusAfterUpload('todo', 1, 3), 'doing');
+  assert.equal(d.statusAfterUpload('doing', 3, 3), 'review');
+  assert.equal(d.statusAfterUpload('done', 1, 3), 'done');
+  assert.equal(d.statusAfterUpload('review', 1, 3), 'review');
+});
+test('검색은 띄어쓰기와 대소문자를 무시한다', () => {
+  assert.ok(d.matchesQuery('겨울 영혼', ['겨울의 영혼', 'soul_down.png']));
+  assert.ok(d.matchesQuery('SOUL_DOWN', ['soul_down.png']));
+  assert.ok(d.matchesQuery('눈 덩이', ['작은 눈덩이']));
+  assert.ok(!d.matchesQuery('포탈', ['겨울의 영혼']));
+  assert.ok(d.matchesQuery('   ', ['아무거나']));
+});
+test('글 나누기', () => {
+  assert.deepEqual(d.textLines('가\n\n 나 \n'), ['가', '나']);
+  assert.deepEqual(d.ideaList('집, 울타리,우물'), ['집', '울타리', '우물']);
 });
 test('날짜 계산', () => {
   assert.equal(d.addDays('2026-12-31', 1), '2027-01-01');

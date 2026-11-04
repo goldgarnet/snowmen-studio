@@ -394,3 +394,47 @@ create policy design_assets_insert on storage.objects
 drop policy if exists design_assets_delete on storage.objects;
 create policy design_assets_delete on storage.objects
   for delete to authenticated using (bucket_id = 'design-assets');
+
+-- ---------- 디자인 작업 공간 v2: 파일 칸 · 색 · 분류 ----------
+alter table public.design_groups
+  add column if not exists note  text not null default '',
+  add column if not exists color text not null default 'gray';
+
+alter table public.design_items
+  add column if not exists category text not null default '',
+  add column if not exists alpha    text not null default '',
+  add column if not exists priority text not null default '',
+  add column if not exists rules    text not null default '',     -- 지킬 것 (줄마다 하나)
+  add column if not exists ideas    text not null default '',     -- 참고 아이디어 (쉼표로 구분)
+  add column if not exists is_new   boolean not null default false;
+
+-- 항목 안의 파일 칸. 그림은 칸마다 올리고, 규격과 설명도 칸마다 가진다.
+create table if not exists public.design_files (
+  id         uuid primary key default gen_random_uuid(),
+  item_id    uuid not null references public.design_items(id) on delete cascade,
+  sort_order integer not null default 0,
+  file_name  text not null default '',
+  label      text not null default '',
+  canvas_w   integer,
+  canvas_h   integer,
+  body_w     integer,
+  body_h     integer,
+  bottom_px  integer,                        -- 아래 여백
+  face_px    integer,                        -- 앞면 높이
+  placement  text not null default 'free',   -- 그리는 위치
+  spec_note  text not null default '',
+  note       text not null default '',       -- 이 파일의 설명
+  created_at timestamptz not null default now()
+);
+create index if not exists design_files_item_idx on public.design_files(item_id, sort_order);
+
+alter table public.design_images
+  add column if not exists file_id uuid references public.design_files(id) on delete cascade;
+
+alter table public.design_tasks
+  add column if not exists category text not null default 'base';
+
+alter table public.design_files enable row level security;
+grant select, insert, update, delete on public.design_files to authenticated;
+drop policy if exists design_files_all on public.design_files;
+create policy design_files_all on public.design_files for all to authenticated using (true) with check (true);

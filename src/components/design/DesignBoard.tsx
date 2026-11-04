@@ -1,19 +1,29 @@
 import { useRef, useState, type DragEvent } from 'react';
-import { DESIGN_STATUSES, imageUrl, type DesignData, type DesignGroup, type DesignImage, type DesignItem, type DesignStatus } from '../../api/design';
-import { bySortOrder, imageWarnings } from '../../lib/designBoard';
+import {
+  colorOf, DESIGN_ALPHAS, DESIGN_ASSIGNEES, DESIGN_CATEGORIES, DESIGN_PRIORITIES, DESIGN_STATUSES, imageUrl,
+  type DesignFile, type DesignGroup, type DesignImage, type DesignItem, type DesignStatus,
+} from '../../api/design';
 import EditableText from './EditableText';
+import { Tag, TagSelect } from './tags';
 
 export interface BoardActions {
   addGroup: () => void;
-  renameGroup: (id: string, name: string) => void;
+  patchGroup: (id: string, patch: Partial<DesignGroup>) => void;
+  recolorGroup: (group: DesignGroup) => void;
   removeGroup: (group: DesignGroup) => void;
   moveGroup: (id: string, beforeId: string | null) => void;
   addItem: (groupId: string) => void;
   patchItem: (id: string, patch: Partial<DesignItem>) => void;
   moveItem: (id: string, groupId: string, beforeId: string | null) => void;
-  uploadTo: (itemId: string, files: File[]) => void;
-  addItemsFromFiles: (groupId: string, files: File[]) => void;
+  dropOnItem: (item: DesignItem, picked: File[]) => void;
   openItem: (id: string) => void;
+}
+
+export interface BoardRows {
+  group: DesignGroup;
+  items: DesignItem[];     // 지금 보이는 항목
+  total: number;           // 묶음의 전체 항목 수
+  done: number;
 }
 
 const ITEM_TYPE = 'application/x-design-item';
@@ -21,7 +31,6 @@ const GROUP_TYPE = 'application/x-design-group';
 
 const hasType = (e: DragEvent, type: string) => e.dataTransfer.types.includes(type);
 const hasFiles = (e: DragEvent) => hasType(e, 'Files');
-const droppedFiles = (e: DragEvent) => Array.from(e.dataTransfer.files);
 
 // 마우스가 요소의 위쪽 절반이면 그 앞에, 아래쪽 절반이면 그 뒤에 놓는다.
 const isUpperHalf = (e: DragEvent<HTMLElement>) => {
@@ -29,18 +38,31 @@ const isUpperHalf = (e: DragEvent<HTMLElement>) => {
   return e.clientY < r.top + r.height / 2;
 };
 
+const firstSentence = (text: string) => text.split('\n')[0];
+const assigneeOptions = DESIGN_ASSIGNEES;
+
+function sizeText(files: DesignFile[]): string {
+  const sizes = [...new Set(files.filter((f) => f.canvas_w && f.canvas_h).map((f) => `${f.canvas_w} × ${f.canvas_h}`))];
+  if (sizes.length === 0) return '';
+  return sizes.length === 1 ? `${sizes[0]} px` : `${sizes[0]} 외 ${sizes.length - 1}개`;
+}
+
 interface Slot {
   groupId: string;
   beforeId: string | null;
 }
 
 function ItemRow({
-  item, nextId, image, uploading, slot, setSlot, fileOver, setFileOver, actions,
+  item, files, filled, image, busy, canDrag, active, nextId, slot, setSlot, fileOver, setFileOver, actions,
 }: {
   item: DesignItem;
-  nextId: string | null;
+  files: DesignFile[];
+  filled: number;
   image: DesignImage | undefined;
-  uploading: boolean;
+  busy: boolean;
+  canDrag: boolean;
+  active: boolean;
+  nextId: string | null;
   slot: Slot | null;
   setSlot: (s: Slot | null) => void;
   fileOver: string | null;
@@ -48,8 +70,6 @@ function ItemRow({
   actions: BoardActions;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const warnings = image ? imageWarnings(item, image.file_name, image.width, image.height) : [];
-  const lineBefore = slot?.beforeId === item.id;
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
     if (hasFiles(e)) {
@@ -67,62 +87,73 @@ function ItemRow({
       e.preventDefault();
       e.stopPropagation();
       setFileOver(null);
-      actions.uploadTo(item.id, droppedFiles(e));
+      actions.dropOnItem(item, Array.from(e.dataTransfer.files));
     }
   };
 
   return (
     <div
       ref={rowRef}
-      className={`dw-row${lineBefore ? ' is-line-before' : ''}${fileOver === item.id ? ' is-file-over' : ''}`}
+      role="button"
+      tabIndex={0}
+      className={`dw-row${slot?.beforeId === item.id ? ' is-line-before' : ''}${fileOver === item.id ? ' is-file-over' : ''}${active ? ' is-active' : ''}`}
       data-item-id={item.id}
+      onClick={() => actions.openItem(item.id)}
+      onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) actions.openItem(item.id); }}
       onDragOver={onDragOver}
       onDragLeave={() => { if (fileOver === item.id) setFileOver(null); }}
       onDrop={onDrop}
     >
-      <span
-        className="dw-handle"
-        draggable
-        title="끌어서 위치 옮기기"
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData(ITEM_TYPE, item.id);
-          if (rowRef.current) e.dataTransfer.setDragImage(rowRef.current, 12, 16);
-        }}
-        onDragEnd={() => setSlot(null)}
-      >⋮⋮</span>
-      <button type="button" className="dw-thumb" onClick={() => actions.openItem(item.id)} aria-label={`${item.name || '항목'} 열기`}>
-        {image ? <img src={imageUrl(image.path)} alt="" loading="lazy" /> : <span>{uploading ? '…' : '+'}</span>}
-        {warnings.length > 0 && <i className="dw-warn-dot" title={warnings.join('\n')}>!</i>}
-      </button>
-      <EditableText className="dw-cell dw-cell-name" label="요소명" placeholder="요소명" value={item.name}
-        onSave={(name) => actions.patchItem(item.id, { name })} />
-      <EditableText className="dw-cell dw-cell-file" label="파일명" placeholder="파일명" value={item.file_name}
-        onSave={(file_name) => actions.patchItem(item.id, { file_name })} />
-      <EditableText className="dw-cell" label="담당자" placeholder="담당자" value={item.assignee}
-        onSave={(assignee) => actions.patchItem(item.id, { assignee })} />
-      <select
-        className={`dw-status is-${item.status}`}
-        aria-label="상태"
-        value={item.status}
-        onChange={(e) => actions.patchItem(item.id, { status: e.target.value as DesignStatus })}
-      >
-        {DESIGN_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-      </select>
-      <button type="button" className="dw-desc" onClick={() => actions.openItem(item.id)}>
-        {item.description || <span className="dw-faint">세부 설명</span>}
-      </button>
+      {canDrag ? (
+        <span
+          className="dw-handle"
+          draggable
+          title="끌어서 위치 옮기기"
+          onClick={(e) => e.stopPropagation()}
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData(ITEM_TYPE, item.id);
+            if (rowRef.current) e.dataTransfer.setDragImage(rowRef.current, 12, 16);
+          }}
+          onDragEnd={() => setSlot(null)}
+        >⋮⋮</span>
+      ) : <span />}
+      <span className="dw-thumb">
+        {image ? <img src={imageUrl(image.path)} alt="" loading="lazy" /> : <i>{busy ? '…' : '+'}</i>}
+      </span>
+      <span className="dw-row-main">
+        <b>{item.name || '이름 없음'}{item.is_new && <Tag color="pink" title="게임에 아직 그림 자리가 없어 크기와 파일명이 바뀔 수 있습니다">신규</Tag>}</b>
+        {item.description && <small>{firstSentence(item.description)}</small>}
+      </span>
+      <span className="dw-row-tags">
+        {item.category && <Tag color={colorOf(DESIGN_CATEGORIES, item.category)}>{item.category}</Tag>}
+        {item.priority && <Tag color={colorOf(DESIGN_PRIORITIES, item.priority)}>{item.priority}</Tag>}
+        {item.alpha && <Tag color={colorOf(DESIGN_ALPHAS, item.alpha)}>{item.alpha}</Tag>}
+      </span>
+      <span className="dw-row-size">{sizeText(files)}</span>
+      <span className={`dw-row-files${files.length > 0 && filled === files.length ? ' is-full' : ''}`}>
+        {files.length > 0 ? `${filled} / ${files.length}` : '-'}
+      </span>
+      <TagSelect value={item.assignee} options={assigneeOptions} label="담당자" emptyLabel="담당 미정"
+        onChange={(assignee) => actions.patchItem(item.id, { assignee })} />
+      <TagSelect value={item.status} options={DESIGN_STATUSES} label="상태"
+        onChange={(status) => actions.patchItem(item.id, { status: status as DesignStatus })} />
     </div>
   );
 }
 
 function GroupSection({
-  group, items, latest, uploading, nextGroupId, slot, setSlot, groupSlot, setGroupSlot, fileOver, setFileOver, actions,
+  row, filesOf, filledOf, latest, busyItems, open, canDrag, openId, nextGroupId, slot, setSlot, groupSlot, setGroupSlot,
+  fileOver, setFileOver, onToggle, actions,
 }: {
-  group: DesignGroup;
-  items: DesignItem[];
+  row: BoardRows;
+  filesOf: Map<string, DesignFile[]>;
+  filledOf: Map<string, number>;
   latest: Map<string, DesignImage>;
-  uploading: Set<string>;
+  busyItems: Set<string>;
+  open: boolean;
+  canDrag: boolean;
+  openId: string | null;
   nextGroupId: string | null;
   slot: Slot | null;
   setSlot: (s: Slot | null) => void;
@@ -130,18 +161,17 @@ function GroupSection({
   setGroupSlot: (id: string | null | undefined) => void;
   fileOver: string | null;
   setFileOver: (id: string | null) => void;
+  onToggle: () => void;
   actions: BoardActions;
 }) {
   const sectionRef = useRef<HTMLElement>(null);
-  const done = items.filter((i) => i.status === 'done').length;
-  const fileKey = `group:${group.id}`;
+  const [editing, setEditing] = useState(false);
+  const { group, items, total, done } = row;
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
   const onDragOver = (e: DragEvent<HTMLElement>) => {
-    if (hasFiles(e)) {
-      e.preventDefault();
-      setFileOver(fileKey);
-    } else if (hasType(e, ITEM_TYPE)) {
-      // 줄 사이가 아닌 곳(머리글·빈 묶음)에 놓으면 맨 뒤로 간다.
+    if (hasType(e, ITEM_TYPE)) {
+      // 줄 사이가 아닌 곳(머리글 · 접힌 묶음)에 놓으면 맨 뒤로 간다.
       e.preventDefault();
       setSlot({ groupId: group.id, beforeId: null });
     } else if (hasType(e, GROUP_TYPE)) {
@@ -151,11 +181,6 @@ function GroupSection({
   };
   const onDrop = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
-    setFileOver(null);
-    if (hasFiles(e)) {
-      actions.addItemsFromFiles(group.id, droppedFiles(e));
-      return;
-    }
     const itemId = e.dataTransfer.getData(ITEM_TYPE);
     if (itemId && slot) actions.moveItem(itemId, slot.groupId, slot.beforeId);
     const groupId = e.dataTransfer.getData(GROUP_TYPE);
@@ -167,62 +192,102 @@ function GroupSection({
   return (
     <section
       ref={sectionRef}
-      className={`dw-group${groupSlot === group.id ? ' is-line-before' : ''}${fileOver === fileKey ? ' is-file-over' : ''}`}
+      className={`dw-group c-${group.color}${groupSlot === group.id ? ' is-line-before' : ''}`}
       data-group-id={group.id}
       onDragOver={onDragOver}
-      onDragLeave={(e) => {
-        if (fileOver === fileKey && !e.currentTarget.contains(e.relatedTarget as Node | null)) setFileOver(null);
-      }}
       onDrop={onDrop}
     >
-      <header className="dw-group-head">
-        <span
-          className="dw-handle"
-          draggable
-          title="끌어서 묶음 옮기기"
-          onDragStart={(e) => {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData(GROUP_TYPE, group.id);
-            if (sectionRef.current) e.dataTransfer.setDragImage(sectionRef.current, 12, 16);
-          }}
-          onDragEnd={() => setGroupSlot(undefined)}
-        >⋮⋮</span>
-        <EditableText className="dw-group-name" label="묶음 이름" placeholder="묶음 이름" value={group.name}
-          onSave={(name) => actions.renameGroup(group.id, name)} />
-        <span className="dw-count">{done} / {items.length}</span>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.removeGroup(group)}>묶음 삭제</button>
+      <header className="dw-group-head" onClick={onToggle}>
+        {canDrag ? (
+          <span
+            className="dw-handle"
+            draggable
+            title="끌어서 묶음 옮기기"
+            onClick={(e) => e.stopPropagation()}
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData(GROUP_TYPE, group.id);
+              if (sectionRef.current) e.dataTransfer.setDragImage(sectionRef.current, 12, 16);
+            }}
+            onDragEnd={() => setGroupSlot(undefined)}
+          >⋮⋮</span>
+        ) : <span />}
+        <button type="button" className={`dw-caret${open ? ' is-open' : ''}`} aria-expanded={open} aria-label={`${group.name} ${open ? '접기' : '펼치기'}`}>▶</button>
+        <button
+          type="button"
+          className="dw-dot"
+          title="눌러서 색 바꾸기"
+          aria-label="묶음 색 바꾸기"
+          onClick={(e) => { e.stopPropagation(); actions.recolorGroup(group); }}
+        />
+        {editing ? (
+          <span className="dw-group-title is-editing" onClick={(e) => e.stopPropagation()}>
+            <EditableText className="dw-group-name-input" label="묶음 이름" value={group.name} autoFocus
+              onSave={(name) => actions.patchGroup(group.id, { name })} />
+            <EditableText className="dw-group-note-input" label="묶음 설명" placeholder="묶음 설명" value={group.note}
+              onSave={(note) => actions.patchGroup(group.id, { note })} />
+          </span>
+        ) : (
+          <span className="dw-group-title">
+            <b>{group.name || '이름 없음'}</b>
+            {group.note && <small>{group.note}</small>}
+          </span>
+        )}
+        <span className="dw-group-progress" title={`완료 ${done} / 전체 ${total}`}>
+          <span className="dw-bar"><i style={{ width: `${percent}%` }} /></span>
+          <small>{done} / {total}</small>
+        </span>
+        <span className="dw-group-actions" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing((v) => !v)}>{editing ? '완료' : '이름 수정'}</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => actions.removeGroup(group)}>삭제</button>
+        </span>
       </header>
-      {items.length > 0 && (
-        <div className="dw-row dw-row-head" aria-hidden="true">
-          <span /><span /><span>요소명</span><span>파일명</span><span>담당자</span><span>상태</span><span>세부 설명</span>
+      {open && (
+        <div className="dw-group-body">
+          {items.length > 0 && (
+            <div className="dw-row dw-row-head" aria-hidden="true">
+              <span /><span /><span>요소</span><span>분류 · 우선 순위 · 투명</span><span>제작 크기</span><span>파일</span><span>담당자</span><span>상태</span>
+            </div>
+          )}
+          {items.map((item, i) => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              files={filesOf.get(item.id) ?? []}
+              filled={filledOf.get(item.id) ?? 0}
+              image={latest.get(item.id)}
+              busy={busyItems.has(item.id)}
+              canDrag={canDrag}
+              active={openId === item.id}
+              nextId={items[i + 1]?.id ?? null}
+              slot={slot}
+              setSlot={setSlot}
+              fileOver={fileOver}
+              setFileOver={setFileOver}
+              actions={actions}
+            />
+          ))}
+          <button
+            type="button"
+            className={`dw-add${slot?.groupId === group.id && slot.beforeId === null ? ' is-line-before' : ''}`}
+            onClick={() => actions.addItem(group.id)}
+          >+ 항목 추가</button>
         </div>
       )}
-      {items.map((item, i) => (
-        <ItemRow
-          key={item.id}
-          item={item}
-          nextId={items[i + 1]?.id ?? null}
-          image={latest.get(item.id)}
-          uploading={uploading.has(item.id)}
-          slot={slot}
-          setSlot={setSlot}
-          fileOver={fileOver}
-          setFileOver={setFileOver}
-          actions={actions}
-        />
-      ))}
-      <button
-        type="button"
-        className={`dw-add${slot?.groupId === group.id && slot.beforeId === null ? ' is-line-before' : ''}`}
-        onClick={() => actions.addItem(group.id)}
-      >+ 항목 추가 <span className="dw-faint">또는 그림을 여기로 끌어다 놓기</span></button>
     </section>
   );
 }
 
-export default function DesignBoard({ data, uploading, actions }: {
-  data: DesignData;
-  uploading: Set<string>;
+export default function DesignBoard({ rows, filesOf, filledOf, latest, busyItems, isOpen, filtering, openId, onToggle, actions }: {
+  rows: BoardRows[];
+  filesOf: Map<string, DesignFile[]>;
+  filledOf: Map<string, number>;
+  latest: Map<string, DesignImage>;
+  busyItems: Set<string>;
+  isOpen: (groupId: string) => boolean;
+  filtering: boolean;
+  openId: string | null;
+  onToggle: (groupId: string) => void;
   actions: BoardActions;
 }) {
   const [slot, setSlot] = useState<Slot | null>(null);
@@ -230,39 +295,44 @@ export default function DesignBoard({ data, uploading, actions }: {
   const [groupSlot, setGroupSlot] = useState<string | null | undefined>(undefined);
   const [fileOver, setFileOver] = useState<string | null>(null);
 
-  const groups = [...data.groups].sort(bySortOrder);
-  const latest = new Map<string, DesignImage>();
-  for (const image of data.images) if (!latest.has(image.item_id)) latest.set(image.item_id, image);
-
-  if (groups.length === 0) {
+  if (rows.length === 0) {
     return (
       <div className="dw-empty">
-        <p>아직 묶음이 없습니다. 타일, 캐릭터처럼 작업 묶음을 만들어 시작하세요.</p>
-        <button type="button" className="btn btn-primary" onClick={actions.addGroup}>+ 묶음 추가</button>
+        {filtering ? <p>조건에 맞는 항목이 없습니다.</p> : (
+          <>
+            <p>아직 묶음이 없습니다.</p>
+            <button type="button" className="btn btn-primary" onClick={actions.addGroup}>+ 묶음 추가</button>
+          </>
+        )}
       </div>
     );
   }
 
   return (
     <div className="dw-board">
-      {groups.map((group, i) => (
+      {rows.map((row, i) => (
         <GroupSection
-          key={group.id}
-          group={group}
-          items={data.items.filter((item) => item.group_id === group.id).sort(bySortOrder)}
+          key={row.group.id}
+          row={row}
+          filesOf={filesOf}
+          filledOf={filledOf}
           latest={latest}
-          uploading={uploading}
-          nextGroupId={groups[i + 1]?.id ?? null}
+          busyItems={busyItems}
+          open={filtering || isOpen(row.group.id)}
+          canDrag={!filtering}
+          openId={openId}
+          nextGroupId={rows[i + 1]?.group.id ?? null}
           slot={slot}
           setSlot={setSlot}
           groupSlot={groupSlot}
           setGroupSlot={setGroupSlot}
           fileOver={fileOver}
           setFileOver={setFileOver}
+          onToggle={() => onToggle(row.group.id)}
           actions={actions}
         />
       ))}
-      <button type="button" className="btn dw-add-group" onClick={actions.addGroup}>+ 묶음 추가</button>
+      {!filtering && <button type="button" className="btn dw-add-group" onClick={actions.addGroup}>+ 묶음 추가</button>}
     </div>
   );
 }
