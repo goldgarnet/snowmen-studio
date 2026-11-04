@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import * as nav from '../../lib/nav';
+import { saveWorkspace, workspaceHome, workspaceOfPath, type Workspace } from '../../lib/workspace';
 import './LoginScreen.css';
 
 export default function LoginScreen() {
   const { signIn, signUp, lastUsername, configured } = useAuth();
+  const [workspace, setWorkspace] = useState<Workspace>(() => workspaceOfPath(window.location.pathname));
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [username, setUsername] = useState(lastUsername);
   const [password, setPassword] = useState('');
@@ -23,6 +26,9 @@ export default function LoginScreen() {
       return;
     }
     setBusy(true);
+    // 맵 주소로 들어와 게임 제작을 고른 사람은 그 맵으로 그대로 간다.
+    saveWorkspace(workspace);
+    if (workspace !== workspaceOfPath(window.location.pathname)) nav.go(workspaceHome(workspace), { replace: true });
     try {
       if (mode === 'login') await signIn(username, password);
       else await signUp(username, password, name);
@@ -39,7 +45,16 @@ export default function LoginScreen() {
         <div className="login-brand">
           <span className="login-logo">⛄</span>
           <h1>Snowmen Studio</h1>
-          <p>팀 맵 제작 · 허브</p>
+          <p>게임 제작 · 디자인 작업</p>
+        </div>
+
+        <div className="login-tabs" role="group" aria-label="작업 공간">
+          <button className={workspace === 'game' ? 'active' : ''} aria-pressed={workspace === 'game'} onClick={() => setWorkspace('game')} type="button">
+            게임 제작
+          </button>
+          <button className={workspace === 'design' ? 'active' : ''} aria-pressed={workspace === 'design'} onClick={() => setWorkspace('design')} type="button">
+            디자인
+          </button>
         </div>
 
         {!configured && (

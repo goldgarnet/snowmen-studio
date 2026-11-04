@@ -16,6 +16,7 @@ import type { MapRow } from './api/types';
 import * as nav from './lib/nav';
 import { backToHub, getCachedMap, splitUrl } from './lib/hubState';
 import { useEscapeKey } from './lib/useEscapeKey';
+import { readWorkspace, saveWorkspace, workspaceHome } from './lib/workspace';
 import './App.css';
 
 // 맵 상세를 '푼 맵 현황'에서 열었으면 from = 'solved' (주소 ?from=solved) — 뒤로가기가 현황으로 돌아간다.
@@ -180,7 +181,13 @@ function NotFoundRoute({ onBack }: { onBack: () => void }) {
 
 export default function App() {
   const { loading, session, profile, signOut } = useAuth();
-  const [route, setRoute] = useState<AppRoute>(() => readRoute(window.location.pathname, window.location.search));
+  const [route, setRoute] = useState<AppRoute>(() => {
+    // 첫 화면(/)은 마지막에 쓴 작업 공간으로 연다. 주소가 맵 등을 가리키면 그 주소를 따른다.
+    if (window.location.pathname === '/') {
+      window.history.replaceState(window.history.state, '', `${workspaceHome(readWorkspace())}${window.location.search}`);
+    }
+    return readRoute(window.location.pathname, window.location.search);
+  });
 
   const studioApiRef = useRef<StudioApi | null>(null);
   const [pending, setPending] = useState<(() => void) | null>(null);
@@ -238,6 +245,12 @@ export default function App() {
             : '맵 허브 | Snowmen Studio';
     document.title = title;
   }, [route]);
+
+  // 로그인 화면에서 고른 값을 덮어쓰지 않게 로그인한 뒤에만 기억한다.
+  const signedIn = Boolean(session);
+  useEffect(() => {
+    if (signedIn) saveWorkspace(route.kind === 'design' ? 'design' : 'game');
+  }, [signedIn, route.kind]);
 
   useEscapeKey(() => { if (!saving) setPending(null); }, Boolean(pending));
 

@@ -30,14 +30,22 @@ export default function TopNav({ tab, setTab, userName, onLogout }: TopNavProps)
       </div>
 
       <nav className="topnav-tabs" ref={tabsRef}>
-        <button className={tab === 'hub' ? 'active' : ''} onClick={() => setTab('hub')}>맵 허브</button>
-        <button className={tab === 'solved' ? 'active' : ''} onClick={() => setTab('solved')}>푼 맵 현황</button>
-        <button className={tab === 'studio' ? 'active' : ''} onClick={() => setTab('studio')}>맵 제작</button>
-        <button className={tab === 'chapters' ? 'active' : ''} onClick={() => setTab('chapters')}>챕터 구성</button>
-        <button className={tab === 'design' ? 'active' : ''} onClick={() => setTab('design')}>디자인 작업</button>
+        {tab === 'design' ? (
+          <button className="active">디자인 작업</button>
+        ) : (
+          <>
+            <button className={tab === 'hub' ? 'active' : ''} onClick={() => setTab('hub')}>맵 허브</button>
+            <button className={tab === 'solved' ? 'active' : ''} onClick={() => setTab('solved')}>푼 맵 현황</button>
+            <button className={tab === 'studio' ? 'active' : ''} onClick={() => setTab('studio')}>맵 제작</button>
+            <button className={tab === 'chapters' ? 'active' : ''} onClick={() => setTab('chapters')}>챕터 구성</button>
+          </>
+        )}
       </nav>
 
       <div className="topnav-user">
+        <button className="btn btn-sm" onClick={() => setTab(tab === 'design' ? 'hub' : 'design')}>
+          {tab === 'design' ? '게임 제작으로' : '디자인으로'}
+        </button>
         <button
           className="topnav-theme"
           onClick={toggle}
