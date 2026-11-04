@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../../api/design';
-import type { DesignColor, DesignData, DesignFile, DesignGroup, DesignImage, DesignItem, DesignTask } from '../../api/design';
-import { bySortOrder, matchesQuery, moveItem, reorder, slotForDrop, statusAfterUpload } from '../../lib/designBoard';
+import type { DesignColor, DesignComment, DesignData, DesignFile, DesignGroup, DesignImage, DesignItem, DesignTask } from '../../api/design';
+import { bySortOrder, currentDeadline, itemDeadlines, matchesQuery, moveItem, reorder, slotForDrop, statusAfterUpload } from '../../lib/designBoard';
 import ConfirmModal from '../common/ConfirmModal';
 import DesignBoard, { type BoardActions, type BoardRows } from './DesignBoard';
 import DesignItemPanel from './DesignItemPanel';
+import DesignNow from './DesignNow';
 import DesignTimeline from './DesignTimeline';
+import DesignViewer from './DesignViewer';
 import './design.css';
 
 // 디자인 작업 공간 — 항목 보드와 타임라인. 로그인한 팀원 전원이 함께 고친다.
@@ -19,7 +21,8 @@ const OPEN_KEY = 'snowmen-design-open-groups';
 const WHO_FILTERS = [
   { value: 'all', label: '전체' },
   { value: '시연', label: '시연' },
-  { value: '민준·소민', label: '민준·소민' },
+  { value: '민준', label: '민준' },
+  { value: '소민', label: '소민' },
   { value: 'none', label: '담당 미정' },
 ];
 
@@ -44,13 +47,15 @@ interface PendingDelete {
   run: () => Promise<void>;
 }
 
-export default function DesignWorkspace({ userName }: { userName: string }) {
+export default function DesignWorkspace({ userName, userId }: { userName: string; userId: string }) {
   const [data, setData] = useState<DesignData | null>(null);
   const [notInstalled, setNotInstalled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setViewState] = useState<View>(lastView);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyFiles, setBusyFiles] = useState<Set<string>>(new Set());
+  const [busyDraft, setBusyDraft] = useState(false);
+  const [viewing, setViewing] = useState<DesignImage | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [openGroups, setOpenGroups] = useState<string[] | null>(readOpenGroups);
   const [query, setQuery] = useState('');
@@ -116,7 +121,7 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
   const uploadOne = async (item: DesignItem, slot: DesignFile, picked: File, filled: Set<string>) => {
     setBusyFiles((s) => new Set(s).add(slot.id));
     try {
-      const image = await api.uploadImage(slot, picked, userName);
+      const image = await api.uploadImage({ itemId: item.id, slot }, picked, userName);
       change((d) => ({ ...d, images: [image, ...d.images] }));
       filled.add(slot.id);
       const total = (dataRef.current?.files ?? []).filter((f) => f.item_id === item.id).length;
@@ -214,6 +219,60 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
     openItem: setOpenId,
   };
 
+  // ---------- 시안 · 가이드 ----------
+  const draftsOf = (itemId: string) =>
+    (dataRef.current?.images ?? []).filter((i) => i.item_id === itemId && !i.file_id).sort(bySortOrder);
+
+  const uploadDrafts = async (item: DesignItem, picked: File[]) => {
+    const pictures = picked.filter((f) => f.type.startsWith('image/'));
+    if (pictures.length < picked.length) setError('시안은 그림 파일만 올릴 수 있습니다.');
+    if (pictures.length === 0) return;
+    setBusyDraft(true);
+    try {
+      let order = nextOrder(draftsOf(item.id));
+      for (const one of pictures) {
+        const image = await api.uploadImage({ itemId: item.id, sortOrder: order }, one, userName);
+        order += 1;
+        change((d) => ({ ...d, images: [image, ...d.images] }));
+      }
+      if (item.status === 'todo') patchItem(item.id, { status: 'doing' });
+    } catch (e) {
+      setError(`그림을 올리지 못했습니다: ${(e as Error).message}`);
+    } finally {
+      setBusyDraft(false);
+    }
+  };
+
+  const patchImage = (id: string, patch: Partial<DesignImage>) => {
+    change((d) => ({ ...d, images: d.images.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
+    save(api.updateImage(id, patch));
+  };
+
+  const moveDraft = (item: DesignItem, id: string, beforeId: string | null) => {
+    const { changed } = reorder(draftsOf(item.id), id, beforeId);
+    if (changed.length === 0) return;
+    change((d) => ({ ...d, images: d.images.map((i) => changed.find((c) => c.id === i.id) ?? i) }));
+    save(Promise.all(changed.map((i) => api.updateImage(i.id, { sort_order: i.sort_order }))));
+  };
+
+  // 채택은 항목마다 한 장이다.
+  const pickImage = (image: DesignImage) => {
+    if (!image.picked) {
+      for (const other of draftsOf(image.item_id)) if (other.picked) patchImage(other.id, { picked: false });
+    }
+    patchImage(image.id, { picked: !image.picked });
+  };
+
+  const addComment = (imageId: string, body: string, pin: { x: number; y: number } | null) => {
+    save(api.insertComment({ image_id: imageId, author_name: userName, body, pin_x: pin?.x ?? null, pin_y: pin?.y ?? null })
+      .then((c) => change((d) => ({ ...d, comments: [...d.comments, c] }))));
+  };
+
+  const removeComment = (comment: DesignComment) => {
+    change((d) => ({ ...d, comments: d.comments.filter((c) => c.id !== comment.id) }));
+    save(api.deleteComment(comment.id));
+  };
+
   const removeItem = (item: DesignItem) => setPendingDelete({
     title: '항목 삭제',
     message: `‘${item.name || '이름 없음'}’ 항목과 올린 그림이 모두 지워집니다.`,
@@ -243,7 +302,12 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
     message: `‘${image.file_name}’ 그림이 지워집니다.`,
     run: async () => {
       await api.deleteImage(image);
-      change((d) => ({ ...d, images: d.images.filter((i) => i.id !== image.id) }));
+      change((d) => ({
+        ...d,
+        images: d.images.filter((i) => i.id !== image.id),
+        comments: d.comments.filter((c) => c.image_id !== image.id),
+      }));
+      setViewing((v) => (v?.id === image.id ? null : v));
     },
   });
 
@@ -283,25 +347,42 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
     return map;
   }, [data?.files]);
 
-  const { latest, filledOf } = useMemo(() => {
-    const firstImage = new Map<string, DesignImage>();
+  const { latest, filledOf, draftCount, picked } = useMemo(() => {
+    const thumb = new Map<string, DesignImage>();     // 대표 그림: 최신 최종 파일 → 채택 시안 → 첫 시안
     const slots = new Map<string, Set<string>>();
-    for (const image of data?.images ?? []) {
-      if (!firstImage.has(image.item_id)) firstImage.set(image.item_id, image);
-      if (image.file_id) {
-        const set = slots.get(image.item_id) ?? new Set<string>();
-        set.add(image.file_id);
-        slots.set(image.item_id, set);
-      }
+    const counts = new Map<string, number>();
+    const chosen = new Set<string>();
+    const images = data?.images ?? [];
+    for (const image of images) {
+      if (!image.file_id) continue;
+      if (!thumb.has(image.item_id)) thumb.set(image.item_id, image);
+      const set = slots.get(image.item_id) ?? new Set<string>();
+      set.add(image.file_id);
+      slots.set(image.item_id, set);
     }
-    return { latest: firstImage, filledOf: new Map([...slots].map(([id, set]) => [id, set.size])) };
+    for (const image of images.filter((i) => !i.file_id).sort(bySortOrder)) {
+      counts.set(image.item_id, (counts.get(image.item_id) ?? 0) + 1);
+      if (image.picked) chosen.add(image.item_id);
+      if (image.picked || !thumb.has(image.item_id)) thumb.set(image.item_id, image);
+    }
+    return { latest: thumb, filledOf: new Map([...slots].map(([id, set]) => [id, set.size])), draftCount: counts, picked: chosen };
   }, [data?.images]);
+
+  const commentCount = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of data?.comments ?? []) map.set(c.image_id, (map.get(c.image_id) ?? 0) + 1);
+    return map;
+  }, [data?.comments]);
+
+  const tasksById = useMemo(() => new Map((data?.tasks ?? []).map((t) => [t.id, t])), [data?.tasks]);
+  const deadlinesOf = (item: DesignItem) => itemDeadlines(item, tasksById, picked.has(item.id), today);
 
   const filtering = query.trim() !== '' || who !== 'all' || status !== 'all' || priority !== 'all';
 
   const rows: BoardRows[] = useMemo(() => {
     const matches = (item: DesignItem, groupName: string) => {
-      if (who === 'none' ? item.assignee !== '' : who !== 'all' && item.assignee !== who) return false;
+      const people = item.split ? [item.guide_assignee, item.assignee] : [item.assignee];
+      if (who === 'none' ? people.some(Boolean) : who !== 'all' && !people.includes(who)) return false;
       if (status !== 'all' && item.status !== status) return false;
       if (priority !== 'all' && item.priority !== priority) return false;
       const files = filesOf.get(item.id) ?? [];
@@ -362,6 +443,8 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
         </div>
       </div>
 
+      {data && !notInstalled && <DesignNow tasks={sortedTasks} today={today} who={who} />}
+
       {!notInstalled && (
         <div className="dw-toolbar">
           <input
@@ -407,7 +490,7 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
       {notInstalled ? (
         <div className="dw-empty">
           <p>디자인 작업 공간의 새 DB 구조가 아직 적용되지 않았습니다.</p>
-          <p>Supabase SQL Editor에서 <code>supabase/migrations/2026-11-05_design_v2.sql</code>을 실행해 주세요.</p>
+          <p>Supabase SQL Editor에서 <code>supabase/migrations/2026-11-05_design_v3.sql</code>을 실행해 주세요.</p>
         </div>
       ) : !data ? (
         !error && <div className="dw-empty"><p>불러오는 중…</p></div>
@@ -416,6 +499,8 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
           rows={rows}
           filesOf={filesOf}
           filledOf={filledOf}
+          dueOf={(item) => currentDeadline(deadlinesOf(item), item.status)}
+          draftsOf={draftCount}
           latest={latest}
           busyItems={busyItems}
           isOpen={isOpen}
@@ -443,9 +528,19 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
           item={openItem}
           group={data?.groups.find((g) => g.id === openItem.group_id)}
           files={filesOf.get(openItem.id) ?? []}
-          images={(data?.images ?? []).filter((i) => i.item_id === openItem.id)}
+          drafts={(data?.images ?? []).filter((i) => i.item_id === openItem.id && !i.file_id).sort(bySortOrder)}
+          finals={(data?.images ?? []).filter((i) => i.item_id === openItem.id && i.file_id)}
+          comments={commentCount}
+          tasks={sortedTasks}
+          deadlines={deadlinesOf(openItem)}
           busyFiles={busyFiles}
+          busyDraft={busyDraft}
           onPatch={(patch) => patchItem(openItem.id, patch)}
+          onUploadDrafts={(picked) => { void uploadDrafts(openItem, picked); }}
+          onMoveDraft={(id, beforeId) => moveDraft(openItem, id, beforeId)}
+          onRank={(id, rank) => patchImage(id, { rank })}
+          onPickImage={pickImage}
+          onOpenImage={setViewing}
           onPickFile={(file, picked) => pickFile(openItem, file, picked)}
           onPatchFile={(id, patch) => {
             change((d) => ({ ...d, files: d.files.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
@@ -458,6 +553,31 @@ export default function DesignWorkspace({ userName }: { userName: string }) {
           onClose={() => setOpenId(null)}
         />
       )}
+
+      {viewing && data && (() => {
+        const list = viewing.file_id
+          ? data.images.filter((i) => i.file_id === viewing.file_id)
+          : data.images.filter((i) => i.item_id === viewing.item_id && !i.file_id).sort(bySortOrder);
+        const item = data.items.find((i) => i.id === viewing.item_id);
+        const slot = data.files.find((f) => f.id === viewing.file_id);
+        return (
+          <DesignViewer
+            key={`viewer-${viewing.file_id ?? viewing.item_id}`}
+            title={`${item?.name ?? ''} · ${slot ? slot.label || '파일' : item?.split ? '가이드' : '시안'}`}
+            images={list}
+            comments={data.comments}
+            startId={viewing.id}
+            userId={userId}
+            ranked={!viewing.file_id}
+            onClose={() => setViewing(null)}
+            onRank={(id, rank) => patchImage(id, { rank })}
+            onPick={pickImage}
+            onAddComment={addComment}
+            onRemoveComment={removeComment}
+            onRemoveImage={removeImage}
+          />
+        );
+      })()}
 
       {pendingDelete && (
         <ConfirmModal

@@ -3,6 +3,7 @@ import {
   colorOf, DESIGN_ALPHAS, DESIGN_ASSIGNEES, DESIGN_CATEGORIES, DESIGN_PRIORITIES, DESIGN_STATUSES, imageUrl,
   type DesignFile, type DesignGroup, type DesignImage, type DesignItem, type DesignStatus,
 } from '../../api/design';
+import { daysLeft, shortDate, type Deadline } from '../../lib/designBoard';
 import EditableText from './EditableText';
 import { Tag, TagSelect } from './tags';
 
@@ -39,7 +40,6 @@ const isUpperHalf = (e: DragEvent<HTMLElement>) => {
 };
 
 const firstSentence = (text: string) => text.split('\n')[0];
-const assigneeOptions = DESIGN_ASSIGNEES;
 
 function sizeText(files: DesignFile[]): string {
   const sizes = [...new Set(files.filter((f) => f.canvas_w && f.canvas_h).map((f) => `${f.canvas_w} × ${f.canvas_h}`))];
@@ -53,11 +53,13 @@ interface Slot {
 }
 
 function ItemRow({
-  item, files, filled, image, busy, canDrag, active, nextId, slot, setSlot, fileOver, setFileOver, actions,
+  item, files, filled, due, drafts, image, busy, canDrag, active, nextId, slot, setSlot, fileOver, setFileOver, actions,
 }: {
   item: DesignItem;
   files: DesignFile[];
   filled: number;
+  due: Deadline | null;
+  drafts: number;
   image: DesignImage | undefined;
   busy: boolean;
   canDrag: boolean;
@@ -122,7 +124,12 @@ function ItemRow({
         {image ? <img src={imageUrl(image.path)} alt="" loading="lazy" /> : <i>{busy ? '…' : '+'}</i>}
       </span>
       <span className="dw-row-main">
-        <b>{item.name || '이름 없음'}{item.is_new && <Tag color="pink" title="게임에 아직 그림 자리가 없어 크기와 파일명이 바뀔 수 있습니다">신규</Tag>}</b>
+        <b>
+          {item.name || '이름 없음'}
+          {item.is_new && <Tag color="pink" title="게임에 아직 그림 자리가 없어 크기와 파일명이 바뀔 수 있습니다">신규</Tag>}
+          {item.split && <Tag color={item.guide_done ? 'teal' : 'purple'}>{item.guide_done ? '채색 차례' : '가이드 차례'}</Tag>}
+          {drafts > 0 && <Tag color="blue">{item.split ? '가이드' : '시안'} {drafts}</Tag>}
+        </b>
         {item.description && <small>{firstSentence(item.description)}</small>}
       </span>
       <span className="dw-row-tags">
@@ -131,11 +138,29 @@ function ItemRow({
         {item.alpha && <Tag color={colorOf(DESIGN_ALPHAS, item.alpha)}>{item.alpha}</Tag>}
       </span>
       <span className="dw-row-size">{sizeText(files)}</span>
+      <span className={`dw-row-due${due ? (due.days < 0 ? ' is-late' : due.days <= 7 ? ' is-soon' : '') : ''}`} title={due ? `${due.label} 마감 ${daysLeft(due.days)}` : undefined}>
+        {due ? <><b>~{shortDate(due.date)}</b><small>{due.label}</small></> : item.status === 'done' ? <small>완료</small> : ''}
+      </span>
       <span className={`dw-row-files${files.length > 0 && filled === files.length ? ' is-full' : ''}`}>
         {files.length > 0 ? `${filled} / ${files.length}` : '-'}
       </span>
-      <TagSelect value={item.assignee} options={assigneeOptions} label="담당자" emptyLabel="담당 미정"
-        onChange={(assignee) => actions.patchItem(item.id, { assignee })} />
+      {item.split ? (
+        <span className="dw-row-who">
+          <label className={item.guide_done ? '' : 'is-turn'}>
+            <em>가이드</em>
+            <TagSelect value={item.guide_assignee} options={DESIGN_ASSIGNEES} label="가이드 담당" emptyLabel="미정"
+              onChange={(guide_assignee) => actions.patchItem(item.id, { guide_assignee })} />
+          </label>
+          <label className={item.guide_done ? 'is-turn' : ''}>
+            <em>채색</em>
+            <TagSelect value={item.assignee} options={DESIGN_ASSIGNEES} label="채색 담당" emptyLabel="미정"
+              onChange={(assignee) => actions.patchItem(item.id, { assignee })} />
+          </label>
+        </span>
+      ) : (
+        <TagSelect value={item.assignee} options={DESIGN_ASSIGNEES} label="담당자" emptyLabel="담당 미정"
+          onChange={(assignee) => actions.patchItem(item.id, { assignee })} />
+      )}
       <TagSelect value={item.status} options={DESIGN_STATUSES} label="상태"
         onChange={(status) => actions.patchItem(item.id, { status: status as DesignStatus })} />
     </div>
@@ -143,12 +168,14 @@ function ItemRow({
 }
 
 function GroupSection({
-  row, filesOf, filledOf, latest, busyItems, open, canDrag, openId, nextGroupId, slot, setSlot, groupSlot, setGroupSlot,
+  row, filesOf, filledOf, dueOf, draftsOf, latest, busyItems, open, canDrag, openId, nextGroupId, slot, setSlot, groupSlot, setGroupSlot,
   fileOver, setFileOver, onToggle, actions,
 }: {
   row: BoardRows;
   filesOf: Map<string, DesignFile[]>;
   filledOf: Map<string, number>;
+  dueOf: (item: DesignItem) => Deadline | null;
+  draftsOf: Map<string, number>;
   latest: Map<string, DesignImage>;
   busyItems: Set<string>;
   open: boolean;
@@ -246,7 +273,7 @@ function GroupSection({
         <div className="dw-group-body">
           {items.length > 0 && (
             <div className="dw-row dw-row-head" aria-hidden="true">
-              <span /><span /><span>요소</span><span>분류 · 우선 순위 · 투명</span><span>제작 크기</span><span>파일</span><span>담당자</span><span>상태</span>
+              <span /><span /><span>요소</span><span>분류 · 우선 순위 · 투명</span><span>제작 크기</span><span>마감</span><span>파일</span><span>담당자</span><span>상태</span>
             </div>
           )}
           {items.map((item, i) => (
@@ -255,6 +282,8 @@ function GroupSection({
               item={item}
               files={filesOf.get(item.id) ?? []}
               filled={filledOf.get(item.id) ?? 0}
+              due={dueOf(item)}
+              drafts={draftsOf.get(item.id) ?? 0}
               image={latest.get(item.id)}
               busy={busyItems.has(item.id)}
               canDrag={canDrag}
@@ -278,10 +307,12 @@ function GroupSection({
   );
 }
 
-export default function DesignBoard({ rows, filesOf, filledOf, latest, busyItems, isOpen, filtering, openId, onToggle, actions }: {
+export default function DesignBoard({ rows, filesOf, filledOf, dueOf, draftsOf, latest, busyItems, isOpen, filtering, openId, onToggle, actions }: {
   rows: BoardRows[];
   filesOf: Map<string, DesignFile[]>;
   filledOf: Map<string, number>;
+  dueOf: (item: DesignItem) => Deadline | null;
+  draftsOf: Map<string, number>;
   latest: Map<string, DesignImage>;
   busyItems: Set<string>;
   isOpen: (groupId: string) => boolean;
@@ -316,6 +347,8 @@ export default function DesignBoard({ rows, filesOf, filledOf, latest, busyItems
           row={row}
           filesOf={filesOf}
           filledOf={filledOf}
+          dueOf={dueOf}
+          draftsOf={draftsOf}
           latest={latest}
           busyItems={busyItems}
           open={filtering || isOpen(row.group.id)}

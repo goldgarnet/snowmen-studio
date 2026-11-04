@@ -438,3 +438,40 @@ alter table public.design_files enable row level security;
 grant select, insert, update, delete on public.design_files to authenticated;
 drop policy if exists design_files_all on public.design_files;
 create policy design_files_all on public.design_files for all to authenticated using (true) with check (true);
+
+-- ---------- 디자인 작업 공간 v3: 시안 · 피드백 · 가이드/채색 · 마감 ----------
+alter table public.design_items
+  add column if not exists split          boolean not null default false,  -- 가이드와 채색을 나눠 맡는 항목
+  add column if not exists guide_assignee text not null default '',        -- 이때 assignee 는 채색 담당
+  add column if not exists guide_done     boolean not null default false,
+  add column if not exists task_id        uuid references public.design_tasks(id) on delete set null,
+  add column if not exists draft_task_id  uuid references public.design_tasks(id) on delete set null;
+
+-- file_id 가 없는 그림은 항목의 시안 · 가이드다.
+alter table public.design_images
+  add column if not exists sort_order integer not null default 0,
+  add column if not exists rank       text not null default '',
+  add column if not exists picked     boolean not null default false;
+
+-- 그림 한 장에 달린 피드백. pin 이 있으면 그림 위 그 자리(0~1 비율)를 가리킨다.
+create table if not exists public.design_comments (
+  id          uuid primary key default gen_random_uuid(),
+  image_id    uuid not null references public.design_images(id) on delete cascade,
+  author_id   uuid default auth.uid() references public.profiles(id) on delete set null,
+  author_name text not null default '',
+  body        text not null,
+  pin_x       real,
+  pin_y       real,
+  created_at  timestamptz not null default now()
+);
+create index if not exists design_comments_image_idx on public.design_comments(image_id, created_at);
+
+alter table public.design_comments enable row level security;
+grant select, insert, delete on public.design_comments to authenticated;
+-- 조회와 작성은 로그인 사용자 전원, 삭제는 쓴 사람만.
+drop policy if exists design_comments_select on public.design_comments;
+create policy design_comments_select on public.design_comments for select to authenticated using (true);
+drop policy if exists design_comments_insert on public.design_comments;
+create policy design_comments_insert on public.design_comments for insert to authenticated with check (author_id = auth.uid());
+drop policy if exists design_comments_delete on public.design_comments;
+create policy design_comments_delete on public.design_comments for delete to authenticated using (author_id = auth.uid());

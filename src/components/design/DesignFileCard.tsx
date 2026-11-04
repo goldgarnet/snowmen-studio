@@ -59,12 +59,14 @@ function NumberCell({ value, label, onSave }: { value: number | null; label: str
   );
 }
 
-export default function DesignFileCard({ file, images, guide, busy, onPick, onPatch, onRemove, onRemoveImage }: {
+export default function DesignFileCard({ file, images, feedback, guide, busy, onPick, onOpen, onPatch, onRemove, onRemoveImage }: {
   file: DesignFile;
   images: DesignImage[];   // 최근 것부터
+  feedback: number;        // 이 칸의 그림에 달린 피드백 수
   guide: boolean;
   busy: boolean;
   onPick: (picked: File[]) => void;
+  onOpen: (image: DesignImage) => void;
   onPatch: (patch: Partial<DesignFile>) => void;
   onRemove: () => void;
   onRemoveImage: (image: DesignImage) => void;
@@ -88,7 +90,9 @@ export default function DesignFileCard({ file, images, guide, busy, onPick, onPa
   return (
     <article className={`dw-file${current ? ' is-filled' : ''}${problem ? ' has-problem' : ''}`} data-file-id={file.id}>
       <div
-        className={`dw-stage${over ? ' is-over' : ''}`}
+        className={`dw-stage${over ? ' is-over' : ''}${current ? ' can-open' : ''}`}
+        title={current ? '크게 보고 피드백 남기기' : undefined}
+        onClick={() => { if (current) onOpen(current); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true); }}
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
@@ -149,6 +153,7 @@ export default function DesignFileCard({ file, images, guide, busy, onPick, onPa
             {current ? '새 버전 올리기' : '파일 선택'}
           </button>
           {current && <a className="btn btn-sm" href={downloadUrl(current.path, saveName)}>받기</a>}
+          {current && <button type="button" className="btn btn-sm" onClick={() => onOpen(current)}>피드백 {feedback}</button>}
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing((v) => !v)}>{editing ? '완료' : '수정'}</button>
         </div>
         {editing && <button type="button" className="dw-link-danger" onClick={onRemove}>이 파일 칸 삭제</button>}

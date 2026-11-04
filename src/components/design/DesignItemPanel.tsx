@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import {
   DESIGN_ALPHAS, DESIGN_ASSIGNEES, DESIGN_CATEGORIES, DESIGN_PRIORITIES, DESIGN_STATUSES,
-  type DesignFile, type DesignGroup, type DesignImage, type DesignItem, type DesignStatus,
+  type DesignFile, type DesignGroup, type DesignImage, type DesignItem, type DesignStatus, type DesignTask,
 } from '../../api/design';
-import { ideaList, textLines } from '../../lib/designBoard';
+import { daysLeft, ideaList, shortDate, textLines, type Deadline } from '../../lib/designBoard';
 import { useEscapeKey } from '../../lib/useEscapeKey';
 import DesignFileCard from './DesignFileCard';
+import DesignGallery from './DesignGallery';
 import EditableText, { EditableBlock } from './EditableText';
 import { TagSelect } from './tags';
 
@@ -20,14 +21,25 @@ const PLACEMENT_TEXT: Record<string, string> = {
 };
 
 export default function DesignItemPanel({
-  item, group, files, images, busyFiles, onPatch, onPickFile, onPatchFile, onAddFile, onRemoveFile, onRemoveImage, onRemove, onClose,
+  item, group, files, drafts, finals, comments, tasks, deadlines, busyFiles, busyDraft,
+  onPatch, onUploadDrafts, onMoveDraft, onRank, onPickImage, onOpenImage, onPickFile, onPatchFile, onAddFile, onRemoveFile, onRemoveImage, onRemove, onClose,
 }: {
   item: DesignItem;
   group: DesignGroup | undefined;
   files: DesignFile[];
-  images: DesignImage[];   // 이 항목의 그림, 최근 것부터
+  drafts: DesignImage[];          // 시안 · 가이드, 보이는 순서대로
+  finals: DesignImage[];          // 파일 칸의 그림, 최근 것부터
+  comments: Map<string, number>;  // 그림별 피드백 수
+  tasks: DesignTask[];
+  deadlines: Deadline[];
   busyFiles: Set<string>;
+  busyDraft: boolean;
   onPatch: (patch: Partial<DesignItem>) => void;
+  onUploadDrafts: (picked: File[]) => void;
+  onMoveDraft: (id: string, beforeId: string | null) => void;
+  onRank: (id: string, rank: string) => void;
+  onPickImage: (image: DesignImage) => void;
+  onOpenImage: (image: DesignImage) => void;
   onPickFile: (file: DesignFile, picked: File[]) => void;
   onPatchFile: (id: string, patch: Partial<DesignFile>) => void;
   onAddFile: () => void;
@@ -38,7 +50,8 @@ export default function DesignItemPanel({
 }) {
   const [guide, setGuide] = useState(true);
   const placement = PLACEMENT_TEXT[files.find((f) => f.canvas_w)?.placement ?? ''];
-  const filled = files.filter((f) => images.some((i) => i.file_id === f.id)).length;
+  const filled = files.filter((f) => finals.some((i) => i.file_id === f.id)).length;
+  const draftName = item.split ? '가이드' : '시안';
 
   // 글을 고치는 중이면 Esc 는 칸만 벗어나 저장하고, 한 번 더 누르면 닫는다.
   useEscapeKey(() => {
@@ -58,11 +71,39 @@ export default function DesignItemPanel({
         <EditableText className="dw-panel-title" label="요소명" placeholder="요소명" value={item.name} onSave={(name) => onPatch({ name })} />
 
         <div className="dw-props">
-          <div><span>담당자</span><TagSelect value={item.assignee} options={DESIGN_ASSIGNEES} label="담당자" emptyLabel="담당 미정" onChange={(assignee) => onPatch({ assignee })} /></div>
+          {item.split ? (
+            <>
+              <div><span>가이드 담당</span><TagSelect value={item.guide_assignee} options={DESIGN_ASSIGNEES} label="가이드 담당" emptyLabel="담당 미정" onChange={(guide_assignee) => onPatch({ guide_assignee })} /></div>
+              <div><span>채색 담당</span><TagSelect value={item.assignee} options={DESIGN_ASSIGNEES} label="채색 담당" emptyLabel="담당 미정" onChange={(assignee) => onPatch({ assignee })} /></div>
+            </>
+          ) : (
+            <div><span>담당자</span><TagSelect value={item.assignee} options={DESIGN_ASSIGNEES} label="담당자" emptyLabel="담당 미정" onChange={(assignee) => onPatch({ assignee })} /></div>
+          )}
           <div><span>상태</span><TagSelect value={item.status} options={DESIGN_STATUSES} label="상태" onChange={(status) => onPatch({ status: status as DesignStatus })} /></div>
           <div><span>우선 순위</span><TagSelect value={item.priority} options={DESIGN_PRIORITIES} label="우선 순위" emptyLabel="없음" onChange={(priority) => onPatch({ priority })} /></div>
           <div><span>분류</span><TagSelect value={item.category} options={DESIGN_CATEGORIES} label="분류" emptyLabel="없음" onChange={(category) => onPatch({ category })} /></div>
           <div><span>투명 여부</span><TagSelect value={item.alpha} options={DESIGN_ALPHAS} label="투명 여부" emptyLabel="없음" onChange={(alpha) => onPatch({ alpha })} /></div>
+        </div>
+
+        <div className="dw-dues">
+          {deadlines.map((d) => (
+            <div key={d.label} className={`dw-due${d.done ? ' is-done' : d.days < 0 ? ' is-late' : d.days <= 7 ? ' is-soon' : ''}`}>
+              <span>{d.label} 마감</span>
+              <b>{shortDate(d.date)}까지</b>
+              <em>{d.done ? '끝남' : daysLeft(d.days)}</em>
+            </div>
+          ))}
+          <label className="dw-due-task">
+            <span>타임라인 일정</span>
+            <select value={item.task_id ?? ''} onChange={(e) => onPatch({ task_id: e.target.value || null })}>
+              <option value="">연결 안 함</option>
+              {tasks.filter((t) => t.category !== 'mile').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <label className="dw-switch">
+            <input type="checkbox" checked={item.split} onChange={(e) => onPatch({ split: e.target.checked })} />
+            가이드 / 채색 나누기
+          </label>
         </div>
 
         {item.is_new && (
@@ -87,7 +128,36 @@ export default function DesignItemPanel({
 
         <section className="dw-sec">
           <div className="dw-sec-head">
-            <h3>파일 <small>{filled} / {files.length}</small></h3>
+            <h3>{draftName} <small>{drafts.length}장</small></h3>
+            {item.split && (
+              <button type="button" className={`dw-shot-btn${item.guide_done ? ' is-on' : ''}`} onClick={() => onPatch({ guide_done: !item.guide_done })}>
+                {item.guide_done ? '가이드 완료 취소' : '가이드 완료'}
+              </button>
+            )}
+          </div>
+          <p className="dw-sec-hint">
+            {item.split
+              ? (item.guide_done
+                ? '가이드가 끝났습니다. 채색 담당은 이 그림을 보고 같은 그림체로 채색해 아래 최종 파일에 올립니다.'
+                : '채색 전 그림을 올립니다. 끝나면 가이드 완료를 눌러 채색 담당에게 넘깁니다.')
+              : '시안을 여러 장 올려 비교합니다. 그림을 누르면 크게 보고 피드백을 남길 수 있고, 끌어서 순서를 바꿉니다.'}
+          </p>
+          <DesignGallery
+            images={drafts}
+            comments={comments}
+            busy={busyDraft}
+            emptyText={`${draftName} 그림을 끌어다 놓으세요`}
+            onUpload={onUploadDrafts}
+            onMove={onMoveDraft}
+            onRank={onRank}
+            onPick={onPickImage}
+            onOpen={(id) => { const image = drafts.find((d) => d.id === id); if (image) onOpenImage(image); }}
+          />
+        </section>
+
+        <section className="dw-sec">
+          <div className="dw-sec-head">
+            <h3>최종 파일 <small>{filled} / {files.length}</small></h3>
             <label className="dw-guide-toggle">
               <input type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)} /> 규격선 보기
             </label>
@@ -100,19 +170,24 @@ export default function DesignItemPanel({
             </p>
           )}
           <div className="dw-files">
-            {files.map((file) => (
-              <DesignFileCard
-                key={file.id}
-                file={file}
-                images={images.filter((i) => i.file_id === file.id)}
-                guide={guide}
-                busy={busyFiles.has(file.id)}
-                onPick={(picked) => onPickFile(file, picked)}
-                onPatch={(patch) => onPatchFile(file.id, patch)}
-                onRemove={() => onRemoveFile(file)}
-                onRemoveImage={onRemoveImage}
-              />
-            ))}
+            {files.map((file) => {
+              const own = finals.filter((i) => i.file_id === file.id);
+              return (
+                <DesignFileCard
+                  key={file.id}
+                  file={file}
+                  images={own}
+                  feedback={own.reduce((n, i) => n + (comments.get(i.id) ?? 0), 0)}
+                  guide={guide}
+                  busy={busyFiles.has(file.id)}
+                  onPick={(picked) => onPickFile(file, picked)}
+                  onOpen={onOpenImage}
+                  onPatch={(patch) => onPatchFile(file.id, patch)}
+                  onRemove={() => onRemoveFile(file)}
+                  onRemoveImage={onRemoveImage}
+                />
+              );
+            })}
             <button type="button" className="dw-file-add" onClick={onAddFile}>+ 파일 칸 추가</button>
           </div>
         </section>

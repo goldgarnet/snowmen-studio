@@ -122,6 +122,77 @@ export function dragDates(start: string, end: string, days: number, mode: DragMo
   return { start, end: diffDays(start, e) < 0 ? start : e };
 }
 
+// ---------- 마감 ----------
+
+export interface DueTask {
+  id: string;
+  name: string;
+  owner: string;
+  category: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface DueItem {
+  status: string;
+  split: boolean;
+  guide_done: boolean;
+  task_id: string | null;
+  draft_task_id: string | null;
+}
+
+export interface Deadline {
+  label: string;     // 시안 · 완성 또는 가이드 · 채색
+  date: string;
+  days: number;      // 오늘부터 남은 날. 지났으면 음수
+  done: boolean;
+}
+
+/** 항목의 마감 목록. 전용 일정이 없는 가이드 마감은 일정의 가운데 날로 잡는다. */
+export function itemDeadlines(item: DueItem, tasks: Map<string, DueTask>, hasPick: boolean, today: string): Deadline[] {
+  const final = item.task_id ? tasks.get(item.task_id) : undefined;
+  const draft = item.draft_task_id ? tasks.get(item.draft_task_id) : undefined;
+  const draftDate = draft?.end_date
+    ?? (item.split && final ? addDays(final.start_date, Math.floor(diffDays(final.start_date, final.end_date) / 2)) : undefined);
+  const list: Deadline[] = [];
+  if (draftDate) {
+    list.push({ label: item.split ? '가이드' : '시안', date: draftDate, days: diffDays(today, draftDate), done: item.split ? item.guide_done : hasPick });
+  }
+  if (final) {
+    list.push({ label: item.split ? '채색' : '완성', date: final.end_date, days: diffDays(today, final.end_date), done: item.status === 'done' });
+  }
+  return list;
+}
+
+/** 지금 맞춰야 할 마감: 끝나지 않은 첫 마감. 항목이 완료면 없다. */
+export const currentDeadline = (list: Deadline[], status: string): Deadline | null =>
+  (status === 'done' ? null : list.find((d) => !d.done) ?? null);
+
+export const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+
+export function daysLeft(days: number): string {
+  if (days === 0) return '오늘까지';
+  return days > 0 ? `D-${days}` : `${-days}일 지남`;
+}
+
+/** 디자인 작업만 본다. 개발 일정과 확인 시점은 뺀다. */
+const isWork = (t: DueTask) => t.category !== 'mile' && t.category !== 'dev';
+
+/** 오늘 진행 중인 일정. 마감이 가까운 것부터. */
+export const activeTasks = <T extends DueTask>(tasks: T[], today: string): T[] =>
+  tasks.filter((t) => isWork(t) && t.start_date <= today && today <= t.end_date)
+    .sort((a, b) => a.end_date.localeCompare(b.end_date));
+
+/** 오늘 뒤에 처음 시작하는 일정들. 같은 날 시작하는 일정을 모두 돌려준다. */
+export function nextTasks<T extends DueTask>(tasks: T[], today: string): T[] {
+  const later = tasks.filter((t) => isWork(t) && t.start_date > today).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  return later.filter((t) => t.start_date === later[0].start_date);
+}
+
+/** 오늘을 포함해 가장 가까운 확인 시점. */
+export const nextCheck = <T extends DueTask>(tasks: T[], today: string): T | null =>
+  tasks.filter((t) => t.category === 'mile' && t.start_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date))[0] ?? null;
+
 /** 타임라인에 그릴 범위: 오늘과 모든 일정을 담고, 월요일에서 시작해 월요일에서 끝난다. */
 export function timelineRange(tasks: { start_date: string; end_date: string }[], today: string): { from: string; weeks: number } {
   let min = today;

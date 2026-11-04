@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 // 디자인 작업 공간 — 묶음 · 항목 · 파일 칸 · 올린 그림 · 일정.
-// 테이블은 supabase/migrations/2026-11-05_design_workspace.sql 과 2026-11-05_design_v2.sql.
+// 테이블은 supabase/migrations/2026-11-05_design_workspace.sql, _design_v2.sql, _design_v3.sql.
 
 export type DesignStatus = 'todo' | 'doing' | 'review' | 'done';
 export type DesignColor = 'gray' | 'brown' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'purple' | 'pink' | 'red';
@@ -54,11 +54,17 @@ export const DESIGN_ALPHAS: { value: string; color: DesignColor }[] = [
 
 export const DESIGN_ASSIGNEES: { value: string; color: DesignColor }[] = [
   { value: '시연', color: 'blue' },
-  { value: '민준·소민', color: 'orange' },
   { value: '민준', color: 'orange' },
-  { value: '소민', color: 'orange' },
-  { value: '전원', color: 'green' },
-  { value: '김정훈', color: 'purple' },
+  { value: '소민', color: 'green' },
+  { value: '전원', color: 'gray' },
+];
+
+/** 시안 · 가이드 그림의 우선순위. 담당자가 다시 그릴 때 참고한다. */
+export const IMAGE_RANKS: TagOption[] = [
+  { value: '1순위', color: 'red' },
+  { value: '2순위', color: 'orange' },
+  { value: '3순위', color: 'yellow' },
+  { value: '보류', color: 'gray' },
 ];
 
 export const TASK_CATEGORIES: { value: string; label: string; color: DesignColor }[] = [
@@ -95,6 +101,11 @@ export interface DesignItem {
   rules: string;         // 지킬 것 (줄마다 하나)
   ideas: string;         // 참고 아이디어 (쉼표로 구분)
   is_new: boolean;       // 게임에 아직 그림 자리가 없는 항목
+  split: boolean;        // 가이드와 채색을 나눠 맡는 항목. 이때 assignee 가 채색 담당
+  guide_assignee: string;
+  guide_done: boolean;
+  task_id: string | null;        // 최종 마감을 정하는 타임라인 일정
+  draft_task_id: string | null;  // 시안 · 가이드 마감을 정하는 타임라인 일정
 }
 
 /** 항목 안의 파일 칸. 그림은 칸마다 따로 올린다. */
@@ -118,13 +129,28 @@ export interface DesignFile {
 export interface DesignImage {
   id: string;
   item_id: string;
-  file_id: string | null;
+  file_id: string | null;   // 없으면 항목의 시안 · 가이드 그림
+  sort_order: number;
+  rank: string;
+  picked: boolean;          // 채택
   path: string;
   file_name: string;
   width: number | null;
   height: number | null;
   size_bytes: number | null;
   uploader_name: string;
+  created_at: string;
+}
+
+/** 그림 한 장에 달린 피드백. pin 이 있으면 그림 위 그 자리(0~1 비율)를 가리킨다. */
+export interface DesignComment {
+  id: string;
+  image_id: string;
+  author_id: string | null;
+  author_name: string;
+  body: string;
+  pin_x: number | null;
+  pin_y: number | null;
   created_at: string;
 }
 
@@ -143,6 +169,7 @@ export interface DesignData {
   items: DesignItem[];
   files: DesignFile[];
   images: DesignImage[];   // 최근에 올린 것부터
+  comments: DesignComment[];
   tasks: DesignTask[];
 }
 
@@ -169,14 +196,15 @@ async function readAll<T>(table: string, column: string, ascending = true): Prom
 }
 
 export async function loadDesign(): Promise<DesignData> {
-  const [groups, items, files, images, tasks] = await Promise.all([
+  const [groups, items, files, images, comments, tasks] = await Promise.all([
     readAll<DesignGroup>('design_groups', 'sort_order'),
     readAll<DesignItem>('design_items', 'sort_order'),
     readAll<DesignFile>('design_files', 'sort_order'),
     readAll<DesignImage>('design_images', 'created_at', false),
+    readAll<DesignComment>('design_comments', 'created_at'),
     readAll<DesignTask>('design_tasks', 'sort_order'),
   ]);
-  return { groups, items, files, images, tasks };
+  return { groups, items, files, images, comments, tasks };
 }
 
 async function insertRow<T>(table: string, row: object): Promise<T> {
@@ -238,6 +266,12 @@ export async function deleteImage(image: DesignImage): Promise<void> {
   await removeStored([image.path]);
 }
 
+export const updateImage = (id: string, patch: Partial<DesignImage>) => updateRow('design_images', id, patch);
+
+export const insertComment = (row: Pick<DesignComment, 'image_id' | 'author_name' | 'body' | 'pin_x' | 'pin_y'>) =>
+  insertRow<DesignComment>('design_comments', row);
+export const deleteComment = (id: string) => deleteRow('design_comments', id);
+
 export function imageUrl(path: string): string {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
@@ -258,17 +292,22 @@ async function pixelSize(picked: File): Promise<{ width: number; height: number 
   }
 }
 
-/** 파일 칸에 그림 하나를 올린다. 저장소 경로는 영문만 되므로 원래 이름은 file_name 칸에 따로 둔다. */
-export async function uploadImage(slot: DesignFile, picked: File, uploaderName: string): Promise<DesignImage> {
+/** 그림 하나를 올린다. slot 이 있으면 그 파일 칸에, 없으면 항목의 시안 · 가이드로. */
+export async function uploadImage(
+  target: { itemId: string; slot?: DesignFile; sortOrder?: number }, picked: File, uploaderName: string,
+): Promise<DesignImage> {
+  const { itemId, slot, sortOrder = 0 } = target;
   const size = await pixelSize(picked);
+  // 저장소 경로는 영문만 되므로 원래 이름은 file_name 칸에 따로 둔다.
   const safeName = picked.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `${slot.item_id}/${slot.id}/${Date.now()}-${safeName}`;
+  const path = `${itemId}/${slot?.id ?? 'draft'}/${Date.now()}-${safeName}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, picked, { contentType: picked.type || undefined });
   if (error) throw error;
   try {
     return await insertRow<DesignImage>('design_images', {
-      item_id: slot.item_id,
-      file_id: slot.id,
+      item_id: itemId,
+      file_id: slot?.id ?? null,
+      sort_order: sortOrder,
       path,
       file_name: picked.name,
       width: size?.width ?? null,

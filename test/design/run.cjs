@@ -98,6 +98,39 @@ test('막대 끌기', () => {
   assert.deepEqual(d.dragDates('2026-11-09', '2026-11-22', 30, 'start'), { start: '2026-11-22', end: '2026-11-22' });
   assert.deepEqual(d.dragDates('2026-11-09', '2026-11-22', -30, 'end'), { start: '2026-11-09', end: '2026-11-09' });
 });
+const dueTasks = new Map([
+  ['sketch', { id: 'sketch', name: '시안', owner: '시연', category: 'char', start_date: '2026-11-09', end_date: '2026-11-22' }],
+  ['full', { id: 'full', name: '완성', owner: '시연', category: 'char', start_date: '2026-11-23', end_date: '2027-01-03' }],
+]);
+const dueItem = { status: 'todo', split: false, guide_done: false, task_id: 'full', draft_task_id: 'sketch' };
+test('마감: 시안이 채택되면 완성 마감으로 넘어간다', () => {
+  const before = d.itemDeadlines(dueItem, dueTasks, false, '2026-11-05');
+  assert.deepEqual(before.map((x) => [x.label, x.date, x.days]), [['시안', '2026-11-22', 17], ['완성', '2027-01-03', 59]]);
+  assert.equal(d.currentDeadline(before, 'todo').label, '시안');
+  assert.equal(d.currentDeadline(d.itemDeadlines(dueItem, dueTasks, true, '2026-11-05'), 'todo').label, '완성');
+});
+test('마감: 나눈 항목의 가이드 마감은 일정의 가운데 날', () => {
+  const split = { ...dueItem, split: true, draft_task_id: null };
+  const list = d.itemDeadlines(split, dueTasks, false, '2026-11-05');
+  assert.deepEqual(list.map((x) => [x.label, x.date]), [['가이드', '2026-12-13'], ['채색', '2027-01-03']]);
+  assert.equal(d.currentDeadline(d.itemDeadlines({ ...split, guide_done: true }, dueTasks, false, '2026-11-05'), 'todo').label, '채색');
+});
+test('마감: 완료 항목과 일정 없는 항목', () => {
+  assert.equal(d.currentDeadline(d.itemDeadlines(dueItem, dueTasks, false, '2026-11-05'), 'done'), null);
+  assert.deepEqual(d.itemDeadlines({ ...dueItem, task_id: null, draft_task_id: null }, dueTasks, false, '2026-11-05'), []);
+  assert.equal(d.daysLeft(3), 'D-3');
+  assert.equal(d.daysLeft(0), '오늘까지');
+  assert.equal(d.daysLeft(-2), '2일 지남');
+});
+test('지금 기간: 진행 중 · 다음 일정 · 확인 시점', () => {
+  const t = (id, category, start_date, end_date) => ({ id, name: id, owner: '', category, start_date, end_date });
+  const list = [t('a', 'base', '2026-11-02', '2026-11-08'), t('dev', 'dev', '2026-11-02', '2026-11-30'), t('b', 'char', '2026-11-09', '2026-11-22'),
+    t('c', 'play', '2026-11-09', '2026-11-22'), t('m', 'mile', '2026-11-20', '2026-11-20')];
+  assert.deepEqual(d.activeTasks(list, '2026-11-05').map((x) => x.id), ['a']);
+  assert.deepEqual(d.nextTasks(list, '2026-11-05').map((x) => x.id), ['b', 'c']);
+  assert.equal(d.nextCheck(list, '2026-11-05').id, 'm');
+  assert.equal(d.nextCheck(list, '2026-11-21'), null);
+});
 test('타임라인 범위는 모든 일정을 담는다', () => {
   const r = d.timelineRange([{ start_date: '2026-10-20', end_date: '2027-03-31' }], '2026-11-05');
   assert.ok(r.from <= '2026-10-20');

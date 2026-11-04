@@ -283,7 +283,7 @@ export default function App() {
           }}
         />
       : route.kind === 'design'
-        ? <DesignWorkspace userName={profile.name} />
+        ? <DesignWorkspace userName={profile.name} userId={profile.id} />
       : route.kind === 'test'
         ? <TestWorkbench />
       : route.kind === 'solved'
