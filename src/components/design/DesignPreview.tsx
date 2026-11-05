@@ -4,7 +4,7 @@ import type { DesignFile, DesignImage } from '../../api/design';
 import { listPublishedMaps } from '../../api/maps';
 import type { MapRow } from '../../api/types';
 import { artChapter, previewArt, type PreviewArt } from '../../lib/designBoard';
-import { showroomCode } from '../../lib/designShowroom';
+import { showroomLevel } from '../../lib/designShowroom';
 
 // 게임에서 보기 — 진짜 게임의 웹 빌드를 띄우고 올린 그림을 넣어 본다.
 //   · 올린 파일은 그대로 보이고, 올리지 않은 요소는 유리처럼 자리만 비친다.
@@ -33,7 +33,11 @@ export default function DesignPreview({ files, images }: { files: DesignFile[]; 
 
   const art = useMemo(() => previewArt(files, images), [files, images]);
   const picked = maps.find((m) => m.id === target);
-  const code = target === 'showroom' ? showroomCode(playerSize) : picked?.code;
+  const mapCode = picked?.code;
+  const level = useMemo(() => {
+    if (target === 'showroom') return showroomLevel(playerSize);
+    return mapCode ? { code: mapCode } : null;
+  }, [target, playerSize, mapCode]);
   const title = target === 'showroom' ? '전시 맵' : picked?.title || '제목 없음';
 
   useEffect(() => {
@@ -83,9 +87,9 @@ export default function DesignPreview({ files, images }: { files: DesignFile[]; 
   useEffect(() => {
     if (phase !== 'ready') return;
     if (target === 'world') command({ cmd: 'world', chapter });
-    else if (code) command({ cmd: 'level', chapter, level: { id: 'preview', name: title, code } });
+    else if (level) command({ cmd: 'level', chapter, level: { id: 'preview', name: title, ...level } });
     frame.current?.contentWindow?.focus();
-  }, [phase, target, chapter, code, title]);
+  }, [phase, target, chapter, level, title]);
 
   // 게임에 들어간 그림을 지금 목록에 맞춘다. 바뀐 파일만 다시 보낸다.
   useEffect(() => {

@@ -1,7 +1,7 @@
 import type { GameObject, Level, ObjectType, Tile } from '../types';
-import { encodeLevelCode } from '../utils/levelCode';
 
 // '게임에서 보기' 의 전시 맵. 푸는 판이 아니라 요소를 한눈에 보는 판이다.
+// 맵 코드에는 플레이어 크기가 없어(늘 크기 2) 코드 대신 레벨을 그대로 게임에 넘긴다.
 //   # 벽 · 1~4 나무 · o O 눈덩이 · s S Z 눈사람 · B 블록 · L 레이저 · P 플레이어
 //   , 따뜻한 바닥 · h 구멍 · c 금 · f 눈꽃 · a 영혼 발판 · t 삼각 벽
 //   y 노란 버튼 · Y 노란 벽 · g 초록 버튼 · G 목표
@@ -50,7 +50,7 @@ function objectAt(mark: string, playerSize: number): GameObject | null {
   }
 }
 
-export function showroomCode(playerSize: number): string {
+export function showroomLevel(playerSize: number): Level {
   const tiles = ROWS.map((row) => [...row].map((mark): Tile => ({
     isWarm: false, isShade: false, isFlake: false, isRowArch: false, isColumnArch: false, isGoal: false,
     ...TILES[mark],
@@ -61,7 +61,7 @@ export function showroomCode(playerSize: number): string {
   tiles[3][7].edgeArchTop = 2;
   tiles[3][2].isColumnArch = true;
   tiles[3][10].isRowArch = true;
-  const level: Level = {
+  return {
     width: ROWS[0].length,
     height: ROWS.length,
     sunDirection: 'left',
@@ -70,5 +70,4 @@ export function showroomCode(playerSize: number): string {
     tiles,
     objects: ROWS.map((row) => [...row].map((mark) => objectAt(mark, playerSize))),
   };
-  return encodeLevelCode(level);
 }
