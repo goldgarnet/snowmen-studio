@@ -25,6 +25,14 @@ export function reorder<T extends Sortable>(list: T[], id: string, beforeId: str
   return { next, changed: next.filter((x, i) => x !== rest[i]) };
 }
 
+/** 새 일정을 넣을 자리(이 일정의 앞). after 가 없으면 맨 아래, null 이면 맨 위, 있으면 그 일정 바로 아래다. */
+export function insertSlot<T extends Sortable>(list: T[], after: T | null | undefined): string | null {
+  if (after === undefined) return null;
+  const sorted = [...list].sort(bySortOrder);
+  if (after === null) return sorted[0]?.id ?? null;
+  return sorted[sorted.findIndex((x) => x.id === after.id) + 1]?.id ?? null;
+}
+
 /** 항목을 toGroupId 묶음의 beforeId 앞으로 옮긴다. 묶음이 바뀌어도 된다. */
 export function moveItem<T extends MovableItem>(
   items: T[], id: string, toGroupId: string, beforeId: string | null,

@@ -5,7 +5,7 @@ import EditableText from './EditableText';
 import { TagSelect } from './tags';
 
 // 왼쪽 글 칸은 고정하고, 남은 폭에 전체 기간을 맞춰 넣는다. 화면이 좁으면 하루 폭의 하한에서 가로 스크롤이 생긴다.
-const LEFT = 340;
+const LEFT = 368;
 const MIN_DAY = 5;
 const TASK_TYPE = 'application/x-design-task';
 
@@ -20,12 +20,13 @@ interface Dragging {
 const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 const rangeText = (start: string, end: string) => (start === end ? shortDate(start) : `${shortDate(start)} ~ ${shortDate(end)}`);
 
-export default function DesignTimeline({ tasks, allTasks, today, filtering, onAdd, onPatch, onRemove, onMove }: {
+export default function DesignTimeline({ tasks, allTasks, today, filtering, newId, onAdd, onPatch, onRemove, onMove }: {
   tasks: DesignTask[];      // 지금 보이는 일정
   allTasks: DesignTask[];
   today: string;
   filtering: boolean;
-  onAdd: () => void;
+  newId: string | null;     // 방금 넣은 일정. 이름 칸에 바로 들어간다
+  onAdd: (after?: DesignTask | null) => void;   // 없으면 맨 아래, null 이면 맨 위, 일정이면 그 바로 아래
   onPatch: (id: string, patch: Partial<DesignTask>) => void;
   onRemove: (task: DesignTask) => void;
   onMove: (id: string, beforeId: string | null) => void;
@@ -93,13 +94,16 @@ export default function DesignTimeline({ tasks, allTasks, today, filtering, onAd
       {tasks.length === 0 ? (
         <div className="dw-empty">
           <p>{filtering ? '조건에 맞는 일정이 없습니다.' : '아직 일정이 없습니다.'}</p>
-          {!filtering && <button type="button" className="btn btn-primary" onClick={onAdd}>+ 일정 추가</button>}
+          {!filtering && <button type="button" className="btn btn-primary" onClick={() => onAdd()}>+ 일정 추가</button>}
         </div>
       ) : (
         <div className="dw-tl-scroll">
           <div className="dw-tl-grid" style={{ width: width + LEFT }}>
             <div className="dw-tl-row dw-tl-head">
-              <div className="dw-tl-info"><b>일정</b></div>
+              <div className="dw-tl-info">
+                <b>일정</b>
+                {!filtering && <button type="button" className="dw-tl-top" onClick={() => onAdd(null)}>+ 맨 위에 추가</button>}
+              </div>
               <div className="dw-tl-track" style={{ width }}>
                 {monthStarts.map((m) => <b key={m} className="dw-tl-month" style={{ left: x(m) }}>{Number(m.slice(5, 7))}월</b>)}
                 {weekStarts.map((w) => <span key={w} className="dw-tl-week" style={{ left: x(w) }}>{shortDate(w)}</span>)}
@@ -132,7 +136,7 @@ export default function DesignTimeline({ tasks, allTasks, today, filtering, onAd
                     <i className="dw-tl-dot" />
                     <div className="dw-tl-text">
                       <EditableText className="dw-tl-name" label="일정 이름" placeholder="일정 이름" value={task.name}
-                        onSave={(name) => onPatch(task.id, { name })} />
+                        autoFocus={task.id === newId} onSave={(name) => onPatch(task.id, { name })} />
                       {datesOf === task.id ? (
                         <div className="dw-tl-dates">
                           <input type="date" aria-label="시작일" value={task.start_date} max={task.end_date}
@@ -152,6 +156,9 @@ export default function DesignTimeline({ tasks, allTasks, today, filtering, onAd
                         </div>
                       )}
                     </div>
+                    {filtering ? <span /> : (
+                      <button type="button" className="dw-tl-add" title="아래에 일정 추가" aria-label={`${task.name || '일정'} 아래에 일정 추가`} onClick={() => onAdd(task)}>+</button>
+                    )}
                     <button type="button" className="dw-x" aria-label={`${task.name || '일정'} 삭제`} onClick={() => onRemove(task)}>×</button>
                   </div>
                   <div className="dw-tl-track" style={{ width }}>
@@ -185,7 +192,7 @@ export default function DesignTimeline({ tasks, allTasks, today, filtering, onAd
                 onDragOver={(e) => { if (e.dataTransfer.types.includes(TASK_TYPE)) { e.preventDefault(); setRowSlot(null); } }}
                 onDrop={onRowDrop}
               >
-                <button type="button" className="btn btn-sm" onClick={onAdd}>+ 일정 추가</button>
+                <button type="button" className="btn btn-sm" onClick={() => onAdd()}>+ 일정 추가</button>
               </div>
             )}
           </div>

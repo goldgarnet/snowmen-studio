@@ -189,7 +189,7 @@
 .dw-tl-scroll { overflow: auto; max-height: calc(100dvh / 1.05 - 270px); min-height: 360px; }
 .dw-tl-row { position: relative; display: flex; min-height: 46px; border-bottom: 1px solid var(--line); }
 .dw-tl-row:hover .dw-tl-info { background: var(--surface-hover); }
-.dw-tl-info { position: sticky; left: 0; z-index: 3; flex: none; display: grid; grid-template-columns: 18px 10px minmax(0, 1fr) 22px; align-items: center; gap: 6px; width: 340px; padding: 4px 8px; background: var(--surface); border-right: 1px solid var(--border-strong); }
+.dw-tl-info { position: sticky; left: 0; z-index: 3; flex: none; display: grid; grid-template-columns: 18px 10px minmax(0, 1fr) 22px 22px; align-items: center; gap: 6px; width: 368px; padding: 4px 8px; background: var(--surface); border-right: 1px solid var(--border-strong); }
 .dw-tl-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--tag-solid); }
 .dw-tl-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .dw-tl-name { width: 100%; height: 22px; padding: 0 4px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 700; }
@@ -205,6 +205,11 @@
 .dw-x { width: 22px; height: 24px; padding: 0; border: none; border-radius: 5px; background: transparent; color: var(--text-faint); font-size: 16px; cursor: pointer; opacity: 0; }
 .dw-tl-row:hover .dw-x, .dw-x:focus-visible { opacity: 1; }
 .dw-x:hover { color: var(--danger); background: var(--surface-3); }
+.dw-tl-add { width: 22px; height: 24px; padding: 0; border: none; border-radius: 5px; background: transparent; color: var(--text-faint); font-size: 17px; cursor: pointer; opacity: 0; }
+.dw-tl-row:hover .dw-tl-add, .dw-tl-add:focus-visible { opacity: 1; }
+.dw-tl-add:hover { color: var(--accent); background: var(--surface-3); }
+.dw-tl-top { margin-left: auto; height: 24px; padding: 0 8px; border: none; border-radius: 5px; background: transparent; color: var(--text-dim); font: inherit; font-size: 12.5px; cursor: pointer; }
+.dw-tl-top:hover { background: var(--surface-3); color: var(--accent); }
 .dw-tl-head { min-height: 64px; position: sticky; top: 0; z-index: 4; background: var(--surface); box-shadow: 0 1px 0 var(--border-strong); }
 .dw-tl-head .dw-tl-info { display: flex; font-size: 13.5px; color: var(--text-dim); }
 .dw-tl-track { position: relative; flex: none; }
@@ -220,7 +225,7 @@
 .dw-tl-grip.is-start { left: 0; }
 .dw-tl-grip.is-end { right: 0; }
 .dw-tl-diamond { position: absolute; top: 16px; width: 14px; height: 14px; margin-left: -7px; border-radius: 3px; background: var(--tag-solid); transform: rotate(45deg); z-index: 2; }
-.dw-tl-end { position: sticky; left: 0; width: 340px; padding: 10px; }
+.dw-tl-end { position: sticky; left: 0; width: 368px; padding: 10px; }
 
 @media (max-width: 1240px) {
   .dw-group-body { overflow-x: auto; }

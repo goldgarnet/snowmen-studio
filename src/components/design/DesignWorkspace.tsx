@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../../api/design';
 import type { DesignColor, DesignComment, DesignData, DesignFile, DesignGroup, DesignImage, DesignItem, DesignTask } from '../../api/design';
-import { adoptedRows, bySortOrder, currentDeadline, itemDeadlines, matchesQuery, moveItem, pickChoices, reorder, slotForDrop, statusAfterUpload, unusedPaths } from '../../lib/designBoard';
+import { adoptedRows, bySortOrder, currentDeadline, insertSlot, itemDeadlines, matchesQuery, moveItem, pickChoices, reorder, slotForDrop, statusAfterUpload, unusedPaths } from '../../lib/designBoard';
 import ConfirmModal from '../common/ConfirmModal';
 import DesignBoard, { type BoardActions, type BoardRows } from './DesignBoard';
 import DesignItemPanel from './DesignItemPanel';
@@ -57,6 +57,7 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
   const [busyFiles, setBusyFiles] = useState<Set<string>>(new Set());
   const [busyDraft, setBusyDraft] = useState(false);
   const [viewing, setViewing] = useState<DesignImage | null>(null);
+  const [newTaskId, setNewTaskId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [openGroups, setOpenGroups] = useState<string[] | null>(readOpenGroups);
   const [query, setQuery] = useState('');
@@ -383,10 +384,19 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
   });
 
   const taskActions = {
-    add: () => {
+    // after 일정 바로 아래에 넣는다. 그 일정의 기간과 종류를 이어받아 막대가 바로 그 자리에 나타난다.
+    add: (after?: DesignTask | null) => {
       const tasks = dataRef.current?.tasks ?? [];
-      const row = { name: '새 일정', owner: '', start_date: today, end_date: today, category: 'base', sort_order: nextOrder(tasks) };
-      save(api.insertTask(row).then((t) => change((d) => ({ ...d, tasks: [...d.tasks, t] }))));
+      const row = {
+        name: '새 일정', owner: '', start_date: after?.start_date ?? today, end_date: after?.end_date ?? today,
+        category: after?.category ?? 'base', sort_order: nextOrder(tasks),
+      };
+      save(api.insertTask(row).then(async (t) => {
+        const { next, changed } = reorder([...tasks, t], t.id, insertSlot(tasks, after));
+        change((d) => ({ ...d, tasks: next }));
+        setNewTaskId(t.id);
+        await Promise.all(changed.map((c) => api.updateTask(c.id, { sort_order: c.sort_order })));
+      }));
     },
     patch: (id: string, patch: Partial<DesignTask>) => {
       change((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
@@ -589,6 +599,7 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
           allTasks={sortedTasks}
           today={today}
           filtering={query.trim() !== ''}
+          newId={newTaskId}
           onAdd={taskActions.add}
           onPatch={taskActions.patch}
           onRemove={taskActions.remove}

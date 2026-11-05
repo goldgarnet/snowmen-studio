@@ -192,4 +192,14 @@ test('피드백 창은 그림을 원본보다 키우지 않는다', () => {
   assert.equal(d.viewerZoom(3840, 2160, 1920, 1080, 1.05), 0.5);
 });
 
+test('일정 넣을 자리: 맨 아래, 맨 위, 고른 일정 바로 아래', () => {
+  const list = [{ id: 'b', sort_order: 1 }, { id: 'a', sort_order: 0 }, { id: 'c', sort_order: 2 }];
+  assert.equal(d.insertSlot(list, undefined), null);
+  assert.equal(d.insertSlot(list, null), 'a');
+  assert.equal(d.insertSlot(list, list[1]), 'b');
+  assert.equal(d.insertSlot(list, list[0]), 'c');
+  assert.equal(d.insertSlot(list, list[2]), null);
+  assert.equal(d.insertSlot([], null), null);
+});
+
 console.log(`design: ${passed}개 통과`);

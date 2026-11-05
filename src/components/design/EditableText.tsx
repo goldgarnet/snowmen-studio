@@ -23,7 +23,10 @@ export default function EditableText({
       aria-label={label}
       autoFocus={autoFocus}
       onClick={(e) => e.stopPropagation()}
-      onFocus={() => setDraft(value)}
+      onFocus={(e) => {
+        setDraft(value);
+        if (autoFocus) e.target.select();   // 바로 고칠 칸은 글자를 치면 통째로 바뀌게 한다
+      }}
       onBlur={() => {
         if (draft !== null && draft.trim() !== value) onSave(draft.trim());
         setDraft(null);
