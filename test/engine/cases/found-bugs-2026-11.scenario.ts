@@ -219,7 +219,8 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
 
-  // ===== B-006: an s1 held by terrain is forced when P2 pushes s2 + s1 =====
+  // ===== B-006, 2026-11-05: only the ball touching the player takes force, so a big ball
+  // no longer crushes the small ball behind it, whatever holds that small ball =====
   ...([
     ['r01a, B in a ◥ (its right leg is solid)', R01A],
     ['r01c, C is a tunnel turned across the push', R01C],
@@ -227,18 +228,17 @@ export const scenarios: ScenarioDefinition[] = [
     ['r01b (control), C is a wall', R01B],
     ['r01f (control), C is void', R01F],
   ] as const).map(([label, code]) => defineScenario({
-    name: `B-006 ${label}: P2 pushing s2 + s1 crushes the s1, the s2 and the player stay`,
+    name: `B-006 ${label}: P2 pushing s2 + s1 is a no-op`,
     width: 5,
     height: 3,
     setup: (board) => loadCode(board, code),
     actions: ['right'],
     verify: (result) => {
       const { level } = result;
-      expect(result.turns[0].frames.length > 0, 'the push is a valid action (the turn goes on)');
+      expectNoOp(result, 0);
       expectObject(level, 1, 0, 'player', 2);
       expectObject(level, 1, 1, 'snowball', 2);
-      expectEmpty(level, 1, 2);
-      expect(!!level.tiles[1][2].isFlake, 'the s1 leaves a flake');
+      expectObject(level, 1, 2, 'snowball', 1);
     },
   })),
   defineScenario({

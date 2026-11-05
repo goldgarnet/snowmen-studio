@@ -121,32 +121,6 @@ function resolvePush(
     return doForceA(level, posA, dir, turnCount);
   }
 
-  // Indirect force: the player is pushing a BLOCK or a SNOWMAN (4th meeting; N-01
-  // confirmed 9/29, may change later: force travels through snowmen and snowballs alike). The pushed object transmits the player's force
-  // down a jammed chain and crushes a snowball trapped at the far end against a hard
-  // object. Resolved before the object's own move/no-op cases — it only fires when the
-  // chain is jammed (so it never overrides a legitimate move).
-  if (a.isBlock || a.type === 'snowman') {
-    const forced = tryBlockTransmittedForce(level, posA, dir, ps, turnCount);
-    if (forced) return forced;
-  }
-
-  // An explicit size-3 chain rule: when all three pushed objects are size-1
-  // snowballs and C is pressed against a REAL hard backer, only C receives the
-  // transmitted force. A and B are not directly pushed into each other, so they
-  // must not merge into a snowman. A fourth soft object is not a backer and falls
-  // through to the normal table (which leaves the unsupported chain unchanged).
-  if (ps === 3 && posC && a.isSnowball && a.size === 1 &&
-    b.isSnowball && b.size === 1 && c.isSnowball && c.size === 1 &&
-    isBacked(level, posC, dir)) {
-    const objB = level.objects[posB.row][posB.col];
-    if (aCanMoveIntoB && objB && canMoveTo(level, posB, dir, objB)) {
-      if (applyForce(level, posC, dir, turnCount, false)) {
-        return { level, playerMoved: true };
-      }
-    }
-  }
-
   // ===== PLAYER SIZE 1 =====
   if (ps === 1) {
     if (!b.exists) {
@@ -235,12 +209,6 @@ function resolvePush(
       if (a.isSnowball && a.size === 2 && (b.isWall || b.isBlock)) {
         return doForceA(level, posA, dir, turnCount);
       }
-      // A=s2 snowball, B=s1 snowball held only by terrain (a triangle leg, a tunnel side)
-      // while C is empty: terrain backs B like a wall (B-01, §5.7), so B is forced exactly
-      // as when C is a wall (below) or the player is size 3 (B-006).
-      if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 1 && backedAtB) {
-        return doMoveThenForceB(level, posB, dir, turnCount);
-      }
       if (a.isSnowball && a.size === 2 && (b.isSnowball || b.type === 'snowman')) {
         return { level, playerMoved: false };
       }
@@ -271,12 +239,6 @@ function resolvePush(
       if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 2, turnCount);
       return { level, playerMoved: false };
     }
-    // A=s2 snowball, B=s1 snowball, C backed: A MOVES and B FORCED
-    if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 1) {
-      if (backedAtB) return doMoveThenForceB(level, posB, dir, turnCount);
-      return { level, playerMoved: false };
-    }
-
     return { level, playerMoved: false };
   }
 
@@ -324,8 +286,6 @@ function resolvePush(
         if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
           return doMove2(level, playerPos, posA, posB, dir);
         }
-        // can't move forward: if backed, B is forced
-        if (backedAtB) return doMoveThenForceB(level, posB, dir, turnCount);
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 2) {
@@ -420,10 +380,7 @@ function resolvePush(
     if (a.isSnowball && a.size === 2 && (b.isWall || b.isBlock)) {
       return doForceA(level, posA, dir, turnCount);
     }
-    if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 1) {
-      if (backedAtB) return doMoveThenForceB(level, posB, dir, turnCount);
-      return { level, playerMoved: false };
-    }
+    if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 1) return { level, playerMoved: false };
     if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 2) {
       if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 3, turnCount);
       return { level, playerMoved: false };
@@ -438,83 +395,6 @@ function resolvePush(
   }
 
   return { level, playerMoved: false };
-}
-
-// === Indirect (block-transmitted) force ===
-
-/**
- * The player is pushing a block at posA. A block is a rigid pusher that transmits the
- * player's force through the contiguous chain of pushable objects in front of it. If
- * that chain is jammed and ends with a snowball pressed against a HARD object (a wall,
- * board edge, tree, solid partition, or another block/laser), that snowball crushes —
- * a size-1 snowball turns to a flake, a size-2 snowball splits — while nothing in the
- * chain moves (the block stays put, exactly like a snowball the player crushes directly).
- *
- * Returns null when there is no such crush (the chain can move, or the trapped object is
- * only pressed against soft snow), so the caller falls through to the normal push logic.
- *
- * Design notes:
- * - Only BLOCK-started chains reach here. A player pushing a snowball into another
- *   snowball builds a snowman (higher priority), so a snowball never transmits indirect
- *   force on its own — which is why the sole tricky case is block-s1-s1-(wall): the far
- *   snowball (against the wall) flakes and the near one stays, instead of the two merging.
- * - A snowball crushes only when pressed against a HARD object. Two snowballs pressed
- *   together (soft) do not crush. This is what leaves the near ball of block-s1-s1 intact.
- * - The chain "shifts" (and so does NOT crush) only if there is escape space after it AND
- *   the player is strong enough to push the whole chain (a size-N player pushes ≤ N
- *   objects). Both jam conditions used here — a hard wall end, or a chain longer than the
- *   player's strength — are sound: in either case the chain truly cannot move, so this
- *   never steals a move the normal logic would have made.
- */
-function tryBlockTransmittedForce(
-  level: Level, posA: Position, dir: Direction, ps: number, turnCount: number
-): PushResult | null {
-  // Walk the contiguous chain of pushable objects starting at the block/snowman.
-  const positions: Position[] = [posA];
-  let cur = posA;
-  let wallBacked = false;
-  const limit = level.width + level.height + 1;
-  for (let i = 0; i < limit; i++) {
-    const curObj = level.objects[cur.row][cur.col];
-    // Terrain in front of the current member (tunnel side, triangle leg, an edge arch it
-    // does not fit through, a closed partition, the board edge) is a hard end exactly
-    // like a wall object, so the chain is jammed right here.
-    if (curObj && !canMoveTo(level, cur, dir, curObj)) { wallBacked = true; break; }
-    const nextPos = getNextPos(cur, dir);
-    const next = getObjAt(level, nextPos);
-    if (!next.exists) { wallBacked = false; break; }  // empty escape cell ahead
-    if (next.isWall) { wallBacked = true; break; }     // wall / edge / tree / solid partition
-    positions.push(nextPos);                           // block / snowball / snowman → chain member
-    cur = nextPos;
-  }
-
-  const chainLength = positions.length;
-
-  // Can shift (has escape space and fits the player's strength) → not a crush.
-  if (!wallBacked && chainLength <= ps) return null;
-
-  // Jammed: crush the front-most snowball pressed against a hard stationary object.
-  for (let i = chainLength - 1; i >= 1; i--) {
-    const obj = level.objects[positions[i].row][positions[i].col];
-    if (!obj || obj.type !== 'snowball') continue;
-    let successorHard: boolean;
-    if (i === chainLength - 1) {
-      successorHard = wallBacked; // the last object's successor is the wall/edge (or empty)
-    } else {
-      const succ = level.objects[positions[i + 1].row][positions[i + 1].col];
-      successorHard = !!succ && (succ.type === 'block' || succ.type === 'laser');
-    }
-    if (successorHard) {
-      // A transmitted push is never stronger than a direct one: the player must be at
-      // least as large as the ball (P1 cannot split a size-2 ball through a block).
-      if (obj.size > ps) return null;
-      // Indirect force (direct=false): crush/split only, never build a snowman. If it
-      // has no effect (a size-2 ball with nowhere to split), treat the push as a no-op.
-      const changed = applyForce(level, positions[i], dir, turnCount, false);
-      return changed ? { level, playerMoved: true } : null;
-    }
-  }
-  return null;
 }
 
 // === Action helpers ===
@@ -583,12 +463,6 @@ function doRoll2(
 function doForceA(level: Level, posA: Position, dir: Direction, turnCount: number): PushResult {
   // Force: player stays in place, only the force effect is applied
   applyForce(level, posA, dir, turnCount);
-  return { level, playerMoved: true };
-}
-
-function doMoveThenForceB(level: Level, posB: Position, dir: Direction, turnCount: number): PushResult {
-  // Force on B: player and A stay in place, only force is applied on B
-  applyForce(level, posB, dir, turnCount);
   return { level, playerMoved: true };
 }
 

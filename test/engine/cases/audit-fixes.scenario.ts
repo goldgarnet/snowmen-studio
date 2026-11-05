@@ -83,11 +83,11 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
-    name: 'B-04 a block transmits force to a ball that a tunnel side backs',
+    name: 'B-04 a block does not pass force on to a ball that a tunnel side backs',
     width: 5, height: 1,
     setup: (b) => { b.player(0, 0, 2).object(0, 1, 'block', 1).snowball(0, 2, 1).tile(0, 3, { isRowArch: true }); },
     actions: ['right'],
-    verify: (r) => { expectEmpty(r.level, 0, 2); expect(r.level.tiles[0][2].isFlake, 'flake expected'); },
+    verify: (r) => { expectObject(r.level, 0, 2, 'snowball', 1); expect(!r.level.tiles[0][2].isFlake, 'no flake expected'); },
   }),
   defineScenario({
     name: 'B-05 a size-1 arch backs the size-2 ball even when a ball waits beyond the arch',
@@ -204,13 +204,13 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
-    name: 'N-01 force travels through a pushed snowman to a ball pressed against a wall',
+    name: 'N-01 force does not travel through a pushed snowman to a ball pressed against a wall',
     width: 4, height: 1,
     setup: (b) => { b.player(0, 0, 3).snowman(0, 1, 1).snowball(0, 2, 1).object(0, 3, 'wall', 100); },
     actions: ['right'],
     verify: (r) => {
-      expectEmpty(r.level, 0, 2);
-      expect(r.level.tiles[0][2].isFlake, 'flake expected');
+      expectObject(r.level, 0, 2, 'snowball', 1);
+      expect(!r.level.tiles[0][2].isFlake, 'no flake expected');
       expectObject(r.level, 0, 1, 'snowman', 1);
     },
   }),

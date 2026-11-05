@@ -3,17 +3,14 @@ import { isInBounds } from '../utils/level';
 import { getNextPos, getPerpendicularDirs, canMoveTo } from './helpers';
 
 /**
- * Apply a "force" (crush / split) to the snowball at `pos`, pushed in `dir`.
+ * Apply a "force" (crush / split) to the snowball at `pos`, pushed in `dir`. Only the
+ * snowball directly touching the player can take force: nothing is transmitted through
+ * a block, a snowman or another snowball (decided 2026-11-05).
  *
- * `direct` distinguishes force the player applies BY DIRECTLY pushing the snowball
- * (true) from force transmitted INDIRECTLY through a block (false). Building a snowman
- * is not "applying force" and may only happen from a direct push, so indirect force
- * never creates a snowman: a size-2 ball with nowhere to split is simply left intact.
- *
- * Returns whether anything actually changed (so an indirect no-effect press is a no-op).
+ * Returns whether anything actually changed.
  */
 export function applyForce(
-  level: Level, pos: Position, dir: Direction, turnCount: number, direct = true
+  level: Level, pos: Position, dir: Direction, turnCount: number
 ): boolean {
   const obj = level.objects[pos.row][pos.col];
   if (!obj || obj.type !== 'snowball') return false;
@@ -34,9 +31,7 @@ export function applyForce(
     //  - A ball whose neighbour is a single pushable object (size ≤ 1, empty cell
     //    beyond) shoves it one cell and takes its place. This is a plain push, so it
     //    never builds a snowman.
-    //  - If BOTH balls stay, they immediately merge into a size-1 snowman — but only on
-    //    a DIRECT push. Indirect (block-transmitted) force never builds a snowman, so
-    //    with nowhere to split the ball is left intact (a no-op press).
+    //  - If BOTH balls stay, they immediately merge into a size-1 snowman.
     //  - A lone ball left in the origin cell absorbs a snowflake there (→ size 2).
     const [dir1, dir2] = getPerpendicularDirs(dir);
 
@@ -53,11 +48,6 @@ export function applyForce(
     const moved2 = plan2 !== null;
 
     if (!moved1 && !moved2) {
-      if (!direct) {
-        // Indirect force with nowhere to split: leave the ball intact, press is a no-op.
-        level.objects[pos.row][pos.col] = obj;
-        return false;
-      }
       // Both sides blocked: the two halves compact into a size-1 snowman.
       level.objects[pos.row][pos.col] = {
         type: 'snowman', size: 1, isMelting: false, createdAt: turnCount,
