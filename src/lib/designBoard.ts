@@ -54,6 +54,15 @@ export interface SlotSpec {
   placement: string;
 }
 
+/**
+ * 피드백 창에 그림을 놓는 배율. 원본보다 키우지 않고, 화면보다 크면 다 보이게 줄인다. 크기를 모르면 0.
+ * pageZoom 은 사이트 전체에 걸린 확대(body zoom)다. 이만큼 덜어야 화면에서 정확히 원본 크기가 된다.
+ */
+export function viewerZoom(width: number, height: number, boxW: number, boxH: number, pageZoom = 1): number {
+  if (!width || !height || !boxW || !boxH) return 0;
+  return Math.min(boxW / width, boxH / height, 1 / pageZoom);
+}
+
 /** 올린 그림이 칸의 캔버스 크기와 다르면 안내 문구를, 맞으면 null 을 돌려준다. 크기를 모르면 검사하지 않는다. */
 export function sizeProblem(slot: SlotSpec, width: number | null, height: number | null): string | null {
   if (slot.canvas_w == null || slot.canvas_h == null || width == null || height == null) return null;

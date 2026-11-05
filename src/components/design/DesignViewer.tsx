@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { downloadUrl, imageUrl, IMAGE_RANKS, type DesignComment, type DesignImage } from '../../api/design';
+import { viewerZoom } from '../../lib/designBoard';
 import { useEscapeKey } from '../../lib/useEscapeKey';
 import { PickButton, type SlotChoice } from './DesignGallery';
 import { TagSelect } from './tags';
 
 const when = (iso: string) => new Date(iso).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-const MAX_ZOOM = 4;
 
-// 그림을 크게 보며 피드백을 다는 화면. 그림을 누르면 그 자리에 번호를 찍어 피드백을 남길 수 있다.
+// 그림을 보며 피드백을 다는 화면. 원본 크기로 보이고, 화면보다 큰 그림만 줄인다.
+// 그림을 누르면 그 자리에 번호를 찍어 피드백을 남길 수 있다.
 export default function DesignViewer({
   title, images, comments, startId, userId, ranked, slotChoices, onClose, onRank, onPick, onAddComment, onRemoveComment, onRemoveImage,
 }: {
@@ -72,7 +73,7 @@ export default function DesignViewer({
   const pinned = own.filter((c) => c.pin_x != null && c.pin_y != null);
   const nw = current.width ?? natural[current.id]?.w ?? 0;
   const nh = current.height ?? natural[current.id]?.h ?? 0;
-  const zoom = nw && nh && box.w ? Math.min(box.w / nw, box.h / nh, MAX_ZOOM) : 0;
+  const zoom = viewerZoom(nw, nh, box.w, box.h, parseFloat(getComputedStyle(document.body).zoom) || 1);
 
   const placePin = (e: MouseEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();

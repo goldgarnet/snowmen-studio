@@ -182,5 +182,14 @@ test('채택: 칸을 고르는 것은 칸이 여럿인 시안뿐이다', () => {
   assert.deepEqual(d.pickChoices({ split: false }, slots, [{ file_id: 'a' }]),
     [{ id: 'a', label: '정면 · 올림' }, { id: 'b', label: 'y.png' }]);
 });
+test('피드백 창은 그림을 원본보다 키우지 않는다', () => {
+  assert.equal(d.viewerZoom(256, 288, 1200, 800), 1);
+  assert.equal(d.viewerZoom(3840, 2160, 1920, 1080), 0.5);
+  assert.equal(d.viewerZoom(1000, 2000, 1000, 1000), 0.5);
+  assert.equal(d.viewerZoom(0, 0, 1200, 800), 0);
+  assert.equal(d.viewerZoom(256, 288, 0, 0), 0);
+  assert.equal(256 * d.viewerZoom(256, 288, 1200, 800, 1.05) * 1.05, 256);
+  assert.equal(d.viewerZoom(3840, 2160, 1920, 1080, 1.05), 0.5);
+});
 
 console.log(`design: ${passed}개 통과`);
