@@ -7,7 +7,7 @@ import { artChapter, previewArt, type PreviewArt } from '../../lib/designBoard';
 import { showroomCode } from '../../lib/designShowroom';
 
 // 게임에서 보기 — 진짜 게임의 웹 빌드를 띄우고 올린 그림을 넣어 본다.
-//   · 올린 파일만 보인다. 올리지 않은 요소는 어떤 그림으로도 채우지 않고 빈 곳으로 둔다.
+//   · 올린 파일은 그대로 보이고, 올리지 않은 요소는 유리처럼 자리만 비친다.
 //   · 다른 사람이 올린 그림은 이 창으로 돌아올 때 들어온다(작업 공간의 다시 읽기).
 
 type Phase = 'loading' | 'ready' | 'failed' | 'exited';
@@ -194,7 +194,7 @@ export default function DesignPreview({ files, images }: { files: DesignFile[]; 
               </div>
             )}
           </div>
-          <p className="dw-game-hint">게임 화면을 한 번 누른 뒤 방향키로 움직입니다. 올린 파일만 보이고, 아직 올리지 않은 요소는 빈 곳으로 둡니다.</p>
+          <p className="dw-game-hint">게임 화면을 한 번 누른 뒤 방향키로 움직입니다. 올린 파일은 그대로 보이고, 아직 올리지 않은 요소는 유리처럼 자리만 보입니다.</p>
         </div>
 
         <aside className="dw-game-side" aria-label="올린 그림">
