@@ -277,13 +277,17 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     // decision 2026-11-02 — as a cover that will melt at the end of the turn counts). The
     // goal is judged on this tick's resolved state, after its holes and lasers, as the
     // end-of-move check is: a death in the same tick comes first, and a soul that moves
-    // onto a snowman standing on an active goal clears (Q-14).
-    if (isLevelCleared(tickLevel)) clearedWhileRolling = true;
+    // onto a snowman standing on an active goal clears (Q-14). The map stops the moment
+    // the clear is decided (B-027, team decision 2026-11-05): the balls stay where they
+    // are, so nothing later in the roll can touch the winner.
+    if (isLevelCleared(tickLevel)) {
+      clearedWhileRolling = true;
+      return false;
+    }
     // A laser death ends player control, not inertia. The rolling group keeps its
     // already-committed motion until a terrain/collision rule stops it. `roll.ts`
     // separately verifies that the moving group still exists (for example it may
     // have fallen into a hole), so this hook need not stop for player game over.
-    // A clear does not stop the roll either: the frames run to rest, the turn is won.
     return true;
   });
 
@@ -291,7 +295,7 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     return { level: newLevel, status: 'playing', frames };
   }
   // Cleared during the roll: the turn ends there, like the end-of-move clear (no
-  // end-of-turn melt). Whatever the rest of the roll did is presentation only.
+  // end-of-turn melt).
   if (clearedWhileRolling) {
     recordFrame(frames, newLevel, 'turn-end', motionIds);
     return { level: newLevel, status: 'cleared', frames, ...(infiniteLoop ? { infiniteLoop: true } : {}) };
@@ -396,6 +400,10 @@ function endOfTurn(level: Level): void {
   //    sitting on them falls in (a player there dies → soul transfer).
   convertArmedCracks(level);
   applyHoles(level);
+  // A block that fell in may have been holding back a beam. It hits now, before the goal
+  // is judged and before the soul that moved here is treated as safe (B-017, team
+  // decision 2026-11-05). Everything else on a beam was removed earlier in the turn.
+  applyLaserCheck(level);
 
   // 0b. Arm cracks covered right now (crumble next turn). This must run BEFORE melting:
   //     a small snowball that ends the turn on a warm crack melts away below, and the

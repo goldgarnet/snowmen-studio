@@ -1,12 +1,20 @@
 # B-024 목표 위에서 시작하는 맵: '0턴 클리어'를 쓰는 곳과 버리는 곳이 섞여 있다
 
 - **심각도**: low
-- **분류**: **DECIDE** — 규칙 의도가 갈린다. 팀 결정 전까지 기록만 하고 코드는 그대로 둔다
+- **분류**: **DECIDE → 팀 결정**
 - **어느 엔진**: 엔진 함수는 셋 다 0턴 클리어를 낸다(Studio `applyTurnZero`, JS `applyTurnZero`, GDScript `apply_turn_zero`). 갈리는 곳은 그 결과를 쓰는 쪽이다 — Studio 플레이 화면(`newGameState`)은 쓰고, Studio 풀이 녹화·재생(`createSolutionState`/`playMoves`)과 게임(`Main.gd` `_apply_turn_zero`)은 버린다
-- **상태**: 결정 필요
+- **상태**: **고침 — 시작하자마자 클리어 (팀 결정 2026-11-05)**
 - **출처**: 엔진 간 대조 — 팀 맵 풀이 281개를 Studio·adventure 로 한 수씩 재생하다 발견('여러분의 성원에 힘입어') · 옛 번호 `found/X-06-turn-zero-clear-on-start-goal`
 - **재확인 (2026-11-02 분류 단계)**: 본 트리 엔진(studio `fff5e12` · adventure JS·GDScript `a2dd0e9`)으로 아래 재현을 다시 돌려 적힌 결과와 같음을 확인했다(GDScript 는 `game/rules` 사본 headless). 작업 트리(`fix/engine-bugs-2026-11-02`, B-001~003 수정) Studio 에서도 같다.
 - **함께 정할 것**: 0턴 2건 — B-023 · B-024.
+
+## 팀 결정 (2026-11-05)
+
+(a) 인정. 열린 목표 위에서 시작하면 첫 입력 없이 클리어다. 레이저 같은 요인이 있으면 그쪽이 먼저다(나인석 제안).
+
+- Studio: `createSolutionState()` 가 `applyTurnZero()` 결과로 시작한다. 플레이 화면과 풀이 재생·녹화가 이제 같다.
+- 게임: `Main._apply_turn_zero()` 가 0턴 상태를 버리지 않고, 판을 올린 뒤 평범한 클리어 처리(`_on_clear`)를 돈다.
+- 에디터 플레이(`SnowmenAdventureEditor.jsx`)도 0턴 판정으로 시작한다.
 
 ## 증상
 

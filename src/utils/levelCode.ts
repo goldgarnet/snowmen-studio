@@ -360,7 +360,9 @@ function decodeLevelCodeWith(code: string, onTileFlags?: (index: number, flags: 
         }
 
         const tile: Tile = {
-          isWarm,
+          // A flake cell is always cold (B-015, team decision 2026-11-05). The editor
+          // cannot paint both, but a map code carries the two bits separately.
+          isWarm: isWarm && !isFlake,
           isShade: isRowArch || isColumnArch,
           isFlake,
           isGoal,

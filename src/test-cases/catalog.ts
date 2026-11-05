@@ -138,13 +138,33 @@ function buildTriangleGroup(): Level {
   return level;
 }
 
-// B-002: the ball covers the only green button for one tick while the player is on the goal.
+// B-002: the ball reaches the only green button while the player is on the goal, and the map stops.
 function buildRollOverGreenButton(): Level {
   const level = basicLevel(8, 3);
   object(level, 1, 0, 'player', 2);
   tile(level, 1, 1, { isGoal: true });
   object(level, 1, 1, 'snowball', 1);
   tile(level, 1, 4, { isKeyTile: true });
+  return level;
+}
+
+// B-013 (team decision 2026-11-05): a ball in a triangle is pushed around the mirror.
+function buildPushInTriangle(): Level {
+  const level = basicLevel(5, 4);
+  object(level, 1, 0, 'player', 2);
+  tile(level, 1, 1, { triangle: 'tr' });
+  object(level, 1, 1, 'snowball', 1);
+  return level;
+}
+
+// B-017 (team decision 2026-11-05): the block falling through the crack opens the beam that turn.
+function buildCrackOpensBeam(): Level {
+  const level = basicLevel(5, 3);
+  object(level, 0, 0, 'laser', 1, { laserDirection: 'right' });
+  tile(level, 0, 1, { isCrack: true });
+  object(level, 0, 1, 'block', 1);
+  object(level, 0, 3, 'snowman', 1);
+  object(level, 2, 1, 'player', 2);
   return level;
 }
 
@@ -243,6 +263,8 @@ const visualCases: Record<string, Pick<TestCaseDefinition, 'actions' | 'build'>>
   'P0-30': { actions: ['right'], build: buildSnowmanFlakePastArch },
   'P0-31': { actions: ['right'], build: buildTerrainBackedS2S1 },
   'P0-32': { actions: ['right'], build: buildHeavierRollIntoTriangle },
+  'P0-33': { actions: ['right'], build: buildPushInTriangle },
+  'P0-34': { actions: ['wait', 'wait'], build: buildCrackOpensBeam },
   'P1-15a': { actions: ['right'], build: buildSplitShoveMotionIds },
   'P1-15b': { actions: ['up', 'right', 'right', 'right', 'down', 'left', 'left', 'down'], build: buildSoulBodyMotionIds },
   'P2-06': { actions: ['right', 'right', 'right', 'right', 'right', 'right'], build: buildLegacyPortalOrangeCode },
@@ -274,18 +296,20 @@ const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
   ['P0-23', 'P0', '특수 타일', '굴림 중 구멍', '눈덩이가 구멍으로 들어간다.', '눈덩이가 제거되고 굴림이 종료된다.'],
   ['P0-25', 'P0', '레이저', '레이저 차단 순서', '벽·삼각 벽·색상 벽이 빔 경로에 있다.', '차단물 뒤의 오브젝트는 피격되지 않는다.'],
   ['P0-26', 'P0', '질량', '삼각 칸 공의 꺾인 묶음', '굴러온 공이 삼각 칸에 멈춘 공을 친다. 그 공의 거울 출구에 다른 공이 붙어 있다.', '두 공을 한 묶음(질량 2)으로 센다. 질량 1이 맞으면 굴러온 공만 멈춘다. 출구가 비면 예전처럼 거울 방향으로 나가고, 질량이 같으면 묶음 전체가 나간다(B-001). 더 무거우면 함께 굴러간다(P0-32).'],
-  ['P0-27', 'P0', '클리어', '굴림 중 잠시 눌린 초록 버튼', '플레이어가 목표에 선 채 민 공이 마지막 초록 버튼 위를 굴러 지나간다.', '공이 버튼 위에 있는 tick에 목표가 열리므로 그 턴은 클리어다. 굴림은 끝까지 기록되고, 같은 tick의 사망이 먼저다(B-002).'],
+  ['P0-27', 'P0', '클리어', '굴림 중 초록 버튼 클리어', '플레이어가 목표에 선 채 민 공이 마지막 초록 버튼으로 굴러간다.', '공이 버튼 위에 있는 tick에 목표가 열리므로 그 턴은 클리어이고, 판이 거기서 멈춰 공은 버튼 위에 남는다. 같은 tick의 사망이 먼저다(B-002, B-027).'],
   ['P0-28', 'P0', '합성', '아치 너머 눈사람 — 플레이어도 통과', 'P2가 높이 1 아치 너머의 눈덩이 쪽으로 크기 1 눈덩이를 민다.', '플레이어가 A→B 경계를 지날 수 없으므로 합성하지 않는다(무반응). P1은 같은 자리에서 합성한다(B-003).'],
   ['P0-30', 'P0', '합성', '눈송이 위 B로 만드는 눈사람과 합성 경계', 'P2가 높이 2 아치 너머, 눈송이 위의 크기 2 눈덩이 쪽으로 크기 1 눈덩이를 민다.', '새 눈사람은 눈송이를 먹어 크기 3이 되므로 아치를 지나지 못해 합성하지 않는다(무반응, B-005).'],
   ['P0-31', 'P0', '직접 힘', '지형에만 받쳐진 B1을 B2 너머로 밈', 'P2가 크기 2 눈덩이 너머, 삼각 벽의 막힌 변에 받쳐진 크기 1 눈덩이를 민다.', 'C가 벽일 때처럼 크기 1 눈덩이만 눈송이로 부서지고 크기 2 눈덩이와 플레이어는 제자리다(B-006).'],
   ['P0-32', 'P0', '질량', '더 무거운 굴림이 삼각 칸 공을 데리고 꺾임', '굴러온 B2가 삼각 칸에 멈춘 더 가벼운 B1을 친다.', '친 tick에 B1이 거울 출구로 한 칸 나가고 B2가 삼각 칸으로 따라 들어와 다음 tick에 꺾인다. 둘이 한 열차로 맵 끝까지 굴러가고 impact는 없다. 출구가 막히면 아무것도 안 움직이고, 같은 질량이면 예전처럼 넘긴다(B-013, 사용자 결정 ①).'],
+  ['P0-33', 'P0', '직접 힘', '삼각 칸 공을 막힌 변 쪽으로 밀기', 'P2가 삼각 칸에 멈춘 B1을 막힌 변 쪽으로 민다.', '눈꽃 없이 공이 거울을 따라 굴러가고 플레이어는 삼각 칸으로 들어간다. 출구 바로 앞이 벽이면 곧은 줄처럼 부서진다(B-013).'],
+  ['P0-34', 'P0', '레이저', '금 붕괴로 열린 빔', '빔을 막던 상자가 금 간 칸으로 떨어진다.', '빔이 그 턴에 열려 빔 위 눈사람이 그 턴에 녹는다(B-017).'],
   ['P1-02', 'P1', '턴 종료', '금 간 타일의 두 턴 붕괴', '균열 타일은 다음 턴 종료에 붕괴한다.', '막힌 입력은 붕괴를 진행시키지 않는다.'],
   ['P1-03', 'P1', '턴 종료', '햇빛과 녹기', '따뜻한 타일에서 오브젝트가 녹는다.', '플레이어와 눈덩이의 녹기 시점이 다르다.'],
   ['P1-04', 'P1', '턴 종료', '그림자 갱신', '이동·성장·벽 상태 변경 후 그림자를 계산한다.', 'void에는 그림자를 만들지 않는다.'],
   ['P1-05', 'P1', '영혼', '레이저 사망 후 영혼 이전', '플레이어가 사망하면 눈사람 후보를 찾는다.', '거리와 createdAt 순서로 새 플레이어를 선택한다.'],
   ['P1-06', 'P1', '영혼', '영혼 순환은 턴을 소비하지 않음', 'M 입력으로 영혼을 순환한다.', '이동·녹기·레이저·턴 수가 진행되지 않는다.'],
   ['P1-07', 'P1', '영혼', '영혼 발판의 지연 발동', '같은 발판에 머문 다음 유효 턴에 발동한다.', '진입 즉시 영혼이 바뀌지 않는다.'],
-  ['P1-08', 'P1', '클리어', '레이저보다 클리어 판정이 늦음', '목표 위 플레이어가 레이저에 노출된다.', '같은 순간(이동 직후, 굴림의 같은 tick)의 레이저 사망이 클리어보다 먼저 처리된다. 굴림의 앞 tick에 이미 정해진 클리어는 뒤 tick의 사망으로 바뀌지 않는다(B-002, 팀 결정 대기 B-027).'],
+  ['P1-08', 'P1', '클리어', '레이저보다 클리어 판정이 늦음', '목표 위 플레이어가 레이저에 노출된다.', '같은 순간(이동 직후, 굴림의 같은 tick)의 레이저 사망이 클리어보다 먼저 처리된다. 굴림은 클리어가 정해진 tick에서 끝나므로 뒤 tick의 빔은 없다(B-027).'],
   ['P1-09', 'P1', '클리어', '클리어 조건의 초록 버튼', '모든 초록 버튼을 덮어야 목표가 활성화된다.', '버튼 조건과 목표 점유를 모두 만족해야 클리어된다.'],
   ['P1-10', 'P1', '결정성', '동일 입력 결정성', '같은 보드와 입력을 두 번 실행한다.', '최종 상태와 frame 순서가 완전히 같다.'],
   ['P1-11', 'P1', '프레임', '프레임 phase 순서', '한 입력에서 이동·환경 반응·충돌이 발생한다.', 'movement, resolved, impact, turn-end 순서가 보존된다.'],

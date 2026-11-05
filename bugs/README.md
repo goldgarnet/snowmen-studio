@@ -28,21 +28,21 @@
 | B-010 | 규칙 문서가 엔진과 다른 곳 | low | 문서 | FIX(문서) | 문서 고침 (Studio·adventure). mapmaker `RULES.md` 는 메인 세션 | [B-010-docs-disagree-with-engine.md](B-010-docs-disagree-with-engine.md) |
 | B-011 | 같은 턴에 생긴 두 눈사람의 나이: Studio 는 동갑, adventure 는 생성 순서 | low | JS·GD | PORT | JS 고침 · GDScript 고침 (Studio 는 원래 맞음) | [B-011-same-turn-snowman-age.md](B-011-same-turn-snowman-age.md) |
 | B-012 | `diff-vs-studio.mjs` 기본 모드의 거짓 갈림 | low | 도구(adventure) | PORT(도구) | 도구 고침 · JS 고침 · GDScript 고침 (`initState` 나이 시계) | [B-012-diff-tool-age-false-positives.md](B-012-diff-tool-age-false-positives.md) |
-| B-013 | 삼각 칸 안의 공을 더 무거운 공이 치면 아무 일도 없음 (+ B-001 뒤 출구 공이 있으면 넘김) | medium | studio·JS·GD | DECIDE → 사용자 결정 ① | Studio 고침 — 사용자 결정 ①(2026-11-03) · JS·GDScript 포트 남음 | [B-013-heavier-roll-into-triangle-ball.md](B-013-heavier-roll-into-triangle-ball.md) |
+| B-013 | 삼각 칸 안의 공을 더 무거운 공이 치면 아무 일도 없음 (+ B-001 뒤 출구 공이 있으면 넘김) | medium | studio·JS·GD | DECIDE → 사용자 결정 ① · 팀 결정 | Studio 고침 — 사용자 결정 ①(2026-11-03) · 팀 결정(2026-11-05, 삼각 칸 공 밀기) · JS·GDScript 포트 | [B-013-heavier-roll-into-triangle-ball.md](B-013-heavier-roll-into-triangle-ball.md) |
 | B-014 | 금+포탈 칸이 무너지면 구멍+포탈이 남아 걸어 들어가도 안 빠짐 | medium | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-014-crack-portal-collapse.md](B-014-crack-portal-collapse.md) |
-| B-015 | 볕 칸 위 눈꽃: Studio 는 따뜻한 칸, adventure 는 찬 칸 | medium | studio ≠ JS·GD | DECIDE | 결정 필요 | [B-015-warm-flake-cell.md](decide/B-015-warm-flake-cell.md) |
-| B-016 | 대기·턴 끝 영혼 이동의 목표 판정이 녹기 뒤라 녹을 덮개가 인정 안 됨 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-016-wait-turn-goal-check-after-melt.md](decide/B-016-wait-turn-goal-check-after-melt.md) |
-| B-017 | 턴 끝에 새로 열린 빔을 안 보고 목표 판정 → 빔 위 목표로 클리어 | low | studio·JS·GD | DECIDE | 결정 필요 (주황 래치로 빔이 열리는 경우는 주황 삭제로 없어짐, 금 붕괴 경우는 남음) | [B-017-turn-end-beam-before-goal.md](decide/B-017-turn-end-beam-before-goal.md) |
+| B-015 | 볕 칸 위 눈꽃: Studio 는 따뜻한 칸, adventure 는 찬 칸 | medium | studio ≠ JS·GD | DECIDE → 팀 결정 | 고침 — 눈꽃 칸은 늘 찬 칸(2026-11-05) | [B-015-warm-flake-cell.md](B-015-warm-flake-cell.md) |
+| B-016 | 대기·턴 끝 영혼 이동의 목표 판정이 녹기 뒤라 녹을 덮개가 인정 안 됨 | low | studio·JS·GD | DECIDE → 팀 결정 | 닫음 — 지금 동작 유지(2026-11-05) | [B-016-wait-turn-goal-check-after-melt.md](B-016-wait-turn-goal-check-after-melt.md) |
+| B-017 | 턴 끝에 새로 열린 빔을 안 보고 목표 판정 → 빔 위 목표로 클리어 | low | studio·JS·GD | DECIDE → 팀 결정 | 고침 — 금 붕괴로 열린 빔은 그 턴에 맞힘(2026-11-05) | [B-017-turn-end-beam-before-goal.md](B-017-turn-end-beam-before-goal.md) |
 | B-018 | 동시에 구르는 두 열차의 경합을 읽기 순서로 판정 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-018-concurrent-trains-reading-order.md](B-018-concurrent-trains-reading-order.md) |
 | B-019 | 포탈 '턴 시작 점유'가 칸 기준 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-019-portal-start-occupancy.md](B-019-portal-start-occupancy.md) |
 | B-020 | 붙어 있는 두 포탈이 몸을 되돌려 보냄 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-020-adjacent-portals-bounce.md](B-020-adjacent-portals-bounce.md) |
 | B-021 | 순간이동 도착 칸에서 눈꽃을 안 먹고 금을 무장하지 않음 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-021-portal-arrival-effects.md](B-021-portal-arrival-effects.md) |
 | B-022 | 포탈로 영혼 발판에 도착하면 대기를 두 번 해야 함 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-022-soulplate-before-portal.md](B-022-soulplate-before-portal.md) |
 | B-023 | 처음부터 덮인 주황 버튼이 0턴에 래치되지 않음 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 주황 버튼 삭제(2026-11-03 팀 결정) | [B-023-turn-zero-orange-latch.md](B-023-turn-zero-orange-latch.md) |
-| B-024 | 열린 목표 위에서 시작하는 맵의 0턴 클리어를 쓰는 곳과 버리는 곳이 섞임 | low | studio 화면 ≠ 녹화·게임 | DECIDE | 결정 필요 | [B-024-turn-zero-clear.md](decide/B-024-turn-zero-clear.md) |
+| B-024 | 열린 목표 위에서 시작하는 맵의 0턴 클리어를 쓰는 곳과 버리는 곳이 섞임 | low | studio 화면 ≠ 녹화·게임 | DECIDE → 팀 결정 | 고침 — 시작하자마자 클리어(2026-11-05) | [B-024-turn-zero-clear.md](B-024-turn-zero-clear.md) |
 | B-025 | '레이저는 발사면 쪽에서 못 민다' 검사가 바로 앞 칸에만 있음 | low | studio·JS·GD | DECIDE → NOTBUG | 버그 아님 — 현행 유지(사용자 확인 2026-11-03) | [B-025-laser-emitting-face-chain.md](B-025-laser-emitting-face-chain.md) |
 | B-026 | 레거시 삼각 블록을 Studio 만 반사로 처리 | low | studio ≠ JS·GD | NOTBUG | 버그 아님 | [B-026-legacy-triangle-block.md](B-026-legacy-triangle-block.md) |
-| B-027 | 굴림 도중 정해진 클리어가 같은 굴림의 뒤 사망보다 우선 — 초록 버튼이 없는 맵에도 | medium | studio·JS·GD (B-002 뒤) | DECIDE | 결정 필요 (지금 동작을 시나리오·골든으로 고정) | [B-027-clear-then-death-same-roll.md](decide/B-027-clear-then-death-same-roll.md) |
+| B-027 | 굴림 도중 정해진 클리어가 같은 굴림의 뒤 사망보다 우선 — 초록 버튼이 없는 맵에도 | medium | studio·JS·GD (B-002 뒤) | DECIDE → 팀 결정 | 고침 — 클리어가 정해지면 판이 멈춤(2026-11-05) | [B-027-clear-then-death-same-roll.md](B-027-clear-then-death-same-roll.md) |
 
 ## 분류
 
@@ -54,17 +54,9 @@
 | **DECIDE** | 규칙 의도가 갈린다 | 팀 결정 전까지 기록만 하고 코드는 그대로 둔다 |
 | **NOTBUG** | 의도된 동작 | 기록만 |
 
-## 팀이 정할 것 (결정 필요 5건)
+## 팀이 정할 것
 
-함께 정하면 좋은 것끼리 묶었다. 등록 풀이에 미치는 영향은 모두 0 이다.
-
-- **B-027**(마무리 검토에서 새로 올림) 굴림 도중 클리어가 정해진 뒤 같은 굴림에서 플레이어가 죽으면 결과는 무엇인가.
-  - (가) 지금대로 `cleared`. 초록 버튼 유무와 무관하다.
-  - (나) 굴림이 끝났을 때 살아 있을 때만 `cleared`.
-  - 지금 동작은 Studio 시나리오와 골든으로 고정해 두었다.
-- **B-015** 볕 칸 눈꽃. 따뜻한 칸으로 볼지(adventure 를 포트하고 게임 그림을 추가), 찬 칸으로 볼지(Studio 디코더가 정규화) 정한다.
-- **B-016·B-017** 턴 끝 목표 판정 시점: 녹기 전에 판정할지, 빔을 먼저 판정할지. B-017 은 금 붕괴로 빔이 열리는 경우만 남았다(주황 래치 경우는 주황 삭제로 없어짐).
-- **B-024** 0턴 클리어. 열린 목표 위에서 시작하면 바로 클리어인가.
+남은 것은 없다. 2026-11-05 팀 결정으로 B-015·B-016·B-017·B-024·B-027 을 닫았다.
 
 이 목록에서 뺀 것:
 

@@ -1,7 +1,7 @@
 import { Level, GameObject, Position, Direction } from '../types';
 import { isInBounds } from '../utils/level';
 import { getNextPos, canMoveTo, canLeaveTile, canPassEdge, isBacked, yellowWallsSolid } from './helpers';
-import { rollSnowball, rollSnowballGroup, type RollTickHook } from './roll';
+import { rollSnowball, rollSnowballGroup, TRI_DEFLECT, type RollTickHook } from './roll';
 import { applyForce } from './force';
 
 export interface PushResult {
@@ -42,17 +42,23 @@ export function executePush(
   // Get objects A, B, C in push direction
   const a = objInfo(objA);
 
-  const posB = getNextPos(posA, dir);
+  // A triangle links its two open edges (B-013, team decision 2026-11-05): a ball resting
+  // inside one is not crushed against the cell's own leg. The push turns with the mirror,
+  // as a rolling ball does, and the line ahead is judged along the turned direction.
+  const triangle = level.tiles[posA.row][posA.col].triangle;
+  const lineDir = (a.isSnowball && triangle && TRI_DEFLECT[triangle][dir]) || dir;
+
+  const posB = getNextPos(posA, lineDir);
   const b = getObjAt(level, posB);
 
-  const posC = (b.exists && isInBounds(level, posB)) ? getNextPos(posB, dir) : null;
+  const posC = (b.exists && isInBounds(level, posB)) ? getNextPos(posB, lineDir) : null;
   const c = posC ? getObjAt(level, posC) : { exists: false, type: 'wall' as const, size: 100, isSnowball: false, isWall: true, isBlock: false };
 
   // The push table only describes A, B, and C. A fourth ordinary object is not a
   // wall: it merely prevents C from moving in rules that need an empty D cell.
   // Keep C's real identity so that an unspecified long chain safely becomes a no-op.
-  return resolvePush(level, playerPos, posA, posB, posC, dir, ps, a, b, c,
-    isBacked(level, posB, dir), turnCount, onRollTick);
+  return resolvePush(level, playerPos, posA, posB, posC, lineDir, ps, a, b, c,
+    isBacked(level, posB, lineDir), turnCount, onRollTick);
 }
 
 interface ObjInfo {

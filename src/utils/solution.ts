@@ -1,6 +1,6 @@
 import type { Level, GameStatus, Direction } from '../types';
 import { cloneLevel } from './level';
-import { executeTurn, executeSkipTurn, cycleSoul, isLevelCleared, type TurnFrame } from '../engine/turn';
+import { applyTurnZero, executeTurn, executeSkipTurn, cycleSoul, isLevelCleared, type TurnFrame } from '../engine/turn';
 
 // A 풀이(solution) is a recorded sequence of the player's actions while clearing a
 // map. It is stored as a compact letter string (one char per action) so it fits in
@@ -78,12 +78,11 @@ export function advanceSolutionState(state: StepState, move: SolutionMove, captu
   };
 }
 
+// A map can be over before the first move (B-024, team decision 2026-11-05): starting on
+// an open goal clears at once, as the play screen does.
 export function createSolutionState(startLevel: Level): StepState {
-  return {
-    level: cloneLevel(startLevel),
-    status: 'playing',
-    turnCount: 0,
-  };
+  const level = cloneLevel(startLevel);
+  return { level, status: applyTurnZero(level), turnCount: 0 };
 }
 
 // Replay a sequence of moves from a fresh level, returning the resulting state.

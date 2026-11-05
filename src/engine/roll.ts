@@ -6,7 +6,7 @@ import { getNextPos, canMoveTo, yellowWallsSolid } from './helpers';
 // based on the direction it came in (like a light ray hitting the diagonal mirror).
 // Keys and results never overlap, so a ball that waits inside the cell after turning
 // is not turned a second time.
-const TRI_DEFLECT: Record<TriangleCorner, Partial<Record<Direction, Direction>>> = {
+export const TRI_DEFLECT: Record<TriangleCorner, Partial<Record<Direction, Direction>>> = {
   br: { down: 'left', right: 'up' },
   bl: { down: 'right', left: 'up' },
   tl: { up: 'right', left: 'down' },

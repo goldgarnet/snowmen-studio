@@ -1,12 +1,18 @@
 # B-015 볕 칸 눈꽃(따뜻한 칸 + 눈꽃)이 adventure 에서는 찬 칸이 된다
 
 - **심각도**: medium
-- **분류**: **DECIDE** — 규칙 의도가 갈린다. 팀 결정 전까지 기록만 하고 코드는 그대로 둔다
+- **분류**: **DECIDE → 팀 결정**
 - **어느 엔진**: adventure JS · GDScript 가 Studio 와 다름 (JS·GD 끼리는 같음)
-- **상태**: 결정 필요
+- **상태**: **고침 — 눈꽃 칸은 늘 찬 칸 (팀 결정 2026-11-05)**
 - **출처**: 엔진 간 대조(접두 X) — 확장 무작위 대조 `xdiff`(볕+눈꽃 칸 섞음)에서 0턴부터 갈림 · 옛 번호 `found/X-01-warm-flake-cold-in-adventure`
 - **재확인 (2026-11-02 분류 단계)**: 본 트리 엔진(studio `fff5e12` · adventure JS·GDScript `a2dd0e9`)으로 아래 재현을 다시 돌려 적힌 결과와 같음을 확인했다(GDScript 는 `game/rules` 사본 headless). 작업 트리(`fix/engine-bugs-2026-11-02`, B-001~003 수정) Studio 에서도 같다.
 - **분류 근거**: 엔진 간 대조에서는 PORT(adventure 를 Studio 에 맞춤)로 올라왔지만, Studio 안에서도 엔진과 에디터의 전제가 다르다. 에디터 브러시는 볕·눈꽃을 서로 지우고(`Editor.tsx:641-651`), 부서져 생긴 눈꽃 칸은 늘 식는다(`force.ts:24-25`). 그래서 볕 눈꽃 칸은 맵 코드(mapmaker compose `~*`)로만 생긴다. 게임 바닥 그림도 눈꽃 칸을 찬 칸으로 그린다(adventure `CLAUDE.md:486` 바닥 키). 어느 쪽을 정본으로 할지 정해야 한다.
+
+## 팀 결정 (2026-11-05)
+
+"눈꽃 위에서 눈덩이가 녹아요"는 버그다. 눈꽃 칸은 늘 찬 칸이다.
+
+Studio 디코더(`src/utils/levelCode.ts`)가 볕 비트와 눈꽃 비트가 함께 켜진 칸을 찬 칸으로 읽는다. adventure 는 원래 `makeTile`·`_make_tile` 이 찬 칸으로 만들어서 고칠 것이 없다. 시험은 Studio `team-decisions-2026-11.scenario.ts`, 게임 골든 `team-b015-warm-flake-cold`.
 
 ## 증상
 

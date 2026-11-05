@@ -198,9 +198,9 @@ export const scenarios: ScenarioDefinition[] = [
       const { level } = result;
       expectStatus(result, 'cleared');
       expectObject(level, 3, 2, 'player', 2);
-      // The roll still runs to rest; the clear does not freeze the ball on the button.
-      expectObject(level, 3, 7, 'snowball', 1);
-      expectEmpty(level, 3, 5);
+      // The map stops at the clear (B-027): the ball stays on the button.
+      expectObject(level, 3, 5, 'snowball', 1);
+      expectEmpty(level, 3, 7);
       expectFrame(
         result,
         0,
@@ -266,8 +266,8 @@ export const scenarios: ScenarioDefinition[] = [
     verify: (result) => {
       expectStatus(result, 'cleared');
       expectObject(result.level, 0, 1, 'player', 3);
-      expectObject(result.level, 0, 6, 'snowball', 1);
-      expectObject(result.level, 0, 7, 'snowball', 1);
+      expectObject(result.level, 0, 4, 'snowball', 1);
+      expectObject(result.level, 0, 5, 'snowball', 1);
     },
   }),
   defineScenario({
@@ -313,7 +313,7 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
-    name: 'B-002 a clear during the roll stands even when the rest of that roll opens a laser on the player',
+    name: 'B-027 the map stops at a clear during the roll, so the laser the ball would open never fires',
     width: 6,
     height: 4,
     setup: (board) => {
@@ -328,15 +328,15 @@ export const scenarios: ScenarioDefinition[] = [
     },
     actions: ['right'],
     verify: (result) => {
-      // The goal was satisfied one tick before the beam opened: the turn is won there,
-      // and the remaining ticks are presentation (no end-of-turn melt follows).
+      // The goal is satisfied one tick before the ball would reach the yellow button:
+      // the turn is won there and the ball stops on the green button.
       expectStatus(result, 'cleared');
-      expectNoPlayer(result.level);
-      expectObject(result.level, 1, 5, 'snowball', 1);
+      expectObject(result.level, 1, 1, 'player', 2);
+      expectObject(result.level, 1, 3, 'snowball', 1);
     },
   }),
   defineScenario({
-    name: 'B-002 with no green button the goal is open from the first roll tick, and that clear stands although the ball then opens a laser on the player',
+    name: 'B-027 with no green button the goal is open from the first roll tick: the map stops there',
     width: 6,
     height: 4,
     setup: (board) => {
@@ -352,12 +352,10 @@ export const scenarios: ScenarioDefinition[] = [
     },
     actions: ['right'],
     verify: (result) => {
-      // The tick clear applies to every map, not only to green-button maps: before B-002
-      // this turn was a gameover (the goal was judged only after the whole roll). Pinned
-      // as the current rule while the team decides (bugs/B-027).
+      // The tick clear applies to every map, not only to green-button maps (bugs/B-027).
       expectStatus(result, 'cleared');
-      expectNoPlayer(result.level);
-      expectObject(result.level, 1, 5, 'snowball', 1);
+      expectObject(result.level, 1, 1, 'player', 2);
+      expectObject(result.level, 1, 2, 'snowball', 1);
     },
   }),
 
