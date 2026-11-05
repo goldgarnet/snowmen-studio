@@ -274,9 +274,12 @@ export const deleteComment = (id: string) => deleteRow('design_comments', id);
 
 /** 게임 데이터. 게임 내용이 들어 있어 로그인한 사람만 받는 비공개 저장소에 둔다. */
 export async function downloadGamePack(): Promise<ArrayBuffer> {
-  const { data, error } = await supabase.storage.from('game-preview').download('index.pck');
+  // 서명 주소는 부를 때마다 달라서, 파일을 교체하면 브라우저 캐시 없이 바로 새 파일을 받는다.
+  const { data, error } = await supabase.storage.from('game-preview').createSignedUrl('index.pck', 60);
   if (error) throw error;
-  return data.arrayBuffer();
+  const response = await fetch(data.signedUrl);
+  if (!response.ok) throw new Error(`게임 데이터를 받지 못했습니다 (${response.status})`);
+  return response.arrayBuffer();
 }
 
 export function imageUrl(path: string): string {

@@ -107,7 +107,7 @@
 - 이 저장소는 공개입니다. 게임 데이터 `index.pck`는 절대 여기에 넣지 마세요.
 - 게임 코드를 바꿨다면 `snowmen_adventure/game`에서 웹 빌드를 다시 만듭니다.
   `godot4 --headless --export-release "Web" build/web/index.html`
-- 새 `build/web/index.pck`를 Supabase → Storage → `game-preview`에 같은 이름으로 올립니다.
+- Supabase → Storage → `game-preview`에서 기존 `index.pck`를 지우고, 새 `build/web/index.pck`를 같은 이름으로 올립니다.
 - Godot 버전을 올렸을 때만 `public/game-preview/`의 `index.js`, 오디오 파일 2개, `engine.wgz`(`index.wasm`을 gzip 한 파일)를 바꿉니다.
 
 ## 보안 수준 (참고)
