@@ -103,10 +103,10 @@ export function findPlayer(level: Level): Position | null {
   return null;
 }
 
-// Identity of the body that holds the soul. The engine's motionId survives moves and
-// portals, while a soul transfer or footplate swap builds a fresh player object, so the
-// id changes with the body. An untagged player (before the first turn, or right after an
-// M cycle) gets the id the engine is about to give it.
+// Identity of the body that holds the soul. The engine's motionId survives moves, while
+// a soul transfer or footplate swap builds a fresh player object, so the id changes with
+// the body. An untagged player (before the first turn, or right after an M cycle) gets
+// the id the engine is about to give it.
 function playerBodyId(level: Level): string | null {
   const pos = findPlayer(level);
   if (!pos) return null;
@@ -123,6 +123,31 @@ export function soulChangedBody(before: Level, after: Level): boolean {
 
 export function serializeLevel(level: Level): string {
   return JSON.stringify(level, null, 2);
+}
+
+// Fields of features removed from the game on 2026-11-03 (team decision): orange
+// buttons/walls with their latch, and portals with their per-turn mark. Level JSON saved
+// before then may still carry them; they are dropped on reading, so such a cell is plain
+// ground. (Map codes drop the same bits in levelCode.ts.)
+const REMOVED_TILE_FIELDS = ['isPortal', 'isOrangeButton', 'isOrangeWall', 'orangePressed'] as const;
+const REMOVED_OBJECT_FIELDS = ['justTeleported'] as const;
+
+/** Delete the removed features' fields from every tile and object. Mutates `level`. */
+export function dropRemovedFeatures(level: Level): void {
+  for (const row of level.tiles) {
+    for (const tile of row ?? []) {
+      if (!tile) continue;
+      const record = tile as unknown as Record<string, unknown>;
+      for (const field of REMOVED_TILE_FIELDS) delete record[field];
+    }
+  }
+  for (const row of level.objects) {
+    for (const object of row ?? []) {
+      if (!object) continue;
+      const record = object as unknown as Record<string, unknown>;
+      for (const field of REMOVED_OBJECT_FIELDS) delete record[field];
+    }
+  }
 }
 
 export function deserializeLevel(json: string): Level | null {
@@ -146,6 +171,7 @@ export function deserializeLevel(json: string): Level | null {
           }
         }
       }
+      dropRemovedFeatures(parsed as Level);
       return parsed as Level;
     }
     return null;

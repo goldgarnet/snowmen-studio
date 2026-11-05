@@ -170,18 +170,6 @@ export const scenarios: ScenarioDefinition[] = [
     verify: (r) => { expectEmpty(r.level, 0, 1); },
   }),
   defineScenario({
-    // Only the ORANGE wall keeps this rule: a raised yellow wall no longer shades its
-    // cell (see yellow-shade-and-crack-melt.scenario.ts).
-    name: 'B-11 (decision 9/29) with shadows on the closed orange wall cell is shade and the ball survives',
-    width: 3, height: 2,
-    setup: (b) => {
-      b.level.hasShadow = true;
-      b.tile(0, 1, { isOrangeWall: true, isWarm: true }).snowball(0, 1, 1).player(1, 0, 2).tile(1, 2, { isOrangeButton: true });
-    },
-    actions: ['wait'],
-    verify: (r) => { expectObject(r.level, 0, 1, 'snowball', 1); },
-  }),
-  defineScenario({
     name: 'B-13 a laser trapped inside a closed yellow wall cannot fire out',
     width: 5, height: 2,
     setup: (b) => { b.tile(0, 1, { isYellowWall: true }).laser(0, 1, 'right').player(0, 3, 2).tile(1, 0, { isYellowButton: true }); },
@@ -233,16 +221,6 @@ export const scenarios: ScenarioDefinition[] = [
     verify: (r) => {
       for (let c = 2; c < 8; c++) expectEmpty(r.level, 0, c);
       expectObject(r.level, 0, 1, 'player', 3);
-    },
-  }),
-  defineScenario({
-    name: 'Q-06 a rolling ball keeps rolling out of the partner portal',
-    width: 4, height: 3,
-    setup: (b) => { b.player(0, 0, 2).snowball(0, 1, 1).tile(0, 2, { isPortal: true }).tile(2, 0, { isPortal: true }); },
-    actions: ['right'],
-    verify: (r) => {
-      expectObject(r.level, 2, 3, 'snowball', 1);
-      expectEmpty(r.level, 2, 0);
     },
   }),
   defineScenario({

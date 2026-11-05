@@ -19,10 +19,12 @@ import {
  * B-009). Each report's boards are loaded from its map code exactly as reported (the
  * report has the board text), followed by small boards for the edges of the rule.
  * Scenario names start with the bug number.
+ *
+ * B-004 (two trains absorbing one ball in the same tick) is no longer here: only a portal
+ * could split a roll into two trains, and portals were removed from the game on
+ * 2026-11-03. Its boards now play without portals (legacy-portal-orange-codes.scenario.ts).
  */
 
-const DUP_A = 'bOzi0u4CVT438eGybeTH4HYtRhM0rzFcrdnT6MwiMPIPWaEmYtp1CcMCpYhhgsohYNPmWgMFvzo9gkHDq35IORl6rRthpvsYrvCznTg84J7F3fxWmVl3fVznV7HU3WOA1U6tj';
-const DUP_A_FLIPPED = 'bOzmlhutV5se7dg30oSNMraKrUjuoQ0wnUgCFwn5PL2Dn9DnMDpAI4qQWNJ62RBE20oJQq4DfwmSwOveaMLHv7GqonlQDDLxi76RZ6FPj5n0RZBSi8NUzwJzPkuAmGsV1Ruu9';
 const Q03A = 'XTZGO3f4W5vCA0kziJgQuj51GXkNB7zL9MsWpoNZu';
 const Q03B = 'XTZGO3f4W5vCA0kziJgQujdgYLJyp14BtI280pdrq';
 const Q03C = 'XTZGO3f4W5vCA0kziJgQuGqddiVEN0ylZPpwC7B5m';
@@ -46,16 +48,6 @@ function decode(code: string): Level {
 /** Replace the scenario board with a decoded map code (the board of the report). */
 function loadCode(board: ScenarioBoard, code: string): void {
   Object.assign(board.level, decode(code));
-}
-
-function snowMass(level: Level): number {
-  let mass = 0;
-  for (const row of level.objects) {
-    for (const object of row) {
-      if (object?.type === 'snowball' || object?.type === 'snowman') mass += object.size;
-    }
-  }
-  return mass;
 }
 
 /** No object in two cells of a turn result, and no motionId on two objects of a frame. */
@@ -85,66 +77,6 @@ function expectNoOp(result: ScenarioResult, turnIndex: number): void {
 }
 
 export const scenarios: ScenarioDefinition[] = [
-  // ===== B-004: a ball is absorbed by one train per tick =====
-  defineScenario({
-    name: 'B-004 dup-a: two heavier trains hit one ball in the same tick — the first train in reading order takes it, nothing is copied',
-    width: 8,
-    height: 6,
-    setup: (board) => loadCode(board, DUP_A),
-    actions: ['down', 'right'],
-    verify: (result) => {
-      const { level } = result;
-      expectNoDuplicates(result);
-      // Three s1 + the two flakes eaten on the way.
-      expect(snowMass(level) === 5, `snow mass must stay 5, found ${snowMass(level)}`);
-      expectObject(level, 2, 1, 'player', 3);
-      // The train bent down at the ◥ absorbed the (4,5) ball; the teleported one stopped.
-      expectObject(level, 4, 4, 'snowball', 2);
-      expectObject(level, 4, 5, 'snowball', 2);
-      expectObject(level, 5, 5, 'snowball', 1);
-      expectEmpty(level, 4, 6);
-      expectEmpty(level, 4, 7);
-    },
-  }),
-  defineScenario({
-    name: "B-004 dup-a' (flipped): the teleported train comes first in reading order and takes the ball",
-    width: 8,
-    height: 6,
-    setup: (board) => loadCode(board, DUP_A_FLIPPED),
-    actions: ['up', 'right'],
-    verify: (result) => {
-      const { level } = result;
-      expectNoDuplicates(result);
-      expect(snowMass(level) === 5, `snow mass must stay 5, found ${snowMass(level)}`);
-      expectObject(level, 3, 1, 'player', 3);
-      expectObject(level, 1, 6, 'snowball', 2);
-      expectObject(level, 1, 7, 'snowball', 1);
-      expectObject(level, 2, 5, 'snowball', 2);
-      expectEmpty(level, 0, 5);
-    },
-  }),
-  defineScenario({
-    name: 'B-004 an equal-mass train meeting a ball another train absorbs that tick stops without an impact',
-    width: 8,
-    height: 6,
-    setup: (board) => {
-      loadCode(board, DUP_A);
-      // Without the flake at (4,2) the teleported ball stays s1: equal to the (4,5) ball
-      // that the bent s2 train takes first.
-      board.tile(4, 2, { isFlake: false });
-    },
-    actions: ['down', 'right'],
-    verify: (result) => {
-      const { level } = result;
-      expectNoDuplicates(result);
-      expectObject(level, 4, 4, 'snowball', 1);
-      expectObject(level, 4, 5, 'snowball', 2);
-      expectObject(level, 5, 5, 'snowball', 1);
-      expect(!result.turns[1].frames.some(frame => frame.phase === 'impact'),
-        'no motion is handed to a ball that is already being absorbed');
-    },
-  }),
-
   // ===== B-005: the arch check of a build uses the size after the flake under B =====
   defineScenario({
     name: 'B-005 q03a: P2 cannot build beyond a height-2 arch when the flake under B makes the snowman an S3',

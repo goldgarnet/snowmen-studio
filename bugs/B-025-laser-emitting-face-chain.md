@@ -1,9 +1,10 @@
 # B-025 '레이저는 발사면 쪽에서 못 민다' 검사가 플레이어 바로 앞(A)에만 있어 실제로는 발동하지 않고, 상자 사슬로는 발사면 쪽에서 밀림
 
 - **심각도**: low
-- **분류**: **DECIDE** — 규칙 의도가 갈린다. 팀 결정 전까지 기록만 하고 코드는 그대로 둔다
+- **분류**: **DECIDE → NOTBUG** — 규칙 의도가 갈려 팀 결정에 올렸고, 사용자가 현행 유지로 정했다(2026-11-03)
 - **어느 엔진**: studio · JS · GDScript (셋 다 같음)
-- **상태**: 결정 필요
+- **상태**: 버그 아님 — 현행 유지(사용자 확인 2026-11-03)
+- **결정**: 지금 동작을 그대로 둔다. 발사면 쪽 밀기 금지는 바로 앞 칸(A)만 보고(실제로는 빔 때문에 발동하지 않는다), 상자 사슬로는 발사면 쪽에서도 레이저가 밀린다. 코드는 바꾸지 않았고, 레이저 맵 풀이도 바뀌지 않는다. 지금 동작을 `ENGINE_ALGORITHMS.md` §2.2·§5.1 과 `test/GAME_IMPLEMENTATION_CASES.md` P0-06 에 적었다.
 - **출처**: mapmaker `RULES.md` §16 버그 의심 9 (`rules/verify-docs-vs-code.md` §I-3) · 옛 번호 `found/R-08-laser-emitting-face-push-rule-only-for-A`
 - **줄 번호 기준**: 본 트리(현재 배포) — studio `fff5e12`, adventure `a2dd0e9`. 재현 스크립트(세 엔진 대조): `/tmp/claude-1000/bugfix/R-known/run3.sh <specs.txt>`
 - **재확인 (2026-11-02 분류 단계)**: 본 트리 엔진(studio `fff5e12` · adventure JS·GDScript `a2dd0e9`)으로 아래 재현을 다시 돌려 적힌 결과와 같음을 확인했다(GDScript 는 `game/rules` 사본 headless). 작업 트리(`fix/engine-bugs-2026-11-02`, B-001~003 수정) Studio 에서도 같다.

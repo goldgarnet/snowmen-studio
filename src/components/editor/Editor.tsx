@@ -20,12 +20,9 @@ export type EditorTool =
   | 'keyTile'
   | 'yellowButton'
   | 'yellowWall'
-  | 'orangeButton'
-  | 'orangeWall'
   | 'hole'
   | 'crackWarm'
   | 'crackCool'
-  | 'portal'
   | 'edgeArch1'
   | 'edgeArch2'
   | 'player'
@@ -44,7 +41,7 @@ export type EditorTool =
 type TerrainFillMode = 'warm' | 'cool';
 type Hotkey = { code: string; label: string; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean };
 
-const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'removeGround', 'restoreGround', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'orangeButton', 'orangeWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
+const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'removeGround', 'restoreGround', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
 
 // Object tools place an object in the cell; they clear any hole there first (an object
 // can't sit on a hole), matching the "no objects on holes" rule.
@@ -84,11 +81,8 @@ const TOOL_HOTKEYS: Partial<Record<EditorTool, Hotkey>> = {
   keyTile: { code: 'KeyK', label: 'K' },
   yellowWall: { code: 'KeyY', label: 'Y' },
   yellowButton: { code: 'KeyY', label: 'Y', shiftKey: true },
-  orangeWall: { code: 'KeyO', label: 'O' },
-  orangeButton: { code: 'KeyO', label: 'O', shiftKey: true },
   laser: { code: 'KeyL', label: 'L' },
   soulSwap: { code: 'KeyS', label: 'S' },
-  portal: { code: 'KeyR', label: 'R' },
   eraser: { code: 'KeyE', label: 'E' },
 };
 
@@ -704,18 +698,11 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         if (tile.triangle) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.isYellowWall = true;
         break;
-      case 'orangeButton':
-        tile.isOrangeButton = true;
-        break;
-      case 'orangeWall':
-        tile.isOrangeWall = true;
-        break;
       case 'hole':
-        // A hole can't hold an object, a portal, or a crack.
+        // A hole can't hold an object or a crack.
         tile.isHole = true;
         tile.isCrack = false;
         tile.crackArmed = false;
-        tile.isPortal = false;
         lv.objects[row][col] = null;
         break;
       case 'crackWarm':
@@ -727,10 +714,6 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
       case 'crackCool':
         tile.isCrack = true;
         tile.isWarm = false;
-        tile.isHole = false;
-        break;
-      case 'portal':
-        tile.isPortal = true;
         tile.isHole = false;
         break;
       case 'edgeArch1':
@@ -786,10 +769,6 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
           tile.triangle = undefined;
           break;
         }
-        if (tile.isPortal) {
-          tile.isPortal = false;
-          break;
-        }
         if (tile.isCrack) {
           tile.isCrack = false;
           tile.crackArmed = false;
@@ -797,15 +776,6 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         }
         if (tile.isHole) {
           tile.isHole = false;
-          break;
-        }
-        if (tile.isOrangeWall) {
-          tile.isOrangeWall = false;
-          break;
-        }
-        if (tile.isOrangeButton) {
-          tile.isOrangeButton = false;
-          tile.orangePressed = false;
           break;
         }
         if (tile.isYellowWall) {
@@ -1026,12 +996,9 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     yellowButton: { label: '버튼', emoji: '🟡' },
     laser: { label: '레이저', emoji: '🔴' },
     soulSwap: { label: '영혼 발판', emoji: '🌀' },
-    orangeButton: { label: '버튼', emoji: '🟠' },
-    orangeWall: { label: '벽', emoji: '🔶' },
     hole: { label: '구멍', emoji: '🕳️' },
     crackWarm: { label: '따뜻함', emoji: '♨️' },
     crackCool: { label: '차가움', emoji: '🧊' },
-    portal: { label: '포탈', emoji: '🟣' },
     removeGround: { label: '땅 제거', emoji: '×' },
     restoreGround: { label: '땅 복원', emoji: '⬜' },
   };
@@ -1063,16 +1030,8 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     { label: '장애물', tools: ['wall', 'tree', 'triangle', 'block'], columns: 2 },
     { label: '터널', tools: ['columnTunnel', 'rowTunnel'] },
     { label: '노랑', tools: ['yellowWall', 'yellowButton'] },
-    { label: '주황', tools: ['orangeWall', 'orangeButton'] },
-    { label: '특수', tools: ['keyTile', 'laser', 'soulSwap', 'portal'], columns: 2 },
+    { label: '특수', tools: ['keyTile', 'laser', 'soulSwap'], columns: 2 },
   ];
-
-  // Portals must come in pairs (exactly 0 or 2). Count them for an inline warning.
-  let portalCount = 0;
-  for (let r = 0; r < level.height; r++)
-    for (let c = 0; c < level.width; c++)
-      if (level.tiles[r][c].isPortal) portalCount++;
-  const portalWarning = portalCount !== 0 && portalCount !== 2;
 
   const hotkeyBadge = (id: EditorTool) => {
     const hotkey = TOOL_HOTKEYS[id];
@@ -1222,11 +1181,6 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
               </div>
             ))}
           </div>
-          {portalWarning && (
-            <div className="select-hint" style={{ color: '#e6a23c' }}>
-              ⚠️ 포탈은 정확히 2개여야 합니다 (현재 {portalCount}개). 개수가 맞지 않으면 순간이동이 작동하지 않습니다.
-            </div>
-          )}
           {selectedTool === 'tree' && (
             <div className="tree-height-input">
               <label>

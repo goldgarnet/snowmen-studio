@@ -306,8 +306,7 @@
   .editor-section:last-child { padding-right: 0; }
   .editor-section h3,
   .tool-group-label,
-  .select-hint,
-  .portalWarning { display: none; }
+  .select-hint { display: none; }
   .size-controls,
   .tool-rows,
   .tool-groups,

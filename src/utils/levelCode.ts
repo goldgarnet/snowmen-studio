@@ -15,18 +15,28 @@ const V2_MARKER = 0b111;
 const V3_MARKER = 0b110;
 const V4_MARKER = 0b101;
 
-// v5 features (orange button/wall, hole, cracked tile, portal) are stored in an
-// OPTIONAL extension section appended AFTER the complete v4 body. The 3-bit version
-// marker space (0b101/0b110/0b111) is exhausted, so instead of a new marker we rely
-// on the fact that a plain v4 code decodes to exactly its pushed bits — after reading
+// v5 features (hole, cracked tile — and the removed orange button/wall and portal) are
+// stored in an OPTIONAL extension section appended AFTER the complete v4 body. The 3-bit
+// version marker space (0b101/0b110/0b111) is exhausted, so instead of a new marker we
+// rely on the fact that a plain v4 code decodes to exactly its pushed bits — after reading
 // the v4 body, `pos` equals the bit length. A v5 code appends `EXT_MAGIC` + a sparse
 // list of the tiles carrying any v5 flag, which old decoders simply never read (they
 // stop after the tile grid) and which we only emit when at least one such tile exists.
 // Result: maps that use none of the new features encode byte-for-byte like before.
+//
+// Orange buttons/walls and portals were removed from the game on 2026-11-03 (team
+// decision). The layout stays as it was so every old code still decodes, sections after
+// the flag list included: the decoder reads their three bits and drops them (that cell
+// is plain ground, keeping its other tile data), and the encoder always writes 0 there.
+// Studio levelCode.ts, adventure editor/src/utils/levelCode.js and game/rules/level_io.gd
+// keep this same layout.
 const EXT_MAGIC = 0b10100101; // 0xA5, 8 bits
 const EXT_INDEX_BITS = 11;    // tile index r*width+c (max 33*33-1 = 1088 < 2048)
 const EXT_COUNT_BITS = 11;
-const EXT_FLAG_BITS = 5;      // orangeButton, orangeWall, isHole, isCrack, isPortal
+// Flag bits 4..0: orange button (removed), orange wall (removed), hole, crack, portal (removed).
+const EXT_FLAG_BITS = 5;
+const EXT_FLAG_HOLE = 1 << 2;
+const EXT_FLAG_CRACK = 1 << 1;
 // Optional sub-sections (after the tile-flag list) carrying triangle-block corners,
 // objects resting on triangle-wall tiles, and void cells:
 // [TRIBLOCK_MAGIC(4)] [count(11)] [index(11) + corner(2)]*count. Gated by its own magic
@@ -178,17 +188,13 @@ export function encodeLevelCode(level: Level): string {
   }
 
   // v5 extension: sparse list of tiles carrying any new flag. Only appended when at
-  // least one exists, so feature-free maps stay byte-identical to their v4 codes.
+  // least one exists, so feature-free maps stay byte-identical to their v4 codes. The
+  // removed orange-button, orange-wall and portal bits are always written as 0.
   const special: { idx: number; flags: number }[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const t = level.tiles[r][c];
-      const flags =
-        (t.isOrangeButton ? 1 : 0) << 4 |
-        (t.isOrangeWall ? 1 : 0) << 3 |
-        (t.isHole ? 1 : 0) << 2 |
-        (t.isCrack ? 1 : 0) << 1 |
-        (t.isPortal ? 1 : 0);
+      const flags = (t.isHole ? EXT_FLAG_HOLE : 0) | (t.isCrack ? EXT_FLAG_CRACK : 0);
       if (flags !== 0) special.push({ idx: r * level.width + c, flags });
     }
   }
@@ -273,6 +279,22 @@ function decodeRealObject(objType: number, bits: number[], pos: number): { obj: 
 }
 
 export function decodeLevelCode(code: string): Level | null {
+  return decodeLevelCodeWith(code);
+}
+
+/**
+ * The raw v5 tile-flag list of a map code in code order — each entry is a cell index
+ * (r * width + c) and its five flag bits, including the bits the decoder drops (the
+ * removed orange button/wall and portal). Empty when the code has no extension; null when
+ * it does not decode. For tests and tools that check old codes.
+ */
+export function readLevelCodeTileFlags(code: string): { index: number; flags: number }[] | null {
+  const entries: { index: number; flags: number }[] = [];
+  const level = decodeLevelCodeWith(code, (index, flags) => entries.push({ index, flags }));
+  return level ? entries : null;
+}
+
+function decodeLevelCodeWith(code: string, onTileFlags?: (index: number, flags: number) => void): Level | null {
   try {
     const bits = base62ToBits(code.trim());
     if (bits.length < 13) return null;
@@ -382,15 +404,15 @@ export function decodeLevelCode(code: string): Level | null {
       for (let i = 0; i < count; i++) {
         const idx = readBits(bits, pos, EXT_INDEX_BITS); pos += EXT_INDEX_BITS;
         const flags = readBits(bits, pos, EXT_FLAG_BITS); pos += EXT_FLAG_BITS;
+        onTileFlags?.(idx, flags);
         const r = Math.floor(idx / width);
         const c = idx % width;
         if (r < 0 || r >= height || c < 0 || c >= width) continue;
+        // The orange-button, orange-wall and portal bits (4, 3, 0) are read and dropped:
+        // those features were removed (2026-11-03), so such a cell is plain ground.
         const t = tiles[r][c];
-        t.isOrangeButton = (flags & (1 << 4)) !== 0;
-        t.isOrangeWall = (flags & (1 << 3)) !== 0;
-        t.isHole = (flags & (1 << 2)) !== 0;
-        t.isCrack = (flags & (1 << 1)) !== 0;
-        t.isPortal = (flags & 1) !== 0;
+        t.isHole = (flags & EXT_FLAG_HOLE) !== 0;
+        t.isCrack = (flags & EXT_FLAG_CRACK) !== 0;
       }
 
       // Optional triangle-block sub-section (gated by its own magic).

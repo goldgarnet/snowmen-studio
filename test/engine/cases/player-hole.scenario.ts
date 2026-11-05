@@ -11,11 +11,11 @@ import {
 
 /**
  * Rule change (2026-10-26): the player may walk into a hole. The move is a valid turn;
- * the body falls in at the turn's hole step (soul footplate → portal → hole → orange
- * latch → laser → end of turn), so the soul jumps to the nearest snowman (distance →
- * age → reading order) BEFORE the end-of-turn melt, exactly as when a crack crumbles
- * beneath it or a laser hits it. No snowman left → game over. The hole stays a hole: it
- * does not cool, and it swallows the next body that walks in too.
+ * the body falls in at the turn's hole step (soul footplate → hole → laser → end of
+ * turn), so the soul jumps to the nearest snowman (distance → age → reading order)
+ * BEFORE the end-of-turn melt, exactly as when a crack crumbles beneath it or a laser
+ * hits it. No snowman left → game over. The hole stays a hole: it does not cool, and it
+ * swallows the next body that walks in too.
  */
 export const scenarios: ScenarioDefinition[] = [
   defineScenario({

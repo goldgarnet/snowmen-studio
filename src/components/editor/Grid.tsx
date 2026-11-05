@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useRef, useEffect, useId, useLayoutEffect, type TouchEvent as ReactTouchEvent } from 'react';
 import { GameObject, Level, Tile } from '../../types';
-import { yellowWallsSolid, orangeWallsSolid } from '../../engine/helpers';
+import { yellowWallsSolid } from '../../engine/helpers';
 import './Grid.css';
 
 interface GridProps {
@@ -40,7 +40,6 @@ interface GridCellProps {
   cellSize: number;
   goalActive: boolean;
   yellowSolid: boolean;
-  orangeSolid: boolean;
   highlightPlayer?: boolean;
   thumbnail?: boolean;
   editorInteractive: boolean;
@@ -86,7 +85,7 @@ function collectMotionPositions(level: Level): Map<string, MotionPosition> {
 // references. Compare their primitive fields and retain the existing DOM/SVG subtree
 // unless that particular cell actually changed.
 const GridCell = memo(function GridCell({
-  row, col, tile, obj, cellSize, goalActive, yellowSolid, orangeSolid,
+  row, col, tile, obj, cellSize, goalActive, yellowSolid,
   highlightPlayer, thumbnail, editorInteractive, isSelected, snowmanFilterId, goalGradientId,
   onMouseDown, onMouseEnter,
   onTouchStart,
@@ -129,11 +128,8 @@ const GridCell = memo(function GridCell({
       {tile.isKeyTile && <GreenButtonOverlay size={cellSize} />}
       {tile.isYellowButton && <YellowButtonOverlay size={cellSize} />}
       {tile.isYellowWall && <YellowWallOverlay size={cellSize} solid={yellowSolid} />}
-      {tile.isOrangeButton && <OrangeButtonOverlay size={cellSize} pressed={!!tile.orangePressed} />}
-      {tile.isOrangeWall && <OrangeWallOverlay size={cellSize} solid={orangeSolid} />}
       {tile.isHole && <HoleOverlay size={cellSize} />}
       {tile.isCrack && <CrackOverlay size={cellSize} warm={!!tile.isWarm} armed={!!tile.crackArmed} />}
-      {tile.isPortal && <PortalOverlay size={cellSize} />}
       {tile.triangle && <TriangleOverlay corner={tile.triangle} size={cellSize} />}
       {!tile.isVoid && obj && (
         <div
@@ -152,7 +148,6 @@ const GridCell = memo(function GridCell({
   prev.cellSize === next.cellSize &&
   prev.goalActive === next.goalActive &&
   prev.yellowSolid === next.yellowSolid &&
-  prev.orangeSolid === next.orangeSolid &&
   prev.highlightPlayer === next.highlightPlayer &&
   prev.thumbnail === next.thumbnail &&
   prev.editorInteractive === next.editorInteractive &&
@@ -278,9 +273,9 @@ export default function Grid({
 
   // FLIP transition: React renders the object at its next cell first, then this
   // layout effect offsets that DOM node back to its prior cell and releases it over
-  // the movement-frame duration. Only a single-cell delta is interpolated; portal
-  // jumps and triangle-block exits stay instantaneous instead of sliding across the
-  // board through terrain they never occupied.
+  // the movement-frame duration. Only a single-cell delta is interpolated; jumps such
+  // as triangle-block exits stay instantaneous instead of sliding across the board
+  // through terrain they never occupied.
   useLayoutEffect(() => {
     if (animationFrameRef.current !== null) {
       window.cancelAnimationFrame(animationFrameRef.current);
@@ -384,8 +379,6 @@ export default function Grid({
 
   // Yellow walls are solid (visible/blocking) unless all yellow buttons are pressed.
   const yellowSolid = yellowWallsSolid(level);
-  // Orange walls are solid until every orange button has latched (persisted state).
-  const orangeSolid = orangeWallsSolid(level);
   const moveGhostDestinationKeys = new Set(
     moveGhost?.sourceCells.map(({ row, col }) => (
       `${row + moveGhost.delta.dr},${col + moveGhost.delta.dc}`
@@ -451,7 +444,6 @@ export default function Grid({
                   cellSize={cellSize}
                   goalActive={goalActive}
                   yellowSolid={yellowSolid}
-                  orangeSolid={orangeSolid}
                   highlightPlayer={highlightPlayer}
                   thumbnail={thumbnail}
                   editorInteractive={!!onCellClick}
@@ -496,7 +488,7 @@ export default function Grid({
         )}
 
         {/* Laser beam overlay */}
-        <LaserBeamOverlay level={level} cellSize={cellSize} yellowSolid={yellowSolid} orangeSolid={orangeSolid} />
+        <LaserBeamOverlay level={level} cellSize={cellSize} yellowSolid={yellowSolid} />
 
         {/* Arch visuals overlay (absolute pixel positioning over the grid) */}
         <div className="edge-overlay" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3 }}>
@@ -796,46 +788,6 @@ function YellowWallOverlay({ size, solid }: { size: number; solid: boolean }) {
   );
 }
 
-// Orange button: like a yellow button but latching. `pressed` shows the latched state.
-function OrangeButtonOverlay({ size, pressed }: { size: number; pressed: boolean }) {
-  return (
-    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
-      <circle cx="20" cy="20" r="12" fill="none" stroke="#c96a1e" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
-      <circle cx="20" cy="20" r="9" fill={pressed ? '#a8500d' : '#f2913a'} stroke="#bd6018" strokeWidth="1.8" opacity="0.95" />
-      <circle cx="20" cy="20" r="4.5" fill={pressed ? '#d69a5e' : '#ffd19a'} opacity="0.95" />
-    </svg>
-  );
-}
-
-// Orange wall: solid until every orange button has latched; when open, a faint dashed
-// outline of where it will (permanently) stay gone.
-function OrangeWallOverlay({ size, solid }: { size: number; solid: boolean }) {
-  if (solid) {
-    // See YellowWallOverlay for the shared full-cell frame and central cutout treatment.
-    return (
-      <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
-        <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="#e07b22" fillRule="evenodd" />
-        <g stroke="#c56320" strokeWidth="1">
-          <line x1="1" y1="20" x2="8" y2="20" />
-          <line x1="32" y1="20" x2="39" y2="20" />
-          <line x1="20" y1="1" x2="20" y2="8" />
-          <line x1="10" y1="32" x2="10" y2="39" />
-          <line x1="30" y1="32" x2="30" y2="39" />
-        </g>
-        <rect x="1" y="1" width="38" height="38" fill="none" stroke="#a85410" strokeWidth="2" />
-        <rect x="8" y="8" width="24" height="24" fill="none" stroke="#c56320" strokeWidth="1.5" />
-      </svg>
-    );
-  }
-  return (
-    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
-      <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="rgba(224,123,34,0.08)" fillRule="evenodd" />
-      <rect x="1" y="1" width="38" height="38" fill="none" stroke="#e07b22" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.55" />
-      <rect x="8" y="8" width="24" height="24" fill="none" stroke="#e07b22" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.55" />
-    </svg>
-  );
-}
-
 // Hole: a dark pit that swallows objects that move onto it.
 function HoleOverlay({ size }: { size: number }) {
   // A hole is a MISSING tile — render the whole cell as a dark void, not a round pit.
@@ -864,19 +816,6 @@ function CrackOverlay({ size, warm, armed }: { size: number; warm: boolean; arme
         <path d="M18,30 L9,34" />
         <path d="M23,20 L31,31" />
       </g>
-    </svg>
-  );
-}
-
-// Portal: teal swirl. A map has exactly two; entering one relocates you to the other.
-function PortalOverlay({ size }: { size: number }) {
-  return (
-    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 1 }}>
-      <circle cx="20" cy="20" r="14" fill="none" stroke="#22c4d4" strokeWidth="1" opacity="0.35" />
-      <ellipse cx="20" cy="20" rx="12" ry="12" fill="rgba(34,196,212,0.14)" stroke="#22c4d4" strokeWidth="2" />
-      <path d="M20,9 A11,11 0 0 1 31,20" fill="none" stroke="#7fe6f0" strokeWidth="2.2" strokeLinecap="round" opacity="0.9" />
-      <path d="M20,31 A11,11 0 0 1 9,20" fill="none" stroke="#7fe6f0" strokeWidth="2.2" strokeLinecap="round" opacity="0.9" />
-      <circle cx="20" cy="20" r="3.3" fill="#c8f6fc" opacity="0.95" />
     </svg>
   );
 }
@@ -911,11 +850,10 @@ const BEAM_DIRS: Record<string, [number, number]> = {
   right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1],
 };
 
-function LaserBeamOverlay({ level, cellSize, yellowSolid, orangeSolid }: {
+function LaserBeamOverlay({ level, cellSize, yellowSolid }: {
   level: Level;
   cellSize: number;
   yellowSolid: boolean;
-  orangeSolid: boolean;
 }) {
   const beams: React.ReactElement[] = [];
   const gw = level.width;
@@ -926,7 +864,7 @@ function LaserBeamOverlay({ level, cellSize, yellowSolid, orangeSolid }: {
       if (!obj || obj.type !== 'laser') continue;
       // A laser trapped inside a closed partition cannot fire out of it (engine rule).
       const home = level.tiles[row]?.[col];
-      if ((yellowSolid && home?.isYellowWall) || (orangeSolid && home?.isOrangeWall)) continue;
+      if (yellowSolid && home?.isYellowWall) continue;
 
       const dir = (obj as { laserDirection?: string }).laserDirection ?? 'right';
       const [dx, dy] = BEAM_DIRS[dir] ?? [1, 0];
@@ -939,9 +877,8 @@ function LaserBeamOverlay({ level, cellSize, yellowSolid, orangeSolid }: {
         if (level.tiles[cy]?.[cx]?.isVoid) break;
         const hit = level.objects[cy]?.[cx];
         if (hit && LASER_BLOCKERS.has(hit.type)) break;
-        // Solid yellow/orange wall stops the beam BEFORE its cell, like a real wall.
+        // Solid yellow wall stops the beam BEFORE its cell, like a real wall.
         if (yellowSolid && level.tiles[cy]?.[cx]?.isYellowWall) break;
-        if (orangeSolid && level.tiles[cy]?.[cx]?.isOrangeWall) break;
         endCol = cx; endRow = cy;
         if (level.tiles[cy]?.[cx]?.triangle) break; // triangle stops the beam at this cell
         cx += dx; cy += dy;

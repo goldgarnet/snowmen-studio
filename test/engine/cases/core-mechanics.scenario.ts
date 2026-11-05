@@ -7,7 +7,7 @@ import {
   expectStatus,
   type ScenarioDefinition,
 } from '../harness';
-import { orangeWallsSolid, yellowWallsSolid } from '../../../src/engine/helpers';
+import { yellowWallsSolid } from '../../../src/engine/helpers';
 
 /**
  * Portable behavioral specifications for a second implementation of the game.
@@ -139,41 +139,6 @@ export const scenarios: ScenarioDefinition[] = [
       expectStatus(result, 'playing');
       expectObject(result.level, 0, 2, 'player', 1);
       expect(yellowWallsSolid(result.level), 'the yellow wall must re-solidify after the player leaves its button');
-    },
-  }),
-  defineScenario({
-    name: 'an orange wall remains open after its button has been latched once',
-    width: 3,
-    height: 1,
-    setup: (board) => {
-      board
-        .player(0, 0, 1)
-        .tile(0, 1, { isOrangeButton: true })
-        .tile(0, 2, { isOrangeWall: true });
-    },
-    actions: ['right', 'right'],
-    verify: (result) => {
-      expectStatus(result, 'playing');
-      expectObject(result.level, 0, 2, 'player', 1);
-      expect(result.level.tiles[0][1].orangePressed === true, 'the orange button must latch when first covered');
-      expect(!orangeWallsSolid(result.level), 'the orange wall must remain open after the player leaves');
-    },
-  }),
-  defineScenario({
-    name: 'an object entering one portal relocates once to the paired portal',
-    width: 4,
-    height: 1,
-    setup: (board) => {
-      board
-        .player(0, 0, 1)
-        .tile(0, 1, { isPortal: true })
-        .tile(0, 3, { isPortal: true });
-    },
-    actions: ['right'],
-    verify: (result) => {
-      expectStatus(result, 'playing');
-      expectEmpty(result.level, 0, 1);
-      expectObject(result.level, 0, 3, 'player', 1);
     },
   }),
   defineScenario({

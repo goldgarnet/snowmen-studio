@@ -4,6 +4,7 @@
 - **분류**: **DECIDE** — 규칙 의도가 갈린다. 팀 결정 전까지 기록만 하고 코드는 그대로 둔다
 - **어느 엔진**: studio · JS · GDScript (셋 다 같음)
 - **상태**: 결정 필요
+- **2026-11-03 주황 삭제 뒤**: 주황 래치로 빔이 열리는 경우(r06a)는 주황 버튼 삭제로 없어졌다(그 칸이 바닥이라 빔이 0턴부터 열려 S1 이 녹는다). 금 붕괴로 빔이 열리는 경우(r06b·r06c)는 남는다.
 - **출처**: mapmaker `RULES.md` §16 버그 의심 6 — 재현하다가 같은 원인의 경로 둘(금 붕괴 + M, 금 붕괴 사망의 영혼 이동)을 더 찾음 · 옛 번호 `found/R-06-soul-cycle-clears-on-beam-goal`
 - **줄 번호 기준**: 본 트리(현재 배포) — studio `fff5e12`, adventure `a2dd0e9`. 재현 스크립트(세 엔진 대조): `/tmp/claude-1000/bugfix/R-known/run3.sh <specs.txt>`
 - **재확인 (2026-11-02 분류 단계)**: 본 트리 엔진(studio `fff5e12` · adventure JS·GDScript `a2dd0e9`)으로 아래 재현을 다시 돌려 적힌 결과와 같음을 확인했다(GDScript 는 `game/rules` 사본 headless). 작업 트리(`fix/engine-bugs-2026-11-02`, B-001~003 수정) Studio 에서도 같다.

@@ -1,17 +1,20 @@
 import type { Level, GameState } from '../types';
-import { cloneLevel } from './level';
+import { cloneLevel, dropRemovedFeatures } from './level';
 import { recalcShadows, clearShadows } from '../engine/shadow';
 import { applyTurnZero } from '../engine/turn';
 import { decodeLevelCode } from './levelCode';
 
 // Build a fresh playable GameState from an editor Level (mirrors the v2 App's
-// startSimulation): clone, recompute shadows if the level uses them (with shadows off
-// there is no shade at all, so the tunnel shade the decoder stores is cleared — B-11,
+// startSimulation): clone, drop the fields of the removed portal and orange button/wall
+// (2026-11-03 — the engine no longer reads them, so a level built before then plays with
+// those cells as plain ground), recompute shadows if the level uses them (with shadows
+// off there is no shade at all, so the tunnel shade the decoder stores is cleared — B-11,
 // B-007), then resolve "turn 0" — lasers already fire at the start, so snow placed in a
 // beam melts at once (Q-07). Every play screen starts here, so recordings and playback
 // agree.
 export function newGameState(level: Level): GameState {
   const simLevel = cloneLevel(level);
+  dropRemovedFeatures(simLevel);
   if (simLevel.hasShadow) recalcShadows(simLevel);
   else clearShadows(simLevel);
   const status = applyTurnZero(simLevel);

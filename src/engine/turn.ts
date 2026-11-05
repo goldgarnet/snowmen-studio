@@ -2,7 +2,7 @@ import { Level, Direction, GameStatus, Position } from '../types';
 import { cloneLevel, findPlayer } from '../utils/level';
 import { recalcShadows, clearShadows } from './shadow';
 import { executePush } from './push';
-import { yellowWallsSolid, orangeWallsSolid } from './helpers';
+import { yellowWallsSolid } from './helpers';
 
 export interface TurnResult {
   level: Level;
@@ -11,9 +11,9 @@ export interface TurnResult {
   frames: TurnFrame[];
   /**
    * True when a roll this turn never came to rest and was cut off by the tick limit —
-   * an endless loop (for example a ball circling through portals). The rules keep the
-   * current behaviour (the ball stops where the limit hits); the UI may celebrate it
-   * with a special event (Q-13).
+   * an endless loop (for example a ball circling a ring of triangle mirrors). The rules
+   * keep the current behaviour (the ball stops where the limit hits); the UI may
+   * celebrate it with a special event (Q-13).
    */
   infiniteLoop?: boolean;
 }
@@ -74,7 +74,6 @@ export function isLevelCleared(level: Level): boolean {
  */
 export function laserBeamCells(level: Level): Position[] {
   const ySolid = yellowWallsSolid(level);
-  const oSolid = orangeWallsSolid(level);
   const cells: Position[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
@@ -82,7 +81,7 @@ export function laserBeamCells(level: Level): Position[] {
       if (!obj || obj.type !== 'laser') continue;
       // A laser trapped inside a closed partition cannot fire out of it — the wall
       // encloses the whole cell, exactly as it blocks a beam coming from outside.
-      if ((ySolid && level.tiles[r][c].isYellowWall) || (oSolid && level.tiles[r][c].isOrangeWall)) continue;
+      if (ySolid && level.tiles[r][c].isYellowWall) continue;
       const [dr, dc] = DIR_DELTA[obj.laserDirection ?? 'right'];
       let cr = r + dr;
       let cc = c + dc;
@@ -90,10 +89,9 @@ export function laserBeamCells(level: Level): Position[] {
         if (level.tiles[cr][cc].isVoid) break;
         const hit = level.objects[cr][cc];
         if (hit && LASER_BLOCKERS.has(hit.type)) break;
-        // A solid yellow/orange wall blocks the beam BEFORE its cell, like a real wall
-        // (so it also shields anything trapped inside that cell).
+        // A solid yellow wall blocks the beam BEFORE its cell, like a real wall (so it
+        // also shields anything trapped inside that cell).
         if (ySolid && level.tiles[cr][cc].isYellowWall) break;
-        if (oSolid && level.tiles[cr][cc].isOrangeWall) break;
         cells.push({ row: cr, col: cc });
         if (level.tiles[cr][cc].triangle) break; // triangle stops the beam at this cell
         cr += dr;
@@ -151,18 +149,9 @@ function removeObjects(level: Level, positions: Position[], coolTiles: boolean):
   for (const pos of deadPlayers) soulTransfer(level, pos);
 }
 
-// === v5 mechanics: orange latch, holes, portals, cracked tiles ===
-
-// Latch orange buttons: once an orange button is covered, mark it pressed forever.
-export function latchOrangeButtons(level: Level): void {
-  for (let r = 0; r < level.height; r++) {
-    for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isOrangeButton && level.objects[r][c]) {
-        level.tiles[r][c].orangePressed = true;
-      }
-    }
-  }
-}
+// === v5 mechanics: holes, cracked tiles ===
+// (The orange latch and portals of v5 were removed from the game on 2026-11-03 by team
+// decision. Old map codes still carry their bits; the decoder drops them.)
 
 // Any object resting on a hole falls in and disappears. A player that ends up on a
 // hole (it walked in, or a cracked tile crumbled beneath it) dies — the soul jumps to
@@ -175,39 +164,6 @@ export function applyHoles(level: Level): void {
     }
   }
   removeObjects(level, fallen, false);
-}
-
-function findPortals(level: Level): Position[] {
-  const ps: Position[] = [];
-  for (let r = 0; r < level.height; r++) {
-    for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isPortal) ps.push({ row: r, col: c });
-    }
-  }
-  return ps;
-}
-
-// Immediately relocate an object that just moved ONTO a portal (from a non-portal
-// cell this turn) to the other portal, unless that portal is occupied. Runs as a
-// post-movement pass over the two portal cells; `startOccupied` records which portal
-// cells already held an object at the start of the turn (those are "already on the
-// portal" and do not re-teleport). Balls that teleported mid-roll carry justTeleported
-// and are skipped here so they are not relocated twice.
-export function applyPortals(level: Level, portals: Position[], startOccupied: boolean[]): void {
-  if (portals.length !== 2) return;
-  const pairs: [number, number][] = [[0, 1], [1, 0]];
-  for (const [si, di] of pairs) {
-    const src = portals[si];
-    const dst = portals[di];
-    const obj = level.objects[src.row][src.col];
-    if (!obj) continue;
-    if (startOccupied[si]) continue;      // was resting on this portal at turn start
-    if (obj.justTeleported) continue;     // already relocated this turn
-    if (level.objects[dst.row][dst.col]) continue; // destination portal occupied → no-op
-    level.objects[dst.row][dst.col] = obj;
-    level.objects[src.row][src.col] = null;
-    obj.justTeleported = true;
-  }
 }
 
 // Cracked tiles that were armed on a previous turn crumble into holes now.
@@ -235,15 +191,6 @@ function armCoveredCracks(level: Level): void {
         tile.crackArmed = true;
       }
       if (tile.crackRolled) delete tile.crackRolled;
-    }
-  }
-}
-
-function clearTeleportFlags(level: Level): void {
-  for (let r = 0; r < level.height; r++) {
-    for (let c = 0; c < level.width; c++) {
-      const obj = level.objects[r][c];
-      if (obj?.justTeleported) obj.justTeleported = false;
     }
   }
 }
@@ -306,11 +253,6 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     return { level: newLevel, status: 'gameover', frames };
   }
 
-  // Portals don't move; snapshot their occupancy before the push so applyPortals can
-  // tell which objects were already resting on a portal (they don't re-teleport).
-  const portals = findPortals(newLevel);
-  const portalStartOccupied = portals.map(p => !!newLevel.objects[p.row][p.col]);
-
   const turnCount = nextAge();
   let hadRollingTick = false;
   let infiniteLoop = false;
@@ -329,7 +271,6 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     // state for animation, then resolve board-wide hazards before another cell moves.
     recordFrame(frames, tickLevel, 'movement', motionIds);
     applyHoles(tickLevel);
-    latchOrangeButtons(tickLevel);
     applyLaserCheck(tickLevel);
     recordFrame(frames, tickLevel, 'resolved', motionIds);
     // A green button pressed only while a ball rolls across it counts (B-002, user
@@ -355,14 +296,14 @@ export function executeTurn(level: Level, dir: Direction): TurnResult {
     recordFrame(frames, newLevel, 'turn-end', motionIds);
     return { level: newLevel, status: 'cleared', frames, ...(infiniteLoop ? { infiniteLoop: true } : {}) };
   }
-  const result = finishMovedTurn(newLevel, frames, motionIds, turnCount, hadRollingTick, portals, portalStartOccupied);
+  const result = finishMovedTurn(newLevel, frames, motionIds, turnCount, hadRollingTick);
   if (infiniteLoop) result.infiniteLoop = true;
   return result;
 }
 
 function finishMovedTurn(
   newLevel: Level, frames: TurnFrame[], motionIds: Set<string>, turnCount: number,
-  hadRollingTick: boolean, portals: Position[], portalStartOccupied: boolean[],
+  hadRollingTick: boolean,
 ): TurnResult {
   // A non-rolling push is still an observable one-cell movement. Keeping the same
   // movement/resolved pair as rolling ticks lets the presentation layer animate all
@@ -376,11 +317,9 @@ function finishMovedTurn(
     resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
   }
 
-  // Portal relocation, then holes swallow anything that landed on one — a player who
-  // walked into a hole too, so its soul moves on before the end-of-turn melt.
-  applyPortals(newLevel, portals, portalStartOccupied);
+  // Holes swallow anything that landed on one — a player who walked into a hole too,
+  // so its soul moves on before the end-of-turn melt.
   applyHoles(newLevel);
-  latchOrangeButtons(newLevel);
 
   // Lasers fire before the goal is evaluated: stepping onto a goal that sits on a
   // laser beam kills the player (death takes priority over clearing).
@@ -480,11 +419,6 @@ function endOfTurn(level: Level): void {
   if (level.hasShadow && sizesChanged(level, sizesBefore)) {
     recalcShadows(level);
   }
-
-  // 5. Latch orange buttons and clear the per-turn portal marks. (Cracks were armed in
-  //    step 0b, before anything could melt off them.)
-  latchOrangeButtons(level);
-  clearTeleportFlags(level);
 }
 
 function snapshotSizes(level: Level): (number | null)[][] {

@@ -1,6 +1,6 @@
 # 엔진 버그 목록 (2026-11-02)
 
-**요약.** 사용자가 보고한 엔진 버그 3개는 Studio(정본)·adventure JS·GDScript 세 엔진에서 모두 고쳤다. B-001 은 삼각 칸 탄성충돌, B-002 는 굴러 지나가며 잠시 누른 초록 버튼, B-003 은 플레이어가 못 지나는 아치 너머 눈사람이다. 엔진 점검에서 찾은 버그도 고쳤다. 세 엔진 공통인 B-004~B-006 은 세 엔진 모두, Studio 에만 있던 B-007~B-009 는 Studio, adventure 쪽에만 있던 B-011·B-012 는 JS·GDScript·대조 도구를 고쳤다. B-010 은 문서만 고쳤다. 팀 결정을 기다리는 것은 14건(B-013~B-025, B-027)이고, 그중 마무리 검토에서 나온 두 건을 먼저 봐 주면 좋다. 하나는 새 항목 B-027 로, 굴림 도중 클리어(B-002)가 초록 버튼이 없는 맵에도 적용되어 같은 굴림의 뒤 틱 레이저 사망보다 앞선다. 다른 하나는 B-013 에 덧붙인 경우로, B-001 수정 뒤에는 출구에 공이 붙어 있으면 더 무거운 굴림도 공을 넘긴다. B-026 은 버그가 아니다. 모든 변경은 두 저장소의 작업 트리(브랜치 `fix/engine-bugs-2026-11-02`)에 있고 아직 커밋하지 않았다. 남은 일은 채택 맵 `82d18363` 의 풀이 재등록(B-003)과 공개 맵 2개 알림(B-007)이다.
+**요약.** 사용자가 보고한 엔진 버그 3개는 Studio(정본)·adventure JS·GDScript 세 엔진에서 모두 고쳤다. B-001 은 삼각 칸 탄성충돌, B-002 는 굴러 지나가며 잠시 누른 초록 버튼, B-003 은 플레이어가 못 지나는 아치 너머 눈사람이다. 엔진 점검에서 찾은 버그도 고쳤다. 세 엔진 공통인 B-004~B-006 은 세 엔진 모두, Studio 에만 있던 B-007~B-009 는 Studio, adventure 쪽에만 있던 B-011·B-012 는 JS·GDScript·대조 도구를 고쳤다. B-010 은 문서만 고쳤다. B-013 은 2026-11-03 사용자가 선택지 ①로 정했다. 더 무거운 굴림은 삼각 칸 공과 함께 꺾여 굴러간다. Studio 는 고쳤고(브랜치 `fix/b013-heavier-triangle`), JS·GDScript 포트가 남았다. 2026-11-03 팀이 포탈과 주황 버튼·주황 벽을 게임에서 빼기로 했다(같은 브랜치에서 Studio 를 고침, `ENGINE_ALGORITHMS.md` §18). 그래서 포탈 결정 6건(B-014·B-018~B-022)과 주황 래치 B-023 을 닫았다. B-025 는 사용자가 현행 유지로 확인해 버그 아님으로 닫았다. 팀 결정을 기다리는 것은 5건(B-015·B-016·B-017·B-024·B-027)이다. 그중 마무리 검토에서 나온 새 항목 B-027 을 먼저 봐 주면 좋다. 굴림 도중 클리어(B-002)가 초록 버튼이 없는 맵에도 적용되어, 같은 굴림의 뒤 틱 레이저 사망보다 앞서는 문제다. B-026 은 버그가 아니다. 모든 변경은 두 저장소의 작업 트리(브랜치 `fix/engine-bugs-2026-11-02`)에 있고 아직 커밋하지 않았다. 남은 일은 채택 맵 `82d18363` 의 풀이 재등록(B-003)과 공개 맵 2개 알림(B-007)이다.
 
 ## 목록
 
@@ -8,17 +8,18 @@
 
 - **Studio 고침 · JS 고침 · GDScript 고침**: 그 엔진의 작업 트리에서 고쳤다.
 - **결정 필요**: 팀 결정 전까지 코드를 그대로 둔다.
+- **닫음 — 포탈 삭제 · 닫음 — 주황 버튼 삭제**: 2026-11-03 팀 결정으로 그 기능을 게임에서 빼서 더는 생기지 않는다. 분류 열은 `DECIDE → 기능 삭제`.
 - **열림**: 아직 손대지 않았다. 지금은 해당 항목이 없다.
-- **버그 아님**: 의도된 동작이다.
+- **버그 아님**: 의도된 동작이다. 결정 항목이었다가 현행 유지로 정한 것은 분류 열이 `DECIDE → NOTBUG`.
 
 `엔진` 열은 버그가 있던 엔진이다. `studio·JS·GD` 는 세 엔진이 같은 (틀린) 결과를 내던 공통 버그이고, `≠` 는 엔진끼리 결과가 달랐다는 뜻이다.
 
 | 번호 | 제목 | 심각도 | 엔진 | 분류 | 상태 | 파일 |
 |---|---|---|---|---|---|---|
-| B-001 | 삼각 칸에 멈춘 공을 치면 출구의 공에 운동이 넘어가는 탄성충돌 | medium | studio·JS·GD | 사용자 보고 | Studio 고침 · JS 고침 · GDScript 고침 (더 무거운 굴림 쪽은 B-013 결정) | [B-001-triangle-cradle.md](B-001-triangle-cradle.md) |
+| B-001 | 삼각 칸에 멈춘 공을 치면 출구의 공에 운동이 넘어가는 탄성충돌 | medium | studio·JS·GD | 사용자 보고 | Studio 고침 · JS 고침 · GDScript 고침 (더 무거운 굴림 쪽은 B-013 결정 ①로 Studio 고침) | [B-001-triangle-cradle.md](B-001-triangle-cradle.md) |
 | B-002 | 굴러 지나가며 잠시 누른 초록 버튼을 클리어로 인정하지 않음 | high | studio·JS·GD | 사용자 보고 | Studio 고침 · JS 고침 · GDScript 고침 · 게임 연출 고침 (적용 범위는 B-027 결정) | [B-002-roll-over-green-button.md](B-002-roll-over-green-button.md) |
 | B-003 | 플레이어가 못 지나는 아치 너머로 눈사람이 만들어짐 | medium | studio·JS·GD | 사용자 보고 | Studio 고침 · JS 고침 · GDScript 고침 (채택 맵 1개 풀이 재등록 남음) | [B-003-snowman-past-arch-player.md](B-003-snowman-past-arch-player.md) |
-| B-004 | 두 열차가 같은 공을 동시에 흡수하면 그 공이 복제되고 선두 공이 사라짐 | medium | studio·JS·GD (셋 다 다르게 틀림) | FIX | Studio 고침 · JS 고침 · GDScript 고침 | [B-004-concurrent-merge-duplicates-ball.md](B-004-concurrent-merge-duplicates-ball.md) |
+| B-004 | 두 열차가 같은 공을 동시에 흡수하면 그 공이 복제되고 선두 공이 사라짐 | medium | studio·JS·GD (셋 다 다르게 틀림) | FIX | Studio 고침 · JS 고침 · GDScript 고침 · 포탈 삭제로 더는 생기지 않음(2026-11-03) | [B-004-concurrent-merge-duplicates-ball.md](B-004-concurrent-merge-duplicates-ball.md) |
 | B-005 | 아치 너머 눈사람 검사가 눈꽃으로 커진 크기를 안 봄 | medium | studio·JS·GD | FIX | Studio 고침 · JS 고침 · GDScript 고침 | [B-005-arch-build-ignores-flake-growth.md](B-005-arch-build-ignores-flake-growth.md) |
 | B-006 | P2 가 s2+s1 을 밀 때 s1 이 지형에만 받쳐지면 무반응 | medium | studio·JS·GD | FIX | Studio 고침 · JS 고침 · GDScript 고침 | [B-006-p2-s2s1-terrain-backed-noop.md](B-006-p2-s2s1-terrain-backed-noop.md) |
 | B-007 | 그림자 끈 맵의 따뜻한 터널 칸이 Studio 에서만 그늘 | medium | studio | FIX | Studio 고침 (JS·GDScript 는 원래 맞음) · 공개 맵 알림 남음 | [B-007-tunnel-shade-on-shadow-off-map.md](B-007-tunnel-shade-on-shadow-off-map.md) |
@@ -27,21 +28,21 @@
 | B-010 | 규칙 문서가 엔진과 다른 곳 | low | 문서 | FIX(문서) | 문서 고침 (Studio·adventure). mapmaker `RULES.md` 는 메인 세션 | [B-010-docs-disagree-with-engine.md](B-010-docs-disagree-with-engine.md) |
 | B-011 | 같은 턴에 생긴 두 눈사람의 나이: Studio 는 동갑, adventure 는 생성 순서 | low | JS·GD | PORT | JS 고침 · GDScript 고침 (Studio 는 원래 맞음) | [B-011-same-turn-snowman-age.md](B-011-same-turn-snowman-age.md) |
 | B-012 | `diff-vs-studio.mjs` 기본 모드의 거짓 갈림 | low | 도구(adventure) | PORT(도구) | 도구 고침 · JS 고침 · GDScript 고침 (`initState` 나이 시계) | [B-012-diff-tool-age-false-positives.md](B-012-diff-tool-age-false-positives.md) |
-| B-013 | 삼각 칸 안의 공을 더 무거운 공이 치면 아무 일도 없음 (+ B-001 뒤 출구 공이 있으면 넘김) | medium | studio·JS·GD | DECIDE | 결정 필요 | [B-013-heavier-roll-into-triangle-ball.md](B-013-heavier-roll-into-triangle-ball.md) |
-| B-014 | 금+포탈 칸이 무너지면 구멍+포탈이 남아 걸어 들어가도 안 빠짐 | medium | studio·JS·GD | DECIDE | 결정 필요 | [B-014-crack-portal-collapse.md](B-014-crack-portal-collapse.md) |
-| B-015 | 볕 칸 위 눈꽃: Studio 는 따뜻한 칸, adventure 는 찬 칸 | medium | studio ≠ JS·GD | DECIDE | 결정 필요 | [B-015-warm-flake-cell.md](B-015-warm-flake-cell.md) |
-| B-016 | 대기·턴 끝 영혼 이동의 목표 판정이 녹기 뒤라 녹을 덮개가 인정 안 됨 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-016-wait-turn-goal-check-after-melt.md](B-016-wait-turn-goal-check-after-melt.md) |
-| B-017 | 턴 끝에 새로 열린 빔을 안 보고 목표 판정 → 빔 위 목표로 클리어 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-017-turn-end-beam-before-goal.md](B-017-turn-end-beam-before-goal.md) |
-| B-018 | 동시에 구르는 두 열차의 경합을 읽기 순서로 판정 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-018-concurrent-trains-reading-order.md](B-018-concurrent-trains-reading-order.md) |
-| B-019 | 포탈 '턴 시작 점유'가 칸 기준 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-019-portal-start-occupancy.md](B-019-portal-start-occupancy.md) |
-| B-020 | 붙어 있는 두 포탈이 몸을 되돌려 보냄 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-020-adjacent-portals-bounce.md](B-020-adjacent-portals-bounce.md) |
-| B-021 | 순간이동 도착 칸에서 눈꽃을 안 먹고 금을 무장하지 않음 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-021-portal-arrival-effects.md](B-021-portal-arrival-effects.md) |
-| B-022 | 포탈로 영혼 발판에 도착하면 대기를 두 번 해야 함 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-022-soulplate-before-portal.md](B-022-soulplate-before-portal.md) |
-| B-023 | 처음부터 덮인 주황 버튼이 0턴에 래치되지 않음 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-023-turn-zero-orange-latch.md](B-023-turn-zero-orange-latch.md) |
-| B-024 | 열린 목표 위에서 시작하는 맵의 0턴 클리어를 쓰는 곳과 버리는 곳이 섞임 | low | studio 화면 ≠ 녹화·게임 | DECIDE | 결정 필요 | [B-024-turn-zero-clear.md](B-024-turn-zero-clear.md) |
-| B-025 | '레이저는 발사면 쪽에서 못 민다' 검사가 바로 앞 칸에만 있음 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-025-laser-emitting-face-chain.md](B-025-laser-emitting-face-chain.md) |
+| B-013 | 삼각 칸 안의 공을 더 무거운 공이 치면 아무 일도 없음 (+ B-001 뒤 출구 공이 있으면 넘김) | medium | studio·JS·GD | DECIDE → 사용자 결정 ① | Studio 고침 — 사용자 결정 ①(2026-11-03) · JS·GDScript 포트 남음 | [B-013-heavier-roll-into-triangle-ball.md](B-013-heavier-roll-into-triangle-ball.md) |
+| B-014 | 금+포탈 칸이 무너지면 구멍+포탈이 남아 걸어 들어가도 안 빠짐 | medium | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-014-crack-portal-collapse.md](B-014-crack-portal-collapse.md) |
+| B-015 | 볕 칸 위 눈꽃: Studio 는 따뜻한 칸, adventure 는 찬 칸 | medium | studio ≠ JS·GD | DECIDE | 결정 필요 | [B-015-warm-flake-cell.md](decide/B-015-warm-flake-cell.md) |
+| B-016 | 대기·턴 끝 영혼 이동의 목표 판정이 녹기 뒤라 녹을 덮개가 인정 안 됨 | low | studio·JS·GD | DECIDE | 결정 필요 | [B-016-wait-turn-goal-check-after-melt.md](decide/B-016-wait-turn-goal-check-after-melt.md) |
+| B-017 | 턴 끝에 새로 열린 빔을 안 보고 목표 판정 → 빔 위 목표로 클리어 | low | studio·JS·GD | DECIDE | 결정 필요 (주황 래치로 빔이 열리는 경우는 주황 삭제로 없어짐, 금 붕괴 경우는 남음) | [B-017-turn-end-beam-before-goal.md](decide/B-017-turn-end-beam-before-goal.md) |
+| B-018 | 동시에 구르는 두 열차의 경합을 읽기 순서로 판정 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-018-concurrent-trains-reading-order.md](B-018-concurrent-trains-reading-order.md) |
+| B-019 | 포탈 '턴 시작 점유'가 칸 기준 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-019-portal-start-occupancy.md](B-019-portal-start-occupancy.md) |
+| B-020 | 붙어 있는 두 포탈이 몸을 되돌려 보냄 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-020-adjacent-portals-bounce.md](B-020-adjacent-portals-bounce.md) |
+| B-021 | 순간이동 도착 칸에서 눈꽃을 안 먹고 금을 무장하지 않음 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-021-portal-arrival-effects.md](B-021-portal-arrival-effects.md) |
+| B-022 | 포탈로 영혼 발판에 도착하면 대기를 두 번 해야 함 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 포탈 삭제(2026-11-03 팀 결정) | [B-022-soulplate-before-portal.md](B-022-soulplate-before-portal.md) |
+| B-023 | 처음부터 덮인 주황 버튼이 0턴에 래치되지 않음 | low | studio·JS·GD | DECIDE → 기능 삭제 | 닫음 — 주황 버튼 삭제(2026-11-03 팀 결정) | [B-023-turn-zero-orange-latch.md](B-023-turn-zero-orange-latch.md) |
+| B-024 | 열린 목표 위에서 시작하는 맵의 0턴 클리어를 쓰는 곳과 버리는 곳이 섞임 | low | studio 화면 ≠ 녹화·게임 | DECIDE | 결정 필요 | [B-024-turn-zero-clear.md](decide/B-024-turn-zero-clear.md) |
+| B-025 | '레이저는 발사면 쪽에서 못 민다' 검사가 바로 앞 칸에만 있음 | low | studio·JS·GD | DECIDE → NOTBUG | 버그 아님 — 현행 유지(사용자 확인 2026-11-03) | [B-025-laser-emitting-face-chain.md](B-025-laser-emitting-face-chain.md) |
 | B-026 | 레거시 삼각 블록을 Studio 만 반사로 처리 | low | studio ≠ JS·GD | NOTBUG | 버그 아님 | [B-026-legacy-triangle-block.md](B-026-legacy-triangle-block.md) |
-| B-027 | 굴림 도중 정해진 클리어가 같은 굴림의 뒤 사망보다 우선 — 초록 버튼이 없는 맵에도 | medium | studio·JS·GD (B-002 뒤) | DECIDE | 결정 필요 (지금 동작을 시나리오·골든으로 고정) | [B-027-clear-then-death-same-roll.md](B-027-clear-then-death-same-roll.md) |
+| B-027 | 굴림 도중 정해진 클리어가 같은 굴림의 뒤 사망보다 우선 — 초록 버튼이 없는 맵에도 | medium | studio·JS·GD (B-002 뒤) | DECIDE | 결정 필요 (지금 동작을 시나리오·골든으로 고정) | [B-027-clear-then-death-same-roll.md](decide/B-027-clear-then-death-same-roll.md) |
 
 ## 분류
 
@@ -53,22 +54,43 @@
 | **DECIDE** | 규칙 의도가 갈린다 | 팀 결정 전까지 기록만 하고 코드는 그대로 둔다 |
 | **NOTBUG** | 의도된 동작 | 기록만 |
 
-## 팀이 정할 것 (결정 필요 14건)
+## 팀이 정할 것 (결정 필요 5건)
 
-함께 정하면 좋은 것끼리 묶었다. 등록 풀이에 미치는 영향은 모두 0 이다(B-025 는 세지 않았다).
+함께 정하면 좋은 것끼리 묶었다. 등록 풀이에 미치는 영향은 모두 0 이다.
 
 - **B-027**(마무리 검토에서 새로 올림) 굴림 도중 클리어가 정해진 뒤 같은 굴림에서 플레이어가 죽으면 결과는 무엇인가.
   - (가) 지금대로 `cleared`. 초록 버튼 유무와 무관하다.
   - (나) 굴림이 끝났을 때 살아 있을 때만 `cleared`.
   - 지금 동작은 Studio 시나리오와 골든으로 고정해 두었다.
-- **B-013** 더 무거운 굴림이 삼각 칸 공을 칠 때. 검토 단계에서 한 경우를 덧붙였다. B-001 수정 뒤에는 출구에 공이 붙어 질량이 같으면 더 무거운 굴림도 공을 넘기지만, 삼각 칸 공 혼자면 아무 일이 없다. 선택지 1·2 를 고르면 두 경우가 한 규칙으로 이어진다.
-- **B-014** 금+포탈 붕괴. 권장안은 붕괴할 때 포탈을 지우고, 에디터에서 금+포탈 조합을 막는 것이다.
 - **B-015** 볕 칸 눈꽃. 따뜻한 칸으로 볼지(adventure 를 포트하고 게임 그림을 추가), 찬 칸으로 볼지(Studio 디코더가 정규화) 정한다.
-- **B-016·B-017** 턴 끝 목표 판정 시점: 녹기 전에 판정할지, 빔을 먼저 판정할지.
-- **B-018** 동시 열차 경합의 승자.
-- **B-019~B-022** 포탈 도착 규칙 4건.
-- **B-023·B-024** 0턴 2건.
-- **B-025** 레이저 발사면 쪽 사슬 밀기.
+- **B-016·B-017** 턴 끝 목표 판정 시점: 녹기 전에 판정할지, 빔을 먼저 판정할지. B-017 은 금 붕괴로 빔이 열리는 경우만 남았다(주황 래치 경우는 주황 삭제로 없어짐).
+- **B-024** 0턴 클리어. 열린 목표 위에서 시작하면 바로 클리어인가.
+
+이 목록에서 뺀 것:
+
+- **B-013**: 2026-11-03 사용자가 ①(함께 굴러감)으로 정했다.
+- **B-014·B-018~B-022**(포탈), **B-023**(0턴 주황 래치): 2026-11-03 팀 결정으로 포탈과 주황 버튼·주황 벽을 게임에서 빼서 닫았다.
+- **B-025**(레이저 발사면 쪽 사슬 밀기): 사용자가 현행 유지로 확인했다(2026-11-03). 버그 아님.
+
+## 포탈·주황 삭제 (2026-11-03 팀 결정)
+
+포탈(`isPortal`)과 주황 버튼·주황 벽(`isOrangeButton`·`isOrangeWall`, 래치 `orangePressed`)을 게임에서 뺐다. 노란 버튼·노란 벽·초록 버튼은 그대로다. Studio 는 브랜치 `fix/b013-heavier-triangle` 에서 고쳤다(엔진·에디터 팔레트·그리기·카탈로그·문서). 맵 코드 형식은 그대로다. 디코더는 그 비트를 읽고 버리고(그 칸은 평범한 바닥), 인코더는 0 을 쓴다(`ENGINE_ALGORITHMS.md` §18).
+
+**팀 맵 영향** — 스냅샷 `maps-2026-11-02.json`(맵 283개, 등록 풀이 281개 재생). 운영 DB 는 손대지 않았다.
+
+| 맵 | 출제자 · 상태 | 쓰던 것 | 등록 풀이 | 포탈·주황 없이 |
+|---|---|---|---|---|
+| 「CLAUDE-1」 | 김정훈 · 반려 | 포탈 2 | 3개 중 김정훈 22수가 더는 클리어하지 않음(17수째 gameover). 홍은기 31수·정은후 41수는 포탈을 안 써서 그대로 클리어 | 풀림. 최단 17수(전과 같음) |
+| 「CLAUDE-1-FIX-FIX」 | 김정훈 · 반려 | 포탈 2 | 없음 | 풀림. 최단 17수(전 18수) |
+| 「one way」 | 정은후 · 보류 | 포탈 2 | 2개 모두 더는 클리어하지 않음(김정훈 87수, 정은후 44수 — 끝까지 두어도 진행 중) | 풀림. 최단 44수(전 38수) |
+| 「Q-06 굴러가던 눈덩이와 포털」 | 김정훈 · 검토중 | 포탈 2 | 1수 `R`(원래 클리어 아님). 공이 순간이동하지 않고 곧게 굴러가 판이 달라짐 | 시연할 것이 없어짐 |
+| 「Maze」 | 정은후 · 보류 | 주황 버튼 6, 주황 벽 1(목표 칸) | 정은후 48수는 그대로 클리어(판도 같음) | 목표를 막던 벽이 바닥이 되어 최단 16수(전 48수). 퍼즐 의도가 사라짐 |
+
+등록 풀이 281개 중 결과나 판이 바뀌는 것은 위 4개(「CLAUDE-1」 1, 「one way」 2, 「Q-06」 1)뿐이다. 나머지 맵의 풀이 274개는 판·결과·끝난 수가 모두 같다. 같은 브랜치의 B-013 으로 바뀌는 등록 풀이도 0개다.
+
+**검증**: `npm run test:engine` 148 통과(삭제 기능 시나리오 8개를 빼고 `legacy-portal-orange-codes.scenario.ts` 7개를 더함), `npx tsc -b`·`npm run lint`·`npm run build`·`npm run test:clears`·`npm run test:nav` 통과. 무작위 차분 1.1만 판(임시 도구 `/tmp/claude-1000/rmpo/rdiff.cjs`): 포탈·주황이 없는 판은 삭제 전·후 엔진 결과가 프레임까지 같고, 있는 판은 그 필드를 지운 판과 같으며, 옛 인코더 코드의 왕복도 맞다(차이 0).
+
+**adventure (끝남, 2026-11-03)**: 같은 브랜치에서 JS·GDScript 엔진과 `levelCode.js`·`level_io.gd` 디코더(비트를 읽고 버림, 0 을 씀), 게임 화면 그리기, `levels/_debug.json`·`_showcase.json` 과 생성 도구를 고쳤다. 골든 중 포탈·주황을 쓰던 9케이스(`audit-q-06-a`, `b004-dup-a`·`b004-dup-a-flipped`·`b004-equal-mass-meets-absorbed-ball`, `mechanics-v5` 의 `orange-latch-stays-open`·`orange-wall-blocks-before-latch`·`portal-player-teleports`·`portal-destination-occupied`·`portal-rolling-ball`)는 지우거나 예전 코드 호환 케이스(`shared/test-cases/legacy-portal-orange.json`)로 바꿨다. 골든 267/267, diff-vs-studio 갈림 0, Godot CI 18단계 통과.
 
 ## 배포 전후에 할 일 (메인 세션)
 
@@ -79,10 +101,12 @@
    - 그 뒤 mapmaker `CORPUS.md` 의 최적 턴(25 → 31)과 난이도를 갱신한다.
 3. **B-007**: 공개 맵 'Split & Push'(accepted)·'Split & Push (Tight)'(held)의 작성자와 등록 풀이 작성자(정은후)에게 알린다. 등록 풀이는 그대로 클리어한다.
 4. mapmaker `RULES.md`(로컬 전용)에 반영할 곳:
-   - §7 삼각 칸의 꺾인 묶음(B-001)과 B-013 결정
+   - §7 삼각 칸의 꺾인 묶음(B-001)과 B-013 결정 ①(더 무거운 굴림은 꺾인 묶음과 함께 굴러감, 2026-11-03)
    - §12 굴림 중 클리어(B-002)와 B-027 결정
    - Q-03 확장 — 미는 플레이어 크기(B-003)와 눈꽃으로 커지는 크기(B-005)
    - §2·§16 터널 그늘(B-007), §3·§16·§17 M(B-008), §16 막힌 입력 턴 카운터(B-010 #9), §17 trace 주의(B-009)
+   - 포탈·주황 버튼·주황 벽 삭제(2026-11-03)와 그 규칙 절(포탈 도착·래치·주황 그늘), §16 의 포탈·주황 의심 항목(B-014·B-018~B-023 닫음), B-025 현행 유지
+5. **포탈·주황 삭제(2026-11-03)**: 팀 맵에 미치는 영향은 위 '포탈·주황 삭제' 절에 있다. 운영 DB 의 맵은 손대지 않았다. 출제자에게 알릴지는 메인 세션이 정한다.
 
 ## 고친 곳과 고정한 테스트
 
@@ -101,11 +125,12 @@
 | B-009 | `turn.ts` `ensureMotionIds` — 턴 안에서 겹치지 않는 id | (해당 없음) | (해당 없음) |
 | B-011 | (원래 맞음) | 나이 = 행동 도장 | 같음 |
 | B-012 | — | `initState` 나이 시계 + `editor/test/diff-vs-studio.mjs` 기본 나이 0 | `init_state` 나이 시계 |
+| B-013 | `roll.ts` `rollBalls` 더 가벼운 장애물 분기 — 꺾인 묶음을 구성원마다 자기 방향으로 흡수 (2026-11-03) | 포트 남음 | 포트 남음 |
 
 고정한 테스트는 다음과 같다.
 
-- Studio 시나리오: `test/engine/cases/user-bugs-2026-11.scenario.ts` 21개(B-001~003), `found-bugs-2026-11.scenario.ts` 20개(B-004~009).
-- Studio 테스트 워크벤치: P0-26~P0-31, P1-15a·P1-15b.
+- Studio 시나리오: `test/engine/cases/user-bugs-2026-11.scenario.ts` 21개(B-001~003), `found-bugs-2026-11.scenario.ts` 17개(B-005~009 — B-004 의 3개는 포탈 삭제로 지움), `b013-heavier-triangle.scenario.ts` 48개(B-013, 2026-11-03 — 꺾인 길 위 포털 판은 지움), `legacy-portal-orange-codes.scenario.ts` 7개(포탈·주황 삭제, 2026-11-03).
+- Studio 테스트 워크벤치: P0-26~P0-28·P0-30~P0-32, P1-15a·P1-15b, P2-06(예전 맵 코드). P0-24(포털)·P0-29(B-004)·P1-01(주황 래치)는 지웠다.
 - adventure 골든: `shared/test-cases/bugs-2026-11.json` 39케이스. 기대값은 고친 Studio 엔진으로 만들고 JS 결과와 대조했다.
 - adventure 프레임·연출 검사: `editor/test/tick-simulation.mjs`·`game/test/test_turn_flags.gd`(B-001·B-002·B-004 프레임), `game/test/test_main_contract.gd` `_test_rolled_button_clear_and_arch_build_presentation`(B-002·B-003 연출), 갤러리 #38·#39.
 
@@ -124,7 +149,7 @@
 ## 마무리 검토 반영 (2026-11-02)
 
 1. **B-003 으로 채택 맵 `82d18363` 의 등록 풀이가 깨짐.** 사용자 결정대로라 엔진은 그대로 둔다. 세 엔진에서 다시 확인하고, B-003 '영향'에 할 일과 아치를 지운 판이라는 대안을 적었다.
-2. **B-001 뒤 더 무거운 굴림의 비단조.** B-013 '덧붙임'과 B-001 '확인할 점'에 재현 4판을 적고 결정 항목에 넣었다. `ENGINE_ALGORITHMS.md` §9.3·`TICK_SIMULATION_MECHANICS.md` 에도 한 줄씩 적었다. 코드는 그대로다.
+2. **B-001 뒤 더 무거운 굴림의 비단조.** B-013 '덧붙임'과 B-001 '확인할 점'에 재현 4판을 적고 결정 항목에 넣었다. `ENGINE_ALGORITHMS.md` §9.3·`TICK_SIMULATION_MECHANICS.md` 에도 한 줄씩 적었다. 코드는 그대로다. 2026-11-03 B-013 결정 ①로 고쳤다. 출구 공이 없어도 함께 굴러가므로 비단조가 없어졌다.
 3·5. **adventure 연출 문서가 `Main.gd` 와 어긋남.** 다음 문서를 `Main.gd` 동작대로 고쳤다. 클리어 프레임부터 목표를 연 채 그리고, 도착 빛은 굴림이 끝난 뒤 켠다.
    - `CLAUDE.md` §8 25번 연출 줄
    - `shared/animation-contract.md` ⑦·회귀 테스트 목록·만들기 실패 단락
@@ -143,8 +168,8 @@
 - 터널·아치는 레이저 빔을 막지 않고, 빔은 삼각 칸까지 맞힌다(RULES §16 의심 8). 근거: `ENGINE_ALGORITHMS.md` §12, `test/GAME_IMPLEMENTATION_CASES.md` P0-25, RULES §2.
 - 막힌 입력도 화면 턴·언두 기록이 쌓인다. Q-15 현행이고, 게임 `Main.gd` `_commit_turn_trace` 도 같다. RULES §16 의 '차이' 서술만 낡았다(B-010 #9).
 - 거리·나이가 같은 눈사람 사이의 영혼 이동은 읽기 순서로 정해진다. 그래서 판을 뒤집으면 다른 몸으로 간다. `ENGINE_ALGORITHMS.md` §14 에 적힌 동작이다(대칭 검사 대조 실험 108건이 모두 이 규칙).
-- `justTeleported` 플래그가 `cleared`·`gameover` 로 끝난 상태에만 남는다. 다음 턴이 없으니 해가 없다.
-- 저작 배치나 포탈로 눈꽃 위에 놓인 s1 을 부수면 눈꽃이 하나로 겹쳐 눈 질량 1 이 사라진다. B-021(도착 칸 눈꽃) 때문에 생기는 일이다.
+- `justTeleported` 플래그가 `cleared`·`gameover` 로 끝난 상태에만 남는다. 다음 턴이 없으니 해가 없다. 포탈 삭제(2026-11-03)로 이 플래그는 없어졌다.
+- 저작 배치나 포탈로 눈꽃 위에 놓인 s1 을 부수면 눈꽃이 하나로 겹쳐 눈 질량 1 이 사라진다. 포탈 경우는 B-021(도착 칸 눈꽃) 때문에 생겼고 포탈 삭제로 없어졌다. 저작 배치 경우는 남는다.
 - 맵 코드 왕복이 크기 33 에서 어긋난다. 에디터 상한이 30 이라 실제로는 생기지 않는다.
 - 0턴 경계 세 가지(B-023 조사 중 확인)
   - 시작부터 금 위에 있는 물체는 걸어 올라선 경우와 같은 턴에 무너진다.
@@ -212,5 +237,16 @@
   - `items.mjs`: 검토 항목 재현.
   - `make-golden.mjs`: 골든 생성기 사본. `b002-no-green-…` 를 더했다.
   - `featcount.mjs`: B-027 스냅샷 집계.
+- `/tmp/claude-1000/b013/` — B-013 결정 반영(2026-11-03). `pre/`(고치기 전 `e359b23` 의 `src` 사본), `wtlog/`(꺾인 묶음 흡수를 기록하는 계측 사본).
+  - `impact.cjs`: 등록 풀이 재생.
+  - `rdiff.cjs`: 무작위 차분.
+  - `bfs-impact.cjs`·`walk-impact.cjs`: 맵 상태 탐색.
+  - `golden-check.cjs`: 골든 영향.
 
-B-013·B-027 결정이 골든 기대값을 바꾸면 골든을 다시 만들어야 한다. 그때는 `finalize/make-golden.mjs` 를 쓰거나 같은 일을 하는 도구를 저장소에 둔다. 아직 정하지 않았다.
+- `/tmp/claude-1000/rmpo/` — 포탈·주황 삭제(2026-11-03). `b013-src/`(삭제 전, B-013 만 고친 `src` 사본), `lib.cjs`(세 엔진 `pre`·`b013`·`wt` 불러오기).
+  - `features.cjs`: 스냅샷에서 포탈·주황을 쓰는 맵 찾기.
+  - `impact.cjs`: 등록 풀이 재생(세 엔진, 원인을 B-013 과 삭제로 나눔).
+  - `rdiff.cjs`: 무작위 차분(포탈·주황 없는 판은 삭제 전·후가 같은지, 있는 판은 그 필드를 지운 판과 같은지, 맵 코드 왕복).
+  - `bfs.cjs`·`play.cjs`: 최단 풀이 탐색·수열 재생. `segfuzz*.cjs`: 한 틱에 열차가 둘 이상인 경우 세기.
+
+B-013 은 결정 ①로 정했다. 골든 221케이스의 입력을 고치기 전·후 Studio 로 돌려 보니 바뀌는 케이스가 없다. 그래서 포트할 때 B-013 케이스만 더하면 된다. B-027 결정이 골든 기대값을 바꾸면 골든을 다시 만들어야 한다. 그때는 `finalize/make-golden.mjs` 를 쓰거나 같은 일을 하는 도구를 저장소에 둔다. 아직 정하지 않았다.

@@ -88,7 +88,7 @@ setup: (board) => {
 
 - `.player(row, col, size)`, `.snowball(row, col, size)`, `.snowman(row, col, size)`, `.laser(row, col, direction)`로 자주 쓰는 오브젝트를 놓는다.
 - `.object(row, col, type, size, patch?)`는 `wall`, `block`, `tree`, `triangleBlock` 등 모든 오브젝트에 사용한다. 일반 벽처럼 크기가 의미 없는 단단한 물체는 기존 케이스처럼 `100`을 쓴다.
-- `.tile(row, col, patch)`는 타일 속성을 덮어쓴다. 예: `{ isFlake: true }`, `{ isHole: true }`, `{ isPortal: true }`, `{ isYellowButton: true }`, `{ isYellowWall: true }`, `{ triangle: 'br' }`.
+- `.tile(row, col, patch)`는 타일 속성을 덮어쓴다. 예: `{ isFlake: true }`, `{ isHole: true }`, `{ isCrack: true }`, `{ isYellowButton: true }`, `{ isYellowWall: true }`, `{ triangle: 'br' }`. (포털·주황 버튼·주황 벽은 2026-11-03 삭제)
 - `.edgeArch(row, col, direction, height)`는 그 칸에서 `direction`으로 나갈 때 넘는 경계에 높이 1 또는 2 아치를 둔다.
 - 레벨 옵션이 필요하면 기존 케이스처럼 `board.level.soulSwapEnabled = true`로 설정한다.
 
@@ -106,7 +106,7 @@ verify: (result) => {
   expectObject(result.level, 2, 3, 'snowball', 2);
   expectEmpty(result.level, 2, 1);
   expectNoPlayer(result.level);
-  expect(result.level.tiles[2][3].orangePressed === true, 'button must latch');
+  expect(result.level.tiles[2][3].isHole === true, 'the armed crack must crumble');
 },
 ```
 
@@ -150,9 +150,11 @@ expectFrame(
 
 ## 포함된 회귀 사례
 
-- `core-mechanics.scenario.ts`에는 다른 구현체에서도 그대로 옮겨 쓸 수 있는 작은 규칙 명세를 담는다. 밀기/force, 눈꽃 성장, 크기 3 연쇄 밀기, 노랑·주황 벽, 레이저, 포털, 구멍·균열, 초록 키·골, 영혼 발판, 삼각 반사를 각각 독립된 보드로 검증한다.
+- `core-mechanics.scenario.ts`에는 다른 구현체에서도 그대로 옮겨 쓸 수 있는 작은 규칙 명세를 담는다. 밀기/force, 눈꽃 성장, 크기 3 연쇄 밀기, 노란 벽, 레이저, 구멍·균열, 초록 키·골, 영혼 발판, 삼각 반사를 각각 독립된 보드로 검증한다. (주황 벽 래치와 포털 케이스는 2026-11-03 기능 삭제로 지웠다.)
 - `user-bugs-2026-11.scenario.ts`는 2026-11-02 사용자 보고 버그(`bugs/B-001`~`B-003`)를 담는다. 장면마다 사용자의 원래 판을 맵 코드 그대로 불러와 재현하고, 이어서 작은 보드로 규칙과 경계를 검증한다. 다루는 규칙은 세 가지다. 삼각 칸에 멈춘 공은 거울 출구에 붙은 공과 한 묶음이다. 굴림 중 잠시 눌린 초록 버튼도 클리어로 인정한다(같은 tick 사망이 먼저. 앞 tick에 정해진 클리어는 뒤 tick 사망보다 먼저이고, 초록 버튼이 없는 맵도 같다 — 범위는 팀 결정 대기 `bugs/B-027`). 눈사람을 만들려면 미는 플레이어도 A→B 경계를 지나야 한다.
-- `found-bugs-2026-11.scenario.ts`는 같은 날 엔진 점검에서 찾아 고친 버그(`bugs/B-004`~`B-009`)를 담는다. 버그 파일의 판을 맵 코드 그대로 불러오고, 작은 보드로 경계를 더한다. 한 tick에 한 공은 한 열차만 흡수한다(복제·소실 없음, 질량 보존). 눈사람의 아치·터널 검사는 B 칸 눈송이를 먹은 뒤 크기로 한다. 지형에만 받쳐진 B1도 P2가 B2 너머로 밀면 부서진다. 그림자를 끈 맵에는 터널 그늘도 없다. 영혼 순환이 꺼진 맵에서 M은 풀이 재생에서도 아무 일도 하지 않는다. 한 frame 안의 `motionId`는 물체마다 하나다.
+- `found-bugs-2026-11.scenario.ts`는 같은 날 엔진 점검에서 찾아 고친 버그(`bugs/B-005`~`B-009`)를 담는다. 버그 파일의 판을 맵 코드 그대로 불러오고, 작은 보드로 경계를 더한다. (B-004 '한 tick에 한 공은 한 열차만 흡수'는 포털로만 생기던 경우라 2026-11-03 포털 삭제와 함께 지웠다.) 눈사람의 아치·터널 검사는 B 칸 눈송이를 먹은 뒤 크기로 한다. 지형에만 받쳐진 B1도 P2가 B2 너머로 밀면 부서진다. 그림자를 끈 맵에는 터널 그늘도 없다. 영혼 순환이 꺼진 맵에서 M은 풀이 재생에서도 아무 일도 하지 않는다. 한 frame 안의 `motionId`는 물체마다 하나다.
+- `b013-heavier-triangle.scenario.ts`는 B-013 사용자 결정 ①(2026-11-03)을 담는다. 더 무거운 굴림이 삼각 칸에 멈춘 더 가벼운 묶음을 치면 묶음은 거울 출구로 나가고 굴러온 열차가 따라 꺾여 함께 굴러간다. 보고서의 판(맵 코드), 네 삼각형 × 네 방향, 막힌 출구, 열차, 꺾인 길 위의 구멍·눈송이·금을 본다.
+- `legacy-portal-orange-codes.scenario.ts`는 포털·주황 버튼·주황 벽 삭제(2026-11-03)를 담는다. 그 비트가 남은 예전 맵 코드(팀 맵 「Maze」·「one way」, `bugs/B-004` 판, 옛 인코더로 만든 작은 판)가 그대로 열리고 그 칸은 평범한 바닥인지, 다시 인코드하면 비트가 0인지, Studio JSON·`newGameState`가 그 필드를 지우는지 본다.
 - `player-hole.scenario.ts`는 플레이어가 구멍에 걸어 들어가는 규칙(2026-10-26 변경)을 담는다. 이동은 유효한 턴이고, 몸은 구멍 처리에서 빠지며 영혼은 녹기 전에 가장 가까운 눈사람(거리 → 나이 → 읽기 순서)으로 옮겨 간다. 눈사람이 없으면 게임오버, 목표 위 눈사람이면 클리어, 구멍은 그대로 남아 다음 몸도 빠진다.
 - 높이 1 아치에서 뒤쪽 크기 2 눈덩이는 멈추고, 이미 앞쪽에 있던 `1, 1, 2` suffix는 계속 굴러가는 경우
 - 굴러온 눈덩이가 마지막 노란 버튼을 누르는 동일 tick에 벽이 열리고 레이저가 플레이어를 제거하는 경우

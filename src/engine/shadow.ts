@@ -1,6 +1,6 @@
 import { Level } from '../types';
 import { getObjectHeight, getDirectionDelta, getOppositeDirection, isInBounds } from '../utils/level';
-import { yellowWallsSolid, orangeWallsSolid } from './helpers';
+import { yellowWallsSolid } from './helpers';
 
 /**
  * With shadows off there is no shade at all (B-11 decision, 9/29) — tunnel cells
@@ -15,12 +15,11 @@ export function clearShadows(level: Level): void {
 }
 
 export function recalcShadows(level: Level): void {
-  // A solid (active) orange wall is a partition that fully encloses its cell, so
-  // whatever is trapped inside is permanently in shade. A raised YELLOW wall does not
-  // shade its own cell — the sun still reaches inside (only its trapped object's shadow
-  // is kept from spilling out, below). The wall-solid state is global, so compute once.
+  // A raised (solid) yellow wall does not shade its own cell — the sun still reaches
+  // inside (2026-10-29); only its trapped object's shadow is kept from spilling out,
+  // below. The wall-solid state is global, so compute it once. (The orange wall, whose
+  // closed cell was shade, was removed from the game on 2026-11-03.)
   const ySolid = yellowWallsSolid(level);
-  const oSolid = orangeWallsSolid(level);
 
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
@@ -29,9 +28,7 @@ export function recalcShadows(level: Level): void {
         tile.isShade = false;
         continue;
       }
-      let shade = tile.isRowArch || tile.isColumnArch;
-      if (tile.isOrangeWall && oSolid) shade = true;
-      tile.isShade = shade;
+      tile.isShade = tile.isRowArch || tile.isColumnArch;
     }
   }
 
@@ -45,9 +42,7 @@ export function recalcShadows(level: Level): void {
 
       // An object trapped inside a solid wall partition is fully enclosed, so its
       // shadow can't spill out onto neighboring cells.
-      const objTile = level.tiles[r][c];
-      if (objTile.isYellowWall && ySolid) continue;
-      if (objTile.isOrangeWall && oSolid) continue;
+      if (level.tiles[r][c].isYellowWall && ySolid) continue;
 
       const height = getObjectHeight(obj);
       const shadowLength = Math.floor(height);

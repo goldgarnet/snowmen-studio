@@ -22,9 +22,8 @@ export type RollTickHook = (level: Level, phase?: 'movement' | 'impact' | 'loop'
 /**
  * One rolling snowball. Every ball carries its own direction: a train is not a rigid
  * object but a line of balls where each follows the one in front of it. That is what
- * lets a train bend around a triangle mirror one ball at a time (Q-04), lose its front
- * ball to a hole or a laser while the rest keep rolling (Q-05), and come out of a portal
- * still moving (Q-06).
+ * lets a train bend around a triangle mirror one ball at a time (Q-04) and lose its
+ * front ball to a hole or a laser while the rest keep rolling (Q-05).
  */
 interface Ball {
   pos: Position;
@@ -34,22 +33,10 @@ interface Ball {
 
 const keyOf = (p: Position): string => `${p.row},${p.col}`;
 
-// Kept local to avoid a turn.ts import cycle.
-function findPortalsRoll(level: Level): Position[] {
-  const portals: Position[] = [];
-  for (let r = 0; r < level.height; r++) {
-    for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isPortal) portals.push({ row: r, col: c });
-    }
-  }
-  return portals;
-}
-
 /**
- * Resolve the cell a ball has just arrived in. A hole swallows it (returns false). A
- * portal whose partner is free relocates it; the ball keeps its direction and rolls on
- * out of the partner portal on the next tick (Q-06). justTeleported stops the turn-level
- * portal pass from moving it a second time.
+ * Resolve the cell a ball has just arrived in: a crack remembers the roll, a hole
+ * swallows the ball (returns false). (Portals, which relocated a ball here, were
+ * removed from the game on 2026-11-03.)
  */
 function resolveArrival(level: Level, ball: Ball): boolean {
   const tile = level.tiles[ball.pos.row][ball.pos.col];
@@ -60,15 +47,6 @@ function resolveArrival(level: Level, ball: Ball): boolean {
     if (level.objects[ball.pos.row][ball.pos.col] === ball.obj) level.objects[ball.pos.row][ball.pos.col] = null;
     return false;
   }
-  if (!tile.isPortal) return true;
-  const portals = findPortalsRoll(level);
-  if (portals.length !== 2) return true;
-  const other = portals.find(p => p.row !== ball.pos.row || p.col !== ball.pos.col);
-  if (!other || level.objects[other.row][other.col]) return true; // occupied partner: roll straight over
-  level.objects[ball.pos.row][ball.pos.col] = null;
-  level.objects[other.row][other.col] = ball.obj;
-  ball.obj.justTeleported = true;
-  ball.pos = { ...other };
   return true;
 }
 
@@ -112,15 +90,15 @@ interface Segment {
  *     keep rolling (a height-limited arch or a closing wall splits the train).
  *  3. Moving balls are grouped into trains ("segments"): a lead plus the balls that
  *     follow it. Only the lead meets obstacles, using the whole train's mass.
- *  4. All accepted moves are committed together, then flakes, holes and portals are
- *     resolved for each ball that moved, then the tick hook runs buttons and lasers.
+ *  4. All accepted moves are committed together, then flakes and holes are resolved
+ *     for each ball that moved, then the tick hook runs holes, lasers and the goal check.
  */
 function rollBalls(level: Level, initial: Ball[], onTick?: RollTickHook): void {
   let moving: Ball[] = initial;
   const maxTicks = level.width * level.height * 4 + 16;
 
   // The first tick is the position produced by the player's push. It is observable:
-  // a ball may have landed on a button, beam, hole, or portal already.
+  // a ball may have landed on a button, beam, or hole already.
   const firstTick = finishTick(level, moving.filter(ball => resolveArrival(level, ball)), onTick);
   if (firstTick === null) return;
   moving = firstTick;
@@ -201,7 +179,8 @@ function rollBalls(level: Level, initial: Ball[], onTick?: RollTickHook): void {
       // earlier train already absorbs this tick are not stationary obstacles for a second
       // train: a ball is taken by one train per tick. Absorbing it twice moved it twice —
       // a copy in two cells, with one train's lead overwritten (B-004). The earlier train
-      // in the fixed order wins (B-018).
+      // in the fixed order wins (B-018). Only a portal could split a roll into two trains,
+      // so since portals were removed (2026-11-03) this is a guard that no board reaches.
       const stationarySnow = obstacleGroup.every(m => m.obj.type === 'snowball'
         && !byCell.has(keyOf(m.pos)) && !pending.some(p => p.obj === m.obj)
         && !merges.some(g => g.obstacle.some(o => o.obj === m.obj)));
@@ -211,15 +190,21 @@ function rollBalls(level: Level, initial: Ball[], onTick?: RollTickHook): void {
       const obstacleMass = massOf(obstacleGroup);
 
       if (obstacleMass < rollingMass) {
-        // A stationary obstacle has no momentum of its own, so it must move as a whole.
-        // (A group that bends at a mirror never can: its triangle member's straight way
-        // out is a solid leg, so the train simply stops, as before.)
-        if (!obstacleGroup.every(m => canMoveTo(level, m.pos, lead.dir, m.obj))) continue;
+        // A stationary obstacle has no momentum of its own, so it must move as a whole:
+        // every member one cell the way the group runs through its cell. A straight
+        // group moves in the train's direction. A group that bends at a mirror leaves
+        // the same way the equal-mass handoff sends it — the triangle member out of its
+        // mirror exit, together with the balls touching that exit — and the train
+        // follows it into the triangle cell, bending there one ball at a time (Q-04).
+        // The bent group used to be pushed straight, into its triangle member's solid
+        // leg, so a heavier hit moved nothing while an equal one did (B-013, user
+        // decision 2026-11-03). If terrain stops any member, nothing moves.
+        if (!obstacleGroup.every(m => canMoveTo(level, m.pos, m.dir, m.obj))) continue;
         const front = obstacleGroup[obstacleGroup.length - 1];
-        const beyond = getNextPos(front.pos, lead.dir);
+        const beyond = getNextPos(front.pos, front.dir);
         if (!isInBounds(level, beyond) || level.objects[beyond.row][beyond.col] || reserved.has(keyOf(beyond))) continue;
         reserved.add(keyOf(beyond));
-        merges.push({ segment, obstacle: obstacleGroup.map(m => ({ pos: { ...m.pos }, obj: m.obj, dir: lead.dir })) });
+        merges.push({ segment, obstacle: obstacleGroup.map(m => ({ pos: { ...m.pos }, obj: m.obj, dir: m.dir })) });
         continue;
       }
 
@@ -256,7 +241,7 @@ function rollBalls(level: Level, initial: Ball[], onTick?: RollTickHook): void {
       moved.push(ball);
     }
 
-    // 6. Flakes, then holes/portals, for every ball that moved.
+    // 6. Flakes, then holes, for every ball that moved.
     for (const ball of moved) absorbRollFlake(level, ball);
     for (const ball of moved) if (resolveArrival(level, ball)) nextMoving.push(ball);
 

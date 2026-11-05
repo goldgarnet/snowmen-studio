@@ -119,14 +119,6 @@ function buildHole(): Level {
   return level;
 }
 
-function buildPortal(): Level {
-  const level = basicLevel(8, 3);
-  object(level, 1, 1, 'player', 1);
-  tile(level, 1, 2, { isPortal: true });
-  tile(level, 1, 6, { isPortal: true });
-  return level;
-}
-
 function buildTriangleReflection(): Level {
   const level = basicLevel(8, 6);
   object(level, 4, 1, 'player', 3);
@@ -167,15 +159,6 @@ function buildSnowmanPastArch(): Level {
   return level;
 }
 
-// B-004 (bugs/B-004 board dup-a): after `down` the P3 pushes s1 + s1; one ball teleports
-// and both trains, grown to s2, hit the (4,5) ball in the same tick. Only the first in
-// reading order may absorb it.
-const CONCURRENT_TRAINS_CODE = 'bOzi0u4CVT438eGybeTH4HYtRhM0rzFcrdnT6MwiMPIPWaEmYtp1CcMCpYhhgsohYNPmWgMFvzo9gkHDq35IORl6rRthpvsYrvCznTg84J7F3fxWmVl3fVznV7HU3WOA1U6tj';
-
-function buildConcurrentTrains(): Level {
-  return decodeLevelCode(CONCURRENT_TRAINS_CODE) ?? basicLevel();
-}
-
 // B-005: the new snowman eats the flake under B and becomes an S3, too big for the height-2 arch.
 function buildSnowmanFlakePastArch(): Level {
   const level = basicLevel(5, 3);
@@ -194,6 +177,17 @@ function buildTerrainBackedS2S1(): Level {
   object(level, 1, 1, 'snowball', 2);
   tile(level, 1, 2, { triangle: 'tr' });
   object(level, 1, 2, 'snowball', 1);
+  return level;
+}
+
+// B-013: the rolling s2 hits the lighter ball resting in the ◥. The ball leaves by the
+// mirror exit (down) and the s2 follows it into the ◥, bends and rolls down with it.
+function buildHeavierRollIntoTriangle(): Level {
+  const level = basicLevel(6, 5);
+  object(level, 0, 0, 'player', 3);
+  object(level, 0, 1, 'snowball', 2);
+  tile(level, 0, 4, { triangle: 'tr' });
+  object(level, 0, 4, 'snowball', 1);
   return level;
 }
 
@@ -218,6 +212,15 @@ function buildSoulBodyMotionIds(): Level {
   return level;
 }
 
+// P2-06: a map code saved before portals and orange buttons/walls were removed
+// (2026-11-03). Row 1 holds P2 · portal · orange button · orange wall · floor · portal ·
+// goal. The decoder drops those bits, so the player walks the whole row to the goal.
+const LEGACY_PORTAL_ORANGE_CODE = 'dZaSFMGW0LEGjbWPDVECGEbaXOjgXdGW12KGxHF1FayWOSiF2aotky7lr3oiedInikKYbn';
+
+function buildLegacyPortalOrangeCode(): Level {
+  return decodeLevelCode(LEGACY_PORTAL_ORANGE_CODE) ?? basicLevel();
+}
+
 const visualCases: Record<string, Pick<TestCaseDefinition, 'actions' | 'build'>> = {
   'P0-01': { actions: ['right'], build: buildBasicMove },
   'P0-05': { actions: ['right'], build: buildRolling },
@@ -227,7 +230,6 @@ const visualCases: Record<string, Pick<TestCaseDefinition, 'actions' | 'build'>>
   'P0-21': { actions: ['right'], build: buildYellowLaser },
   'P0-22': { actions: ['right'], build: buildYellowLaser },
   'P0-23': { actions: ['right'], build: buildHole },
-  'P0-24': { actions: ['right'], build: buildPortal },
   'P0-14': { actions: ['right'], build: buildImpact },
   'P1-11': { actions: ['right'], build: buildImpact },
   'P1-12': { actions: ['right'], build: buildRolling },
@@ -238,11 +240,12 @@ const visualCases: Record<string, Pick<TestCaseDefinition, 'actions' | 'build'>>
   'P0-26': { actions: ['right'], build: buildTriangleGroup },
   'P0-27': { actions: ['right'], build: buildRollOverGreenButton },
   'P0-28': { actions: ['down'], build: buildSnowmanPastArch },
-  'P0-29': { actions: ['down', 'right'], build: buildConcurrentTrains },
   'P0-30': { actions: ['right'], build: buildSnowmanFlakePastArch },
   'P0-31': { actions: ['right'], build: buildTerrainBackedS2S1 },
+  'P0-32': { actions: ['right'], build: buildHeavierRollIntoTriangle },
   'P1-15a': { actions: ['right'], build: buildSplitShoveMotionIds },
   'P1-15b': { actions: ['up', 'right', 'right', 'right', 'down', 'left', 'left', 'down'], build: buildSoulBodyMotionIds },
+  'P2-06': { actions: ['right', 'right', 'right', 'right', 'right', 'right'], build: buildLegacyPortalOrangeCode },
 };
 
 const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
@@ -258,7 +261,7 @@ const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
   ['P0-10', 'P0', '직접 힘', '크기 2 눈덩이 양방향 분할', '크기 2 눈덩이가 수직 방향으로 갈라진다.', '양쪽·한쪽·완전 차단 결과가 원자적으로 결정된다.'],
   ['P0-11', 'P0', '직접 힘', '힘은 직접 닿은 눈덩이에만', '플레이어와 눈덩이 사이에 블록이 있다.', '블록 너머의 눈덩이는 부서지지도 쪼개지지도 않는다.'],
   ['P0-12', 'P0', '굴림', '굴림은 한 tick에 최대 한 칸', '한 입력이 여러 내부 tick으로 나뉜다.', '각 movement frame의 논리 이동은 최대 한 칸이다.'],
-  ['P0-13', 'P0', '질량', '더 무거운 굴림 그룹의 흡수', '더 무거운 그룹이 가벼운 그룹을 민다.', '두 그룹이 전진 후 하나의 그룹으로 병합된다.'],
+  ['P0-13', 'P0', '질량', '더 무거운 굴림 그룹의 흡수', '더 무거운 그룹이 가벼운 그룹을 민다.', '두 그룹이 전진 후 하나의 그룹으로 병합된다. 삼각 칸에서 꺾인 묶음은 P0-32.'],
   ['P0-14', 'P0', '질량', '같은 질량 탄성 충돌', '같은 질량 충돌에서 운동이 전달된다.', 'impact 뒤 정지 그룹이 굴러간다.'],
   ['P0-15', 'P0', '질량', '더 무거운 장애물 그룹', '진행 그룹보다 장애물이 무겁다.', '진행 그룹이 충돌 위치에서 정지한다.'],
   ['P0-16', 'P0', '질량', '굴림 중 눈송이로 질량 변화', '열차 구성원이 굴러가며 눈송이를 먹는다.', '다음 충돌 전에 총질량이 갱신된다.'],
@@ -269,15 +272,13 @@ const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
   ['P0-21', 'P0', '버튼·레이저', '마지막 노란 버튼과 레이저의 같은 tick', '눈덩이가 마지막 버튼을 누른다.', 'movement에서 버튼을 누르고 resolved에서 레이저가 반응한다.'],
   ['P0-22', 'P0', '버튼·레이저', '게임 오버 후 활성 굴림 유지', '레이저로 플레이어가 먼저 사망한다.', 'gameover여도 이미 시작된 눈덩이는 계속 굴러간다.'],
   ['P0-23', 'P0', '특수 타일', '굴림 중 구멍', '눈덩이가 구멍으로 들어간다.', '눈덩이가 제거되고 굴림이 종료된다.'],
-  ['P0-24', 'P0', '특수 타일', '일반 이동 포털과 굴림 포털', '두 포털 사이로 오브젝트가 이동한다.', '한 턴에 중복 순간이동하지 않는다.'],
   ['P0-25', 'P0', '레이저', '레이저 차단 순서', '벽·삼각 벽·색상 벽이 빔 경로에 있다.', '차단물 뒤의 오브젝트는 피격되지 않는다.'],
-  ['P0-26', 'P0', '질량', '삼각 칸 공의 꺾인 묶음', '굴러온 공이 삼각 칸에 멈춘 공을 친다. 그 공의 거울 출구에 다른 공이 붙어 있다.', '두 공을 한 묶음(질량 2)으로 센다. 질량 1이 맞으면 굴러온 공만 멈춘다. 출구가 비면 예전처럼 거울 방향으로 나가고, 질량이 같으면 묶음 전체가 나간다(B-001).'],
+  ['P0-26', 'P0', '질량', '삼각 칸 공의 꺾인 묶음', '굴러온 공이 삼각 칸에 멈춘 공을 친다. 그 공의 거울 출구에 다른 공이 붙어 있다.', '두 공을 한 묶음(질량 2)으로 센다. 질량 1이 맞으면 굴러온 공만 멈춘다. 출구가 비면 예전처럼 거울 방향으로 나가고, 질량이 같으면 묶음 전체가 나간다(B-001). 더 무거우면 함께 굴러간다(P0-32).'],
   ['P0-27', 'P0', '클리어', '굴림 중 잠시 눌린 초록 버튼', '플레이어가 목표에 선 채 민 공이 마지막 초록 버튼 위를 굴러 지나간다.', '공이 버튼 위에 있는 tick에 목표가 열리므로 그 턴은 클리어다. 굴림은 끝까지 기록되고, 같은 tick의 사망이 먼저다(B-002).'],
   ['P0-28', 'P0', '합성', '아치 너머 눈사람 — 플레이어도 통과', 'P2가 높이 1 아치 너머의 눈덩이 쪽으로 크기 1 눈덩이를 민다.', '플레이어가 A→B 경계를 지날 수 없으므로 합성하지 않는다(무반응). P1은 같은 자리에서 합성한다(B-003).'],
-  ['P0-29', 'P0', '질량', '한 공은 한 tick에 한 열차만 흡수', '포털로 갈라진 두 열차가 같은 tick에 같은 정지 공을 친다.', '읽기 순서로 먼저인 열차만 그 공을 흡수하고 다른 열차는 멈춘다. 공이 복제되거나 사라지지 않고 질량이 보존된다(B-004).'],
   ['P0-30', 'P0', '합성', '눈송이 위 B로 만드는 눈사람과 합성 경계', 'P2가 높이 2 아치 너머, 눈송이 위의 크기 2 눈덩이 쪽으로 크기 1 눈덩이를 민다.', '새 눈사람은 눈송이를 먹어 크기 3이 되므로 아치를 지나지 못해 합성하지 않는다(무반응, B-005).'],
   ['P0-31', 'P0', '직접 힘', '지형에만 받쳐진 B1을 B2 너머로 밈', 'P2가 크기 2 눈덩이 너머, 삼각 벽의 막힌 변에 받쳐진 크기 1 눈덩이를 민다.', 'C가 벽일 때처럼 크기 1 눈덩이만 눈송이로 부서지고 크기 2 눈덩이와 플레이어는 제자리다(B-006).'],
-  ['P1-01', 'P1', '턴 종료', '주황 버튼 누적 래치', '주황 버튼은 한 번 눌리면 유지된다.', '모든 래치 후 주황 벽이 영구적으로 열린다.'],
+  ['P0-32', 'P0', '질량', '더 무거운 굴림이 삼각 칸 공을 데리고 꺾임', '굴러온 B2가 삼각 칸에 멈춘 더 가벼운 B1을 친다.', '친 tick에 B1이 거울 출구로 한 칸 나가고 B2가 삼각 칸으로 따라 들어와 다음 tick에 꺾인다. 둘이 한 열차로 맵 끝까지 굴러가고 impact는 없다. 출구가 막히면 아무것도 안 움직이고, 같은 질량이면 예전처럼 넘긴다(B-013, 사용자 결정 ①).'],
   ['P1-02', 'P1', '턴 종료', '금 간 타일의 두 턴 붕괴', '균열 타일은 다음 턴 종료에 붕괴한다.', '막힌 입력은 붕괴를 진행시키지 않는다.'],
   ['P1-03', 'P1', '턴 종료', '햇빛과 녹기', '따뜻한 타일에서 오브젝트가 녹는다.', '플레이어와 눈덩이의 녹기 시점이 다르다.'],
   ['P1-04', 'P1', '턴 종료', '그림자 갱신', '이동·성장·벽 상태 변경 후 그림자를 계산한다.', 'void에는 그림자를 만들지 않는다.'],
@@ -294,12 +295,13 @@ const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
   ['P1-15', 'P1', '프레임', 'motion ID 연속성', '같은 공의 여러 frame을 비교한다.', '계속 존재하는 entity만 같은 motionId를 유지한다.'],
   ['P1-15a', 'P1', '프레임', 'motion ID — 쪼개진 반쪽이 밀어낸 공', '크기 2 눈덩이가 쪼개지며 위쪽 반쪽이 이웃 공을 한 칸 밀어내고 그 칸에 들어간다.', '밀려난 공은 원래 motionId를 유지하고 새 반쪽은 새 ID를 받는다. 한 frame 안에서 ID는 물체마다 하나다(B-009).'],
   ['P1-15b', 'P1', '프레임', 'motion ID — 영혼이 옮겨 간 새 몸', '플레이어 시작 칸에 눈사람을 밀어 넣고 구멍에 빠져 영혼이 그 눈사람으로 옮겨 간다.', '새 몸은 옛 몸과 다른 motionId를 받아 몸이 바뀐 것으로 인식된다(soulChangedBody, B-009).'],
-  ['P1-16', 'P1', '프레임', '특수 이동은 가짜 경로를 보이지 않음', '포털·반사 이동을 애니메이션으로 재생한다.', '여러 칸 특수 이동은 즉시 전환한다.'],
-  ['P2-01', 'P2', '안전성', '포털·삼각 반사 무한 루프', '반복 경로를 만드는 포털과 반사판이다.', '안전 한도 안에서 게임이 멈추지 않고 종료된다.'],
+  ['P1-16', 'P1', '프레임', '특수 이동은 가짜 경로를 보이지 않음', '삼각 블록 반사처럼 여러 칸을 건너뛰는 이동을 애니메이션으로 재생한다.', '여러 칸 특수 이동은 즉시 전환한다.'],
+  ['P2-01', 'P2', '안전성', '삼각 반사 무한 루프', '반복 경로를 만드는 삼각 반사판이다.', '안전 한도 안에서 게임이 멈추지 않고 종료된다.'],
   ['P2-02', 'P2', '안전성', '동시 이동 덮어쓰기 방지', '세 오브젝트 연쇄 이동이다.', '앞 오브젝트부터 이동해 중복·소실이 없다.'],
   ['P2-03', 'P2', '안전성', '입력 잠금', '애니메이션 재생 중 여러 입력을 보낸다.', '추가 turn·undo·영혼 이동이 생성되지 않는다.'],
   ['P2-04', 'P2', '안전성', '프레임 스냅샷 불변성', '이전 frame을 참조한 채 다음 frame을 계산한다.', '과거 frame의 상태가 변하지 않는다.'],
   ['P2-05', 'P2', '저장', '저장된 풀이 재현', '맵 코드와 입력 문자열을 새 인스턴스에서 재생한다.', '최종 상태가 같고 맵 변경 시 풀이가 무효화된다.'],
+  ['P2-06', 'P2', '저장', '포털·주황 비트가 남은 예전 맵 코드', '포털과 주황 버튼·벽은 2026-11-03 팀 결정으로 게임에서 뺐다. 그 전에 만든 맵 코드에는 그 비트가 남아 있다.', '코드는 그대로 열리고 그 칸은 평범한 바닥이다(다른 타일 정보는 유지). 다시 저장하면 그 비트는 0이다. 플레이어는 순간이동 없이 줄 끝 목표까지 걸어간다.'],
 ].map(([id, priority, category, title, summary, expected]) => ({
   id, priority, category, title, summary, expected,
 } as Omit<TestCaseDefinition, 'actions' | 'build'>));

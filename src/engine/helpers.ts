@@ -34,25 +34,6 @@ export function yellowWallsSolid(level: Level): boolean {
 }
 
 /**
- * Orange walls behave like yellow walls but LATCH: an orange button, once covered,
- * stays "pressed" forever (tile.orangePressed, set by the turn resolver). The walls
- * are solid until every orange button has latched at least once — after which they
- * stay open permanently. (With no orange buttons the walls behave like plain walls.)
- */
-export function orangeWallsSolid(level: Level): boolean {
-  let hasButton = false;
-  for (let r = 0; r < level.height; r++) {
-    for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isOrangeButton) {
-        hasButton = true;
-        if (!level.tiles[r][c].orangePressed) return true; // a not-yet-latched button
-      }
-    }
-  }
-  return !hasButton;
-}
-
-/**
  * Returns the edge-arch level (max passable size) on the boundary between `from`
  * and the next cell in direction `dir`. Returns 0 if no arch is present.
  */
@@ -115,10 +96,6 @@ export function canEnterTile(level: Level, pos: Position, dir: Direction, obj: G
   if (tile.isYellowWall && yellowWallsSolid(level)) {
     return false;
   }
-  // Solid orange wall: impassable until every orange button has latched.
-  if (tile.isOrangeWall && orangeWallsSolid(level)) {
-    return false;
-  }
 
   // Hole: anything may enter, including the player (2026-10-26; the player used to be
   // blocked here). The turn/roll resolver removes whatever stands on a hole
@@ -147,13 +124,12 @@ export function canLeaveTile(level: Level, pos: Position, dir: Direction, obj: G
     return false;
   }
 
-  // Yellow/orange walls are partitions: an object can enter the cell only while the
-  // wall is open (button pressed), but once it re-solidifies whatever is inside can no
-  // longer leave — it is trapped. Because this is evaluated per cell-step (during a
-  // roll, canLeaveTile runs each cell), a snowball that rolls over the button and on
-  // into the wall cell gets sealed in the instant it steps off the button.
+  // Yellow walls are partitions: an object can enter the cell only while the wall is
+  // open (buttons pressed), but once it re-solidifies whatever is inside can no longer
+  // leave — it is trapped. Because this is evaluated per cell-step (during a roll,
+  // canLeaveTile runs each cell), a snowball that rolls over the button and on into the
+  // wall cell gets sealed in the instant it steps off the button.
   if (tile.isYellowWall && yellowWallsSolid(level)) return false;
-  if (tile.isOrangeWall && orangeWallsSolid(level)) return false;
 
   return true;
 }
@@ -213,9 +189,8 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
   if (tile.triangle && TRI_SOLID[tile.triangle].includes(dir)) return true;
   if (nextTile.triangle && TRI_SOLID[nextTile.triangle].includes(getOppositeDirection(dir))) return true;
 
-  // A solid yellow/orange wall at the next cell backs the push like a wall.
+  // A solid yellow wall at the next cell backs the push like a wall.
   if (nextTile.isYellowWall && yellowWallsSolid(level)) return true;
-  if (nextTile.isOrangeWall && orangeWallsSolid(level)) return true;
 
   // Check perpendicular tunnel blockage (existing arch-tile semantics): rowArch
   // blocks left/right movement; columnArch blocks up/down movement.
@@ -231,11 +206,11 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
 }
 
 /**
- * A solid (closed) yellow/orange partition encloses its whole cell: nothing enters or
- * leaves it, its interior is always in shade, and a laser standing inside cannot fire
- * out of it.
+ * A solid (closed) yellow partition encloses its whole cell: nothing enters or leaves
+ * it, its trapped object casts no shadow outside, and a laser standing inside cannot
+ * fire out of it. (Its interior is not shade — the sun still gets in, 2026-10-29.)
  */
 export function isClosedPartition(level: Level, pos: Position): boolean {
   const tile = level.tiles[pos.row][pos.col];
-  return (!!tile.isYellowWall && yellowWallsSolid(level)) || (!!tile.isOrangeWall && orangeWallsSolid(level));
+  return !!tile.isYellowWall && yellowWallsSolid(level);
 }

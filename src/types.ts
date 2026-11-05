@@ -39,16 +39,9 @@ export interface Tile {
   isYellowButton?: boolean;
   // Yellow wall: acts like a solid wall unless all yellow buttons are pressed.
   isYellowWall?: boolean;
-  // Orange button: like a yellow button, but LATCHING — once pressed (covered by an
-  // object) it stays pressed forever, even after the object leaves. Orange walls
-  // vanish permanently once every orange button has been pressed at least once.
-  isOrangeButton?: boolean;
-  // Orange wall: acts like a solid wall until all orange buttons have latched.
-  isOrangeWall?: boolean;
-  // Runtime-only latch for an orange button: set true the first time it is covered
-  // and never reset. NOT saved in the map code (initial state = unpressed); cloneLevel
-  // propagates it during play.
-  orangePressed?: boolean;
+  // (Orange buttons/walls and portals were removed from the game on 2026-11-03 by team
+  // decision. Old map codes still carry their bits; the decoder reads and drops them, so
+  // such a cell is plain ground — see levelCode.ts and dropRemovedFeatures in level.ts.)
   // Hole: any object that moves onto this tile falls in and disappears — the player
   // too (it may walk in; the soul then moves to the nearest snowman, game over if
   // none). The hole stays. No object can be placed on a hole in the editor.
@@ -62,11 +55,6 @@ export interface Tile {
   // Runtime-only: a snowball rolled across this crack during the current turn. It arms
   // the crack at the end of the turn exactly as if something were standing on it (Q-16 c).
   crackRolled?: boolean;
-  // Portal: a map must have exactly 0 or 2. An object/player that moves onto a portal
-  // (from a non-portal cell) is instantly relocated to the other portal, unless the
-  // destination portal already holds an object. Stored as a tile flag (objects rest
-  // on top of it), like the soul-swap footplate.
-  isPortal?: boolean;
   // Triangle wall (half-cell corner mirror). Undefined = none.
   triangle?: TriangleCorner;
 }
@@ -82,10 +70,6 @@ export interface GameObject {
   // that additionally deflects a rolling snowball like a triangle wall of this corner.
   // Undefined = an ordinary block.
   triangleCorner?: TriangleCorner;
-  // Runtime-only: set when this object was relocated by a portal during the current
-  // turn, so the post-push portal pass does not teleport it a second time. Cleared at
-  // end of turn; not saved in the map code.
-  justTeleported?: boolean;
   // Runtime-only stable identity for matching an object across tick snapshots during
   // editor-play animation. It is ignored by the level-code serializer.
   motionId?: string;
