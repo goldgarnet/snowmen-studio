@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { downloadUrl, imageUrl, IMAGE_RANKS, type DesignComment, type DesignImage } from '../../api/design';
 import { useEscapeKey } from '../../lib/useEscapeKey';
+import { PickButton, type SlotChoice } from './DesignGallery';
 import { TagSelect } from './tags';
 
 const when = (iso: string) => new Date(iso).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -8,7 +9,7 @@ const MAX_ZOOM = 4;
 
 // 그림을 크게 보며 피드백을 다는 화면. 그림을 누르면 그 자리에 번호를 찍어 피드백을 남길 수 있다.
 export default function DesignViewer({
-  title, images, comments, startId, userId, ranked, onClose, onRank, onPick, onAddComment, onRemoveComment, onRemoveImage,
+  title, images, comments, startId, userId, ranked, slotChoices, onClose, onRank, onPick, onAddComment, onRemoveComment, onRemoveImage,
 }: {
   title: string;
   images: DesignImage[];
@@ -16,9 +17,10 @@ export default function DesignViewer({
   startId: string;
   userId: string;
   ranked: boolean;             // 시안 · 가이드면 우선순위와 채택을 보여 준다
+  slotChoices: SlotChoice[];   // 채택할 때 고를 파일 칸
   onClose: () => void;
   onRank: (id: string, rank: string) => void;
-  onPick: (image: DesignImage) => void;
+  onPick: (image: DesignImage, slotId?: string) => void;
   onAddComment: (imageId: string, body: string, pin: { x: number; y: number } | null) => void;
   onRemoveComment: (comment: DesignComment) => void;
   onRemoveImage: (image: DesignImage) => void;
@@ -93,7 +95,7 @@ export default function DesignViewer({
           <button type="button" className="dw-view-arrow" aria-label="다음 그림" onClick={() => go(1)}>›</button>
           <span className="dw-view-title">{title}</span>
           {ranked && <TagSelect value={current.rank} options={IMAGE_RANKS} label="우선순위" emptyLabel="순위 없음" onChange={(rank) => onRank(current.id, rank)} />}
-          {ranked && <button type="button" className={`dw-shot-btn${current.picked ? ' is-on' : ''}`} onClick={() => onPick(current)}>{current.picked ? '채택 취소' : '채택'}</button>}
+          {ranked && <PickButton image={current} slots={slotChoices} onPick={onPick} />}
           <a className="dw-shot-btn" href={downloadUrl(current.path, current.file_name)}>받기</a>
           <button type="button" className="dw-shot-btn" onClick={() => onRemoveImage(current)}>삭제</button>
           <button type="button" className="btn btn-primary btn-sm" onClick={onClose}>닫기</button>

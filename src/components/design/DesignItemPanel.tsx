@@ -3,10 +3,10 @@ import {
   DESIGN_ALPHAS, DESIGN_ASSIGNEES, DESIGN_CATEGORIES, DESIGN_PRIORITIES, DESIGN_STATUSES,
   type DesignFile, type DesignGroup, type DesignImage, type DesignItem, type DesignStatus, type DesignTask,
 } from '../../api/design';
-import { daysLeft, ideaList, shortDate, textLines, type Deadline } from '../../lib/designBoard';
+import { adoptedRows, daysLeft, ideaList, shortDate, textLines, type Deadline } from '../../lib/designBoard';
 import { useEscapeKey } from '../../lib/useEscapeKey';
 import DesignFileCard from './DesignFileCard';
-import DesignGallery from './DesignGallery';
+import DesignGallery, { type SlotChoice } from './DesignGallery';
 import EditableText, { EditableBlock } from './EditableText';
 import { TagSelect } from './tags';
 
@@ -21,7 +21,7 @@ const PLACEMENT_TEXT: Record<string, string> = {
 };
 
 export default function DesignItemPanel({
-  item, group, files, drafts, finals, comments, tasks, deadlines, busyFiles, busyDraft,
+  item, group, files, drafts, finals, comments, tasks, deadlines, busyFiles, busyDraft, slotChoices,
   onPatch, onUploadDrafts, onMoveDraft, onRank, onPickImage, onOpenImage, onPickFile, onPatchFile, onAddFile, onRemoveFile, onRemoveImage, onRemove, onClose,
 }: {
   item: DesignItem;
@@ -34,11 +34,12 @@ export default function DesignItemPanel({
   deadlines: Deadline[];
   busyFiles: Set<string>;
   busyDraft: boolean;
+  slotChoices: SlotChoice[];      // 채택할 때 고를 파일 칸
   onPatch: (patch: Partial<DesignItem>) => void;
   onUploadDrafts: (picked: File[]) => void;
   onMoveDraft: (id: string, beforeId: string | null) => void;
   onRank: (id: string, rank: string) => void;
-  onPickImage: (image: DesignImage) => void;
+  onPickImage: (image: DesignImage, slotId?: string) => void;
   onOpenImage: (image: DesignImage) => void;
   onPickFile: (file: DesignFile, picked: File[]) => void;
   onPatchFile: (id: string, patch: Partial<DesignFile>) => void;
@@ -52,6 +53,11 @@ export default function DesignItemPanel({
   const placement = PLACEMENT_TEXT[files.find((f) => f.canvas_w)?.placement ?? ''];
   const filled = files.filter((f) => finals.some((i) => i.file_id === f.id)).length;
   const draftName = item.split ? '가이드' : '시안';
+  const pickedSlot = (image: DesignImage) => {
+    if (files.length < 2) return '';
+    const row = adoptedRows(image, finals)[0];
+    return files.find((f) => f.id === row?.file_id)?.label ?? '';
+  };
 
   // 글을 고치는 중이면 Esc 는 칸만 벗어나 저장하고, 한 번 더 누르면 닫는다.
   useEscapeKey(() => {
@@ -140,13 +146,15 @@ export default function DesignItemPanel({
               ? (item.guide_done
                 ? '가이드가 끝났습니다. 채색 담당은 이 그림을 보고 같은 그림체로 채색해 아래 최종 파일에 올립니다.'
                 : '채색 전 그림을 올립니다. 끝나면 가이드 완료를 눌러 채색 담당에게 넘깁니다.')
-              : '시안을 여러 장 올려 비교합니다. 그림을 누르면 크게 보고 피드백을 남길 수 있고, 끌어서 순서를 바꿉니다.'}
+              : `시안을 여러 장 올려 비교합니다. ${slotChoices.length > 0 ? '채택할 때 고른 파일 칸에 바로 들어갑니다' : '채택하면 아래 최종 파일에 바로 들어갑니다'}. 그림을 누르면 크게 보고 피드백을 남길 수 있고, 끌어서 순서를 바꿉니다.`}
           </p>
           <DesignGallery
             images={drafts}
             comments={comments}
             busy={busyDraft}
             emptyText={`${draftName} 그림을 끌어다 놓으세요`}
+            slots={slotChoices}
+            pickedSlot={pickedSlot}
             onUpload={onUploadDrafts}
             onMove={onMoveDraft}
             onRank={onRank}

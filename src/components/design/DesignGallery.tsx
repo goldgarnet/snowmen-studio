@@ -4,16 +4,44 @@ import { TagSelect } from './tags';
 
 const IMAGE_TYPE = 'application/x-design-image';
 
+export interface SlotChoice {
+  id: string;
+  label: string;
+}
+
+/** 채택 버튼. 넣을 파일 칸이 여럿이면 칸을 고르면서 채택한다. */
+export function PickButton({ image, slots, onPick }: {
+  image: DesignImage;
+  slots: SlotChoice[];
+  onPick: (image: DesignImage, slotId?: string) => void;
+}) {
+  if (image.picked || slots.length === 0) {
+    return (
+      <button type="button" className={`dw-shot-btn${image.picked ? ' is-on' : ''}`} onClick={() => onPick(image)}>
+        {image.picked ? '채택 취소' : '채택'}
+      </button>
+    );
+  }
+  return (
+    <select className="dw-shot-btn dw-pick-select" aria-label="채택해서 넣을 파일 칸" value="" onChange={(e) => onPick(image, e.target.value)}>
+      <option value="" hidden>채택</option>
+      {slots.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+    </select>
+  );
+}
+
 // 시안 · 가이드 그림 모음. 몇 장이든 올리고, 끌어서 순서를 바꾸고, 우선순위와 채택을 고른다.
-export default function DesignGallery({ images, comments, busy, emptyText, onUpload, onMove, onRank, onPick, onOpen }: {
+export default function DesignGallery({ images, comments, busy, emptyText, slots, pickedSlot, onUpload, onMove, onRank, onPick, onOpen }: {
   images: DesignImage[];              // 보이는 순서대로
   comments: Map<string, number>;      // 그림별 피드백 수
   busy: boolean;
   emptyText: string;
+  slots: SlotChoice[];                // 채택할 때 고를 파일 칸
+  pickedSlot: (image: DesignImage) => string;   // 채택해 넣은 칸의 이름. 칸이 하나면 비어 있다
   onUpload: (picked: File[]) => void;
   onMove: (id: string, beforeId: string | null) => void;
   onRank: (id: string, rank: string) => void;
-  onPick: (image: DesignImage) => void;
+  onPick: (image: DesignImage, slotId?: string) => void;
   onOpen: (id: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,11 +91,11 @@ export default function DesignGallery({ images, comments, busy, emptyText, onUpl
             <button type="button" className="dw-shot-open" aria-label={`시안 ${i + 1} 크게 보기`} onClick={() => onOpen(image.id)}>
               <img src={imageUrl(image.path)} alt="" loading="lazy" draggable={false} />
               <i className="dw-shot-no">{i + 1}</i>
-              {image.picked && <b className="dw-shot-pick">채택</b>}
+              {image.picked && <b className="dw-shot-pick">{['채택', pickedSlot(image)].filter(Boolean).join(' · ')}</b>}
             </button>
             <div className="dw-shot-foot">
               <TagSelect value={image.rank} options={IMAGE_RANKS} label="우선순위" emptyLabel="순위 없음" onChange={(rank) => onRank(image.id, rank)} />
-              <button type="button" className={`dw-shot-btn${image.picked ? ' is-on' : ''}`} onClick={() => onPick(image)}>{image.picked ? '채택 취소' : '채택'}</button>
+              <PickButton image={image} slots={slots} onPick={onPick} />
               <button type="button" className="dw-shot-btn" onClick={() => onOpen(image.id)}>피드백 {count}</button>
             </div>
             <p className="dw-shot-meta">{image.uploader_name}</p>

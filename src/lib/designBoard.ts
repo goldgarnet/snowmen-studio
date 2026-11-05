@@ -75,6 +75,29 @@ export function slotForDrop<T extends { id: string; file_name: string }>(slots: 
   return slots.find((s) => s.file_name === name) ?? slots.find((s) => !filled.has(s.id)) ?? slots[0] ?? null;
 }
 
+/** 시안을 채택해 넣은 최종 파일 행. 둘은 저장소 파일을 함께 쓰므로 경로로 찾는다. */
+export function adoptedRows<T extends { path: string; file_id: string | null }>(draft: { path: string }, images: T[]): T[] {
+  return images.filter((i) => i.file_id && i.path === draft.path);
+}
+
+/** 지워도 되는 저장소 파일. 남는 그림이 같은 파일을 쓰면 뺀다. */
+export function unusedPaths<T extends { id: string; path: string }>(gone: T[], images: T[]): string[] {
+  const goneIds = new Set(gone.map((i) => i.id));
+  const kept = new Set(images.filter((i) => !goneIds.has(i.id)).map((i) => i.path));
+  return [...new Set(gone.map((i) => i.path))].filter((p) => !kept.has(p));
+}
+
+/** 채택할 때 고를 파일 칸. 칸이 하나면 바로 넣고, 가이드는 채색의 밑그림이라 최종 파일에 넣지 않는다. */
+export function pickChoices(
+  item: { split: boolean }, slots: { id: string; label: string; file_name: string }[], images: { file_id: string | null }[],
+): { id: string; label: string }[] {
+  if (item.split || slots.length < 2) return [];
+  return slots.map((s) => ({
+    id: s.id,
+    label: `${s.label || s.file_name || '파일'}${images.some((i) => i.file_id === s.id) ? ' · 올림' : ''}`,
+  }));
+}
+
 /** 그림을 올린 뒤의 상태. 칸이 다 차면 검토로, 일부만 찼으면 작업 중으로. 검토 · 완료는 그대로 둔다. */
 export function statusAfterUpload<T extends string>(status: T, filled: number, total: number): T | 'doing' | 'review' {
   if (status !== 'todo' && status !== 'doing') return status;

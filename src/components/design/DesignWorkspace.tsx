@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../../api/design';
 import type { DesignColor, DesignComment, DesignData, DesignFile, DesignGroup, DesignImage, DesignItem, DesignTask } from '../../api/design';
-import { bySortOrder, currentDeadline, itemDeadlines, matchesQuery, moveItem, reorder, slotForDrop, statusAfterUpload } from '../../lib/designBoard';
+import { adoptedRows, bySortOrder, currentDeadline, itemDeadlines, matchesQuery, moveItem, pickChoices, reorder, slotForDrop, statusAfterUpload, unusedPaths } from '../../lib/designBoard';
 import ConfirmModal from '../common/ConfirmModal';
 import DesignBoard, { type BoardActions, type BoardRows } from './DesignBoard';
 import DesignItemPanel from './DesignItemPanel';
@@ -118,6 +118,13 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
     save(api.updateItem(id, patch));
   };
 
+  const updateStatus = (item: DesignItem, filled: Set<string>) => {
+    const total = (dataRef.current?.files ?? []).filter((f) => f.item_id === item.id).length;
+    const current = dataRef.current?.items.find((i) => i.id === item.id)?.status ?? item.status;
+    const next = statusAfterUpload(current, filled.size, Math.max(total, filled.size));
+    if (next !== current) patchItem(item.id, { status: next });
+  };
+
   // 칸 하나에 파일 하나를 올린다. filled 는 이 항목에서 그림이 있는 칸들로, 연달아 올릴 때 이어서 쓴다.
   const uploadOne = async (item: DesignItem, slot: DesignFile, picked: File, filled: Set<string>) => {
     setBusyFiles((s) => new Set(s).add(slot.id));
@@ -125,10 +132,7 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
       const image = await api.uploadImage({ itemId: item.id, slot }, picked, userName);
       change((d) => ({ ...d, images: [image, ...d.images] }));
       filled.add(slot.id);
-      const total = (dataRef.current?.files ?? []).filter((f) => f.item_id === item.id).length;
-      const current = dataRef.current?.items.find((i) => i.id === item.id)?.status ?? item.status;
-      const next = statusAfterUpload(current, filled.size, Math.max(total, filled.size));
-      if (next !== current) patchItem(item.id, { status: next });
+      updateStatus(item, filled);
     } catch (e) {
       setError(`파일을 올리지 못했습니다: ${(e as Error).message}`);
     } finally {
@@ -256,12 +260,74 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
     save(Promise.all(changed.map((i) => api.updateImage(i.id, { sort_order: i.sort_order }))));
   };
 
-  // 채택은 항목마다 한 장이다.
-  const pickImage = (image: DesignImage) => {
-    if (!image.picked) {
-      for (const other of draftsOf(image.item_id)) if (other.picked) patchImage(other.id, { picked: false });
+  const adoptedOf = (draft: DesignImage) => adoptedRows(draft, dataRef.current?.images ?? []);
+
+  // 채택을 내린다. 최종 파일 칸에 넣었던 버전만 빠지고, 저장소 파일은 시안이 계속 쓴다.
+  const dropPick = async (draft: DesignImage) => {
+    const rows = adoptedOf(draft);
+    await Promise.all(rows.map((row) => api.deleteImage(row.id, [])));
+    await api.updateImage(draft.id, { picked: false });
+    const ids = rows.map((row) => row.id);
+    change((d) => ({
+      ...d,
+      images: d.images.filter((i) => !ids.includes(i.id)).map((i) => (i.id === draft.id ? { ...i, picked: false } : i)),
+      comments: d.comments.filter((c) => !ids.includes(c.image_id)),
+    }));
+  };
+
+  // 시안을 채택하면 파일 칸의 새 버전이 되고, 이전 버전은 기록에 남는다. 채택은 칸마다 한 장이다.
+  const adopt = async (draft: DesignImage, item: DesignItem, chosen: DesignFile | undefined) => {
+    const slots = [...(dataRef.current?.files ?? [])].filter((f) => f.item_id === item.id).sort(bySortOrder);
+    const busyKey = chosen?.id ?? slots[0]?.id ?? draft.id;
+    if (busyFiles.has(busyKey)) return;
+    setBusyFiles((s) => new Set(s).add(busyKey));
+    try {
+      const slot = chosen ?? slots[0] ?? await addFile(item.id, { file_name: draft.file_name });
+      for (const other of draftsOf(item.id)) {
+        if (!other.picked) continue;
+        const rows = adoptedOf(other);
+        if (rows.length === 0 || rows.some((r) => r.file_id === slot.id)) await dropPick(other);
+      }
+      const row = await api.adoptImage(draft, slot.id);
+      await api.updateImage(draft.id, { picked: true });
+      change((d) => ({ ...d, images: [row, ...d.images.map((i) => (i.id === draft.id ? { ...i, picked: true } : i))] }));
+      updateStatus(item, filledSlots(item.id).add(slot.id));
+    } catch (e) {
+      setError(`시안을 채택하지 못했습니다: ${(e as Error).message}`);
+      void reload();
+    } finally {
+      setBusyFiles((s) => { const next = new Set(s); next.delete(busyKey); return next; });
     }
-    patchImage(image.id, { picked: !image.picked });
+  };
+
+  const pickImage = (image: DesignImage, slotId?: string) => {
+    const item = dataRef.current?.items.find((i) => i.id === image.item_id);
+    if (!item) return;
+    if (image.picked) {
+      const ids = adoptedOf(image).map((row) => row.id);
+      const notes = (dataRef.current?.comments ?? []).filter((c) => ids.includes(c.image_id)).length;
+      if (notes > 0) {
+        setPendingDelete({
+          title: '채택 취소',
+          message: `최종 파일에 넣은 그림과 거기 달린 피드백 ${notes}개가 지워집니다.`,
+          run: () => dropPick(image),
+        });
+      } else save(dropPick(image));
+    } else if (item.split) {
+      for (const other of draftsOf(item.id)) if (other.picked) patchImage(other.id, { picked: false });
+      patchImage(image.id, { picked: true });
+    } else {
+      void adopt(image, item, dataRef.current?.files.find((f) => f.id === slotId));
+    }
+  };
+
+  // 최종 파일에서 채택한 그림이 빠지면 시안의 채택도 풀린다.
+  const releaseDrafts = (gone: DesignImage[]) => {
+    const images = dataRef.current?.images ?? [];
+    for (const draft of images.filter((i) => !i.file_id && i.picked)) {
+      const rows = adoptedRows(draft, images);
+      if (rows.length > 0 && rows.every((r) => gone.some((g) => g.id === r.id))) patchImage(draft.id, { picked: false });
+    }
   };
 
   const addComment = (imageId: string, body: string, pin: { x: number; y: number } | null) => {
@@ -293,16 +359,20 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
     title: '파일 칸 삭제',
     message: `‘${file.label || file.file_name || '파일'}’ 칸과 올린 그림이 지워집니다.`,
     run: async () => {
-      await api.deleteFile(file.id, (dataRef.current?.images ?? []).filter((i) => i.file_id === file.id).map((i) => i.path));
+      const images = dataRef.current?.images ?? [];
+      const rows = images.filter((i) => i.file_id === file.id);
+      await api.deleteFile(file.id, unusedPaths(rows, images));
+      releaseDrafts(rows);
       change((d) => ({ ...d, files: d.files.filter((f) => f.id !== file.id), images: d.images.filter((i) => i.file_id !== file.id) }));
     },
   });
 
   const removeImage = (image: DesignImage) => setPendingDelete({
     title: '그림 삭제',
-    message: `‘${image.file_name}’ 그림이 지워집니다.`,
+    message: `‘${image.file_name}’ 그림이 지워집니다.${!image.file_id && adoptedOf(image).length > 0 ? ' 최종 파일에 넣은 그림은 남습니다.' : ''}`,
     run: async () => {
-      await api.deleteImage(image);
+      await api.deleteImage(image.id, unusedPaths([image], dataRef.current?.images ?? []));
+      releaseDrafts([image]);
       change((d) => ({
         ...d,
         images: d.images.filter((i) => i.id !== image.id),
@@ -543,6 +613,7 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
           onUploadDrafts={(picked) => { void uploadDrafts(openItem, picked); }}
           onMoveDraft={(id, beforeId) => moveDraft(openItem, id, beforeId)}
           onRank={(id, rank) => patchImage(id, { rank })}
+          slotChoices={pickChoices(openItem, filesOf.get(openItem.id) ?? [], data?.images ?? [])}
           onPickImage={pickImage}
           onOpenImage={setViewing}
           onPickFile={(file, picked) => pickFile(openItem, file, picked)}
@@ -573,6 +644,7 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
             startId={viewing.id}
             userId={userId}
             ranked={!viewing.file_id}
+            slotChoices={item ? pickChoices(item, filesOf.get(item.id) ?? [], data.images) : []}
             onClose={() => setViewing(null)}
             onRank={(id, rank) => patchImage(id, { rank })}
             onPick={pickImage}

@@ -163,4 +163,24 @@ test('챕터 폴더 번호 읽기', () => {
   assert.equal(d.artChapter('ch3/tile_cold'), 3);
   assert.equal(d.artChapter('tile_cold'), 0);
 });
+test('채택: 시안과 저장소 파일이 같은 최종 파일 행만 찾는다', () => {
+  const images = [{ id: 'd', file_id: null, path: 'a' }, { id: 'f', file_id: 's', path: 'a' }, { id: 'g', file_id: 's', path: 'b' }];
+  assert.deepEqual(d.adoptedRows({ path: 'a' }, images).map((i) => i.id), ['f']);
+  assert.deepEqual(d.adoptedRows({ path: 'c' }, images), []);
+});
+test('채택: 남는 그림이 쓰는 저장소 파일은 지우지 않는다', () => {
+  const draft = { id: 'd', path: 'a' }, final = { id: 'f', path: 'a' }, other = { id: 'g', path: 'b' };
+  assert.deepEqual(d.unusedPaths([final], [draft, final, other]), []);
+  assert.deepEqual(d.unusedPaths([draft], [draft, final, other]), []);
+  assert.deepEqual(d.unusedPaths([draft, final], [draft, final, other]), ['a']);
+  assert.deepEqual(d.unusedPaths([other], [draft, final, other]), ['b']);
+});
+test('채택: 칸을 고르는 것은 칸이 여럿인 시안뿐이다', () => {
+  const slots = [{ id: 'a', label: '정면', file_name: 'x.png' }, { id: 'b', label: '', file_name: 'y.png' }];
+  assert.deepEqual(d.pickChoices({ split: false }, slots.slice(0, 1), []), []);
+  assert.deepEqual(d.pickChoices({ split: true }, slots, []), []);
+  assert.deepEqual(d.pickChoices({ split: false }, slots, [{ file_id: 'a' }]),
+    [{ id: 'a', label: '정면 · 올림' }, { id: 'b', label: 'y.png' }]);
+});
+
 console.log(`design: ${passed}개 통과`);

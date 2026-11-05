@@ -242,7 +242,7 @@ export const deleteTask = (id: string) => deleteRow('design_tasks', id);
 /** 행을 먼저 지우고 파일을 지운다. 파일 삭제가 실패해도 화면에 깨진 그림이 남지 않는다. */
 async function removeStored(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
-  const { error } = await supabase.storage.from(BUCKET).remove(paths);
+  const { error } = await supabase.storage.from(BUCKET).remove([...new Set(paths)]);
   if (error) console.warn('design: 저장소 파일을 지우지 못했습니다', error);
 }
 
@@ -261,10 +261,22 @@ export async function deleteFile(id: string, imagePaths: string[]): Promise<void
   await removeStored(imagePaths);
 }
 
-export async function deleteImage(image: DesignImage): Promise<void> {
-  await deleteRow('design_images', image.id);
-  await removeStored([image.path]);
+export async function deleteImage(id: string, imagePaths: string[]): Promise<void> {
+  await deleteRow('design_images', id);
+  await removeStored(imagePaths);
 }
+
+/** 시안을 파일 칸의 새 버전으로 넣는다. 저장소 파일은 시안과 함께 쓴다. */
+export const adoptImage = (draft: DesignImage, fileId: string) => insertRow<DesignImage>('design_images', {
+  item_id: draft.item_id,
+  file_id: fileId,
+  path: draft.path,
+  file_name: draft.file_name,
+  width: draft.width,
+  height: draft.height,
+  size_bytes: draft.size_bytes,
+  uploader_name: draft.uploader_name,
+});
 
 export const updateImage = (id: string, patch: Partial<DesignImage>) => updateRow('design_images', id, patch);
 
