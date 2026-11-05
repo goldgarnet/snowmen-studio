@@ -205,9 +205,9 @@ export function itemDeadlines(item: DueItem, tasks: Map<string, DueTask>, hasPic
   return list;
 }
 
-/** 지금 맞춰야 할 마감: 끝나지 않은 첫 마감. 항목이 완료면 없다. */
-export const currentDeadline = (list: Deadline[], status: string): Deadline | null =>
-  (status === 'done' ? null : list.find((d) => !d.done) ?? null);
+/** 보드에 보이는 마감. 시안 · 가이드 날짜가 아니라 항상 마지막 마감(완성 · 채색)이다. 끝난 항목은 없다. */
+export const finalDeadline = (list: Deadline[], status: string): Deadline | null =>
+  (status === 'done' ? null : list[list.length - 1] ?? null);
 
 export const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 

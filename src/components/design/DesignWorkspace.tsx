@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../../api/design';
 import type { DesignColor, DesignComment, DesignData, DesignFile, DesignGroup, DesignImage, DesignItem, DesignTask } from '../../api/design';
-import { adoptedRows, bySortOrder, currentDeadline, insertSlot, itemDeadlines, matchesQuery, moveItem, pickChoices, reorder, slotForDrop, statusAfterUpload, unusedPaths } from '../../lib/designBoard';
+import { adoptedRows, bySortOrder, finalDeadline, insertSlot, itemDeadlines, matchesQuery, moveItem, pickChoices, reorder, slotForDrop, statusAfterUpload, unusedPaths } from '../../lib/designBoard';
 import ConfirmModal from '../common/ConfirmModal';
 import DesignBoard, { type BoardActions, type BoardRows } from './DesignBoard';
 import DesignItemPanel from './DesignItemPanel';
@@ -583,7 +583,7 @@ export default function DesignWorkspace({ userName, userId }: { userName: string
           rows={rows}
           filesOf={filesOf}
           filledOf={filledOf}
-          dueOf={(item) => currentDeadline(deadlinesOf(item), item.status)}
+          dueOf={(item) => finalDeadline(deadlinesOf(item), item.status)}
           draftsOf={draftCount}
           latest={latest}
           busyItems={busyItems}
