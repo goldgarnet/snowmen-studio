@@ -137,7 +137,7 @@ snowmen-studio/
 - soulSwapEnabled 맵은 플레이 화면 상단에 `.sim-notice` 안내 배너.
 
 ### 레이저
-- `applyLaserCheck`(turn.ts)가 매 턴 빔을 쏴 비-blocker 오브젝트를 죽임(size=0 → processDeadObjects 제거). blocker = wall/block/tree/laser. 삼각/solid 노랑벽에서 빔 정지.
+- `applyLaserCheck`(turn.ts)가 매 턴 빔을 쏴 비-blocker 오브젝트를 죽임(size=0 → processDeadObjects 제거). blocker = wall/block/tree/laser. 닫힌 노란 벽에서 빔이 정지하고 삼각 벽은 통과한다.
 - **executeTurn은 레이저를 골 클리어보다 먼저** 판정 → 레이저 빔 위 골에 진입하면 클리어 아니라 사망(gameover) 우선.
   **[낡음]** 지금은 사망 → 영혼 이동이고, 옮겨 간 몸이 활성 목표 위면 클리어다(Q-14). 남은 눈사람이 없을 때만 gameover.
 - **굴러가는 눈덩이 + 레이저**: `roll.ts`의 `killIfOnBeam`이 각 굴림 스텝 후 검사. `rollSnowball`/`rollGroup` **시작 시점에도** 검사(push 헬퍼가 시작 칸으로 한 칸 먼저 옮기므로, 그 칸이 빔이면 즉시 소멸).

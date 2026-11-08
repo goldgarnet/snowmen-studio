@@ -109,6 +109,26 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
+    name: 'a laser reaches a snowball behind triangle walls of every orientation',
+    width: 7,
+    height: 1,
+    setup: (board) => {
+      board
+        .player(0, 0, 1)
+        .laser(0, 1, 'right')
+        .tile(0, 2, { triangle: 'tl' })
+        .tile(0, 3, { triangle: 'tr' })
+        .tile(0, 4, { triangle: 'bl' })
+        .tile(0, 5, { triangle: 'br' })
+        .snowball(0, 6, 1);
+    },
+    actions: ['wait'],
+    verify: (result) => {
+      expectStatus(result, 'playing');
+      expectEmpty(result.level, 0, 6);
+    },
+  }),
+  defineScenario({
     name: 'a block shields a player from a laser beam',
     width: 4,
     height: 1,

@@ -70,7 +70,7 @@ export function isLevelCleared(level: Level): boolean {
 /**
  * Every cell a laser beam currently passes through (the lasers' own cells excluded).
  * The beam melts every snow object it passes (Q-07: it pierces them) and stops at a
- * blocker object, a closed partition, the board edge, or after a triangle-wall cell.
+ * blocker object, a closed partition, or the board edge. It passes through triangle walls.
  */
 export function laserBeamCells(level: Level): Position[] {
   const ySolid = yellowWallsSolid(level);
@@ -93,7 +93,6 @@ export function laserBeamCells(level: Level): Position[] {
         // also shields anything trapped inside that cell).
         if (ySolid && level.tiles[cr][cc].isYellowWall) break;
         cells.push({ row: cr, col: cc });
-        if (level.tiles[cr][cc].triangle) break; // triangle stops the beam at this cell
         cr += dr;
         cc += dc;
       }

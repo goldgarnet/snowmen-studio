@@ -880,7 +880,6 @@ function LaserBeamOverlay({ level, cellSize, yellowSolid }: {
         // Solid yellow wall stops the beam BEFORE its cell, like a real wall.
         if (yellowSolid && level.tiles[cy]?.[cx]?.isYellowWall) break;
         endCol = cx; endRow = cy;
-        if (level.tiles[cy]?.[cx]?.triangle) break; // triangle stops the beam at this cell
         cx += dx; cy += dy;
       }
 

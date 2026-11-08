@@ -391,7 +391,6 @@ function killBallsOnBeam(level: Level, balls: Ball[]): void {
           if (balls.some(ball => ball.pos.row === cr && ball.pos.col === cc)) hit.size = 0;
           break;
         }
-        if (level.tiles[cr][cc].triangle) break;
         if (yellowSolid && level.tiles[cr][cc].isYellowWall) break;
         cr += dr;
         cc += dc;
