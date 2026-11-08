@@ -818,8 +818,10 @@ export default function MapStudio({
     return (
       <>
         <SolutionRecorder
-          key={currentCode}
+          key={`${profile?.id}:${editId}:${currentCode}`}
           code={currentCode}
+          mapId={editId}
+          playerId={profile?.id}
           title={`플레이 · ${editTitle || '맵'}`}
           backLabel="에디터로"
           onSave={saveStudioSolution}

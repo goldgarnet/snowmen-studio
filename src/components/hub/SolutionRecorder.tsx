@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { gameStateFromCode } from '../../utils/game';
+import { readPlayCheckpoint, writePlayCheckpoint, type PlayCheckpoint } from '../../utils/playCheckpoint';
 import {
   advanceSolutionState,
   createSolutionState,
@@ -23,6 +24,8 @@ import '../editor/PlayView.css';
 
 interface SolutionRecorderProps {
   code: string;
+  mapId: string | null;
+  playerId?: string;
   initial?: string | null;          // existing solution to start from (수정 시)
   onSave: (moves: string, turnCount: number) => Promise<void>;
   onCancel: () => void;
@@ -62,7 +65,7 @@ function createRecordingState(startLevel: NonNullable<ReturnType<typeof gameStat
 // in sync without replaying the entire solution on every input. Saving is only allowed
 // once the played sequence actually clears the map.
 export default function SolutionRecorder({
-  code, initial, onSave, onCancel, title, backLabel = '상세로',
+  code, mapId, playerId, initial, onSave, onCancel, title, backLabel = '상세로',
 }: SolutionRecorderProps) {
   const heading = title ?? '플레이';
   const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
@@ -73,6 +76,9 @@ export default function SolutionRecorder({
   const [recording, setRecording] = useState<RecordingState>(() => initialRecording);
   const [displayState, setDisplayState] = useState<StepState | null>(
     () => initialRecording.states[initialRecording.states.length - 1] ?? null,
+  );
+  const [checkpoint, setCheckpoint] = useState<PlayCheckpoint | null>(
+    () => playerId ? readPlayCheckpoint(playerId, mapId, code) : null,
   );
   const [animationEnabled, setAnimationEnabled] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(DEFAULT_ANIMATION_SPEED);
@@ -227,6 +233,30 @@ export default function SolutionRecorder({
     return () => window.removeEventListener('keydown', onKey);
   }, [startLevel, soulEnabled, push, undo, reset]);
 
+  const saveCheckpoint = () => {
+    if (recordedState?.status !== 'playing' || saving || isAnimating) return;
+    const next = { moves, turnCount: recordedState.turnCount };
+    setCheckpoint(next);
+    const persisted = playerId && writePlayCheckpoint(playerId, mapId, code, next);
+    setError(persisted ? null : '브라우저에 저장하지 못했습니다. 이 플레이 화면에서는 세이브포인트부터 이어할 수 있습니다.');
+  };
+
+  const resumeCheckpoint = () => {
+    if (!startLevel || !checkpoint || saving || isAnimating) return;
+    const next = createRecordingState(startLevel, checkpoint.moves);
+    const nextState = next.states[next.states.length - 1];
+    if (nextState.status !== 'playing') {
+      setError('이 세이브포인트에서는 더 진행할 수 없습니다. 새 지점을 저장해 주세요.');
+      return;
+    }
+    ignoreKeyRepeatRef.current = true;
+    touchStartRef.current = null;
+    lastTapRef.current = null;
+    setRecording(next);
+    setDisplayState(nextState);
+    setError(null);
+  };
+
   const save = async () => {
     if (!cleared) return;
     setSaving(true);
@@ -316,6 +346,14 @@ export default function SolutionRecorder({
             )}
             <button onClick={undo} disabled={moves.length === 0 || saving || isAnimating}>되돌리기 (Z)</button>
             <button onClick={reset} disabled={moves.length === 0 || saving || isAnimating}>초기화 (R)</button>
+            <button onClick={saveCheckpoint} disabled={disabled}>
+              {checkpoint ? '세이브포인트 덮어쓰기' : '세이브포인트 저장'}
+            </button>
+            {checkpoint && (
+              <button onClick={resumeCheckpoint} disabled={saving || isAnimating}>
+                턴 {checkpoint.turnCount}부터 이어하기
+              </button>
+            )}
             <button className="btn btn-primary" onClick={save} disabled={!cleared || saving}>
               {saving ? '등록 중…' : '풀이 등록'}
             </button>
@@ -327,12 +365,14 @@ export default function SolutionRecorder({
           {cleared
             ? '✅ 맵을 클리어했습니다. “풀이 등록”을 누르면 이 플레이가 저장됩니다.'
             : state.status === 'gameover'
-              ? '💀 게임 오버 — 되돌리기(Z)나 초기화(R)로 다시 시도하세요.'
+              ? checkpoint
+                ? '💀 게임 오버 — 세이브포인트부터 이어할 수 있어요.'
+                : '💀 게임 오버 — 되돌리기(Z)나 초기화(R)로 다시 시도하세요.'
               : '맵을 플레이하세요. 클리어하면 이 플레이를 풀이로 등록할 수 있어요.'}
           {soulEnabled && ' · 🌀 영혼 이동(M) 사용 가능'}
         </div>
 
-        {error && <div className="play-view-error" style={{ padding: '8px 22px' }}>{error}</div>}
+        {error && <div className="play-view-error" role="alert" style={{ padding: '8px 22px' }}>{error}</div>}
 
         <div className="sim-body">
           <div

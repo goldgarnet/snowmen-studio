@@ -195,9 +195,11 @@ export default function MapDetail({
   if (recording || solutionMode === 'capture') {
     return (
       <SolutionRecorder
-        key={map.code}
+        key={`${profile?.id}:${map.id}:${map.code}`}
         title={`플레이 · ${map.title || '맵'}`}
         code={map.code}
+        mapId={map.id}
+        playerId={profile?.id}
         onSave={registerSolution}
         onCancel={stopRecording}
       />
