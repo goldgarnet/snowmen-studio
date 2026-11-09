@@ -225,12 +225,25 @@ function buildSplitShoveIntoTriangle(): Level {
   return level;
 }
 
-// B-028: P2 presses a ball against the left leg of a ◤ from outside the triangle.
+// B-028 reverted (user decision 2026-11-09, 「세 모퉁이」): P2 presses an s2 down onto the
+// top leg of a ◤ from outside the triangle. The leg is a wall, so the s2 splits.
 function buildPressOnTriangleLeg(): Level {
-  const level = basicLevel(5, 3);
-  object(level, 1, 0, 'player', 2);
-  object(level, 1, 1, 'snowball', 1);
-  tile(level, 1, 2, { triangle: 'tl' });
+  const level = basicLevel(5, 4);
+  object(level, 0, 2, 'player', 2);
+  object(level, 1, 2, 'snowball', 2);
+  tile(level, 2, 2, { triangle: 'tl' });
+  return level;
+}
+
+// User decision 2026-11-09 (「세 모퉁이」): the ◤ ball is B, not A. The line turns at B, so
+// B goes right onto the green button and A takes the ◤ cell — no snowman.
+function buildBendAtB(): Level {
+  const level = basicLevel(5, 5);
+  object(level, 4, 2, 'player', 2);
+  object(level, 3, 2, 'snowball', 1);
+  tile(level, 2, 2, { triangle: 'tl' });
+  object(level, 2, 2, 'snowball', 1);
+  tile(level, 2, 3, { isKeyTile: true });
   return level;
 }
 
@@ -289,7 +302,8 @@ const visualCases: Record<string, Pick<TestCaseDefinition, 'actions' | 'build'>>
   'P0-33': { actions: ['right'], build: buildPushInTriangle },
   'P0-34': { actions: ['wait', 'wait'], build: buildCrackOpensBeam },
   'P0-37': { actions: ['right'], build: buildSplitShoveIntoTriangle },
-  'P0-38': { actions: ['right'], build: buildPressOnTriangleLeg },
+  'P0-38': { actions: ['down'], build: buildPressOnTriangleLeg },
+  'P0-39': { actions: ['up'], build: buildBendAtB },
   'P1-15a': { actions: ['right'], build: buildSplitShoveMotionIds },
   'P1-15b': { actions: ['up', 'right', 'right', 'right', 'down', 'left', 'left', 'down'], build: buildSoulBodyMotionIds },
   'P2-06': { actions: ['right', 'right', 'right', 'right', 'right', 'right'], build: buildLegacyPortalOrangeCode },
@@ -324,12 +338,13 @@ const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
   ['P0-27', 'P0', '클리어', '굴림 중 초록 버튼 클리어', '플레이어가 목표에 선 채 민 공이 마지막 초록 버튼으로 굴러간다.', '공이 버튼 위에 있는 tick에 목표가 열리므로 그 턴은 클리어이고, 판이 거기서 멈춰 공은 버튼 위에 남는다. 같은 tick의 사망이 먼저다(B-002, B-027).'],
   ['P0-28', 'P0', '합성', '아치 너머 눈사람 — 플레이어도 통과', 'P2가 높이 1 아치 너머의 눈덩이 쪽으로 크기 1 눈덩이를 민다.', '플레이어가 A→B 경계를 지날 수 없으므로 합성하지 않는다(무반응). P1은 같은 자리에서 합성한다(B-003).'],
   ['P0-30', 'P0', '합성', '눈송이 위 B로 만드는 눈사람과 합성 경계', 'P2가 높이 2 아치 너머, 눈송이 위의 크기 2 눈덩이 쪽으로 크기 1 눈덩이를 민다.', '새 눈사람은 눈송이를 먹어 크기 3이 되므로 아치를 지나지 못해 합성하지 않는다(무반응, B-005).'],
-  ['P0-31', 'P0', '직접 힘', '지형에만 받쳐진 B1을 B2 너머로 밈', 'P2가 크기 2 눈덩이 너머, 삼각 벽의 막힌 변에 받쳐진 크기 1 눈덩이를 민다.', '아무 일도 없다(무반응). 힘은 플레이어에 닿은 공에만 가고, 삼각 벽의 막힌 변은 부숨·쪼갬의 받침이 아니다(B-006, B-028).'],
+  ['P0-31', 'P0', '직접 힘', '지형에만 받쳐진 B1을 B2 너머로 밈', 'P2가 크기 2 눈덩이 너머, 삼각 벽의 막힌 변에 받쳐진 크기 1 눈덩이를 민다.', '아무 일도 없다(무반응). 힘은 플레이어에 닿은 공에만 간다(B-006). B1이 자기 삼각 칸에서 꺾여 출구가 비면 P3는 두 공을 꺾인 줄로 한 칸 민다(P0-39).'],
   ['P0-32', 'P0', '질량', '더 무거운 굴림이 삼각 칸 공을 데리고 꺾임', '굴러온 B2가 삼각 칸에 멈춘 더 가벼운 B1을 친다.', '친 tick에 B1이 거울 출구로 한 칸 나가고 B2가 삼각 칸으로 따라 들어와 다음 tick에 꺾인다. 둘이 한 열차로 맵 끝까지 굴러가고 impact는 없다. 출구가 막히면 아무것도 안 움직이고, 같은 질량이면 예전처럼 넘긴다(B-013, 사용자 결정 ①).'],
-  ['P0-33', 'P0', '직접 힘', '삼각 칸 공을 막힌 변 쪽으로 밀기', 'P2가 삼각 칸에 멈춘 B1을 막힌 변 쪽으로 민다.', '눈꽃 없이 공이 거울을 따라 굴러가고 플레이어는 삼각 칸으로 들어간다. 출구 바로 앞이 벽·맵 끝이면 곧은 줄처럼 부서지고, 다른 삼각 칸의 막힌 변이면 아무 일도 없다(B-013, B-028).'],
+  ['P0-33', 'P0', '직접 힘', '삼각 칸 공을 막힌 변 쪽으로 밀기', 'P2가 삼각 칸에 멈춘 B1을 막힌 변 쪽으로 민다.', '눈꽃 없이 공이 거울을 따라 굴러가고 플레이어는 삼각 칸으로 들어간다. 출구 바로 앞이 벽·맵 끝·다른 삼각 칸의 막힌 변이면 곧은 줄처럼 부서진다(B-013).'],
   ['P0-34', 'P0', '레이저', '금 붕괴로 열린 빔', '빔을 막던 상자가 금 간 칸으로 떨어진다.', '빔이 그 턴에 열려 빔 위 눈사람이 그 턴에 녹는다(B-017).'],
   ['P0-37', 'P0', '직접 힘', '쪼개진 반쪽이 삼각 칸 공을 밀기', '크기 2 눈덩이가 쪼개지며 위쪽 반쪽이 ◥ 칸의 B1을 막힌 변 쪽으로 민다.', 'B1이 거울을 따라 꺾여 한 칸 밀리고 반쪽이 ◥ 칸에 들어간다. 꺾인 칸이 막혔으면 반쪽은 가운데에 남는다. 상자·레이저는 꺾이지 않는다(B-028).'],
-  ['P0-38', 'P0', '직접 힘', '삼각 벽 다리에 눌린 눈덩이', 'P2가 삼각 칸 밖의 B1을 그 칸의 막힌 변 쪽으로 민다.', '부서지지 않는다(무반응). 크기 2는 쪼개지지 않는다. 다리에 받쳐 눈사람 만들기는 그대로다(B-028).'],
+  ['P0-38', 'P0', '직접 힘', '삼각 벽 다리에 눌린 눈덩이', 'P2가 삼각 칸 밖의 B2를 ◤의 막힌 위 변 쪽으로 아래로 민다.', '다리는 벽이다. B2는 좌우로 쪼개지고 B1은 부서진다. 다리에 받쳐 눈사람 만들기도 그대로다(B-028 둘째 규칙 되돌림, 2026-11-09).'],
+  ['P0-39', 'P0', '직접 힘', '줄의 뒤 공이 삼각 칸에서 꺾임', 'P2가 B1을 밀고, 그 앞 B1은 ◤ 칸 안에 있어 막힌 위 변 쪽으로 밀린다.', '줄이 ◤에서 꺾여 앞 공은 오른쪽 초록 버튼으로, 뒤 공은 ◤ 칸으로 간다. 눈사람이 생기지 않는다. 꺾인 출구가 막히면 ◤ 칸에 눈사람(2026-11-09).'],
   ['P1-02', 'P1', '턴 종료', '금 간 타일의 두 턴 붕괴', '균열 타일은 다음 턴 종료에 붕괴한다.', '막힌 입력은 붕괴를 진행시키지 않는다.'],
   ['P1-03', 'P1', '턴 종료', '햇빛과 녹기', '따뜻한 타일에서 오브젝트가 녹는다.', '플레이어와 눈덩이의 녹기 시점이 다르다.'],
   ['P1-04', 'P1', '턴 종료', '그림자 갱신', '이동·성장·벽 상태 변경 후 그림자를 계산한다.', 'void에는 그림자를 만들지 않는다.'],

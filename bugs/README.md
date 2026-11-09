@@ -43,7 +43,7 @@
 | B-025 | '레이저는 발사면 쪽에서 못 민다' 검사가 바로 앞 칸에만 있음 | low | studio·JS·GD | DECIDE → NOTBUG | 버그 아님 — 현행 유지(사용자 확인 2026-11-03) | [B-025-laser-emitting-face-chain.md](B-025-laser-emitting-face-chain.md) |
 | B-026 | 레거시 삼각 블록을 Studio 만 반사로 처리 | low | studio ≠ JS·GD | NOTBUG | 버그 아님 | [B-026-legacy-triangle-block.md](B-026-legacy-triangle-block.md) |
 | B-027 | 굴림 도중 정해진 클리어가 같은 굴림의 뒤 사망보다 우선 — 초록 버튼이 없는 맵에도 | medium | studio·JS·GD (B-002 뒤) | DECIDE → 팀 결정 | 고침 — 클리어가 정해지면 판이 멈춤(2026-11-05) | [B-027-clear-then-death-same-roll.md](B-027-clear-then-death-same-roll.md) |
-| B-028 | 삼각벽은 항상 밀리는 판정 — 쪼갠 반쪽의 밀기도 꺾이고, 삼각 다리에서는 안 부서지고 안 쪼개짐 | medium | studio·JS·GD | DECIDE → 사용자 결정 | Studio 고침 (작업 트리 `fix/triangle-always-push`, 2026-11-09) · JS·GDScript 포트 전 | [B-028-triangle-always-push.md](B-028-triangle-always-push.md) |
+| B-028 | 삼각벽은 항상 밀리는 판정 — 쪼갠 반쪽의 밀기도 꺾임. 같은 날 수정: 다리는 밖에서 보면 벽(둘째 규칙 되돌림), 줄의 어느 공이든 삼각 칸에서 꺾임 | medium | studio·JS·GD | DECIDE → 사용자 결정 | `261a2b2` 배포 · 같은 날 수정은 작업 트리 `fix/triangle-bend-any`(Studio·JS·GD, 커밋 전) | [B-028-triangle-always-push.md](B-028-triangle-always-push.md) |
 
 ## 분류
 

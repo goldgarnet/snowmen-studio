@@ -16,12 +16,13 @@ import {
  *     solid leg shoves it one cell around the mirror (as B-013 does for the player). If the
  *     turned cell is closed, the half stays in the origin cell as before. Blocks and lasers
  *     do not turn.
- *  2. A triangle leg is not a backer for a crush or a split: a ball pressed against a leg
- *     from outside the triangle cell does nothing. Building a snowman against a leg is
- *     unchanged, and so are the other terrain backers (tunnel side, arch, closed yellow).
+ *  2. REVERTED by the user decision of 2026-11-09 ("아래로 밀면 쪼개져야지"): seen from
+ *     outside the triangle cell, a leg is a wall. A ball pressed against it crushes (s1) or
+ *     splits (s2) exactly as before B-028; building a snowman against a leg is unchanged.
  *  3. Unchanged: a ball turned by its own mirror into a wall or the board edge still
- *     crushes ("이런 건 눈꽃으로 변하는 게 맞아"). If the turned exit is another triangle's
- *     leg, rule 2 applies and nothing happens.
+ *     crushes ("이런 건 눈꽃으로 변하는 게 맞아"). Another triangle's leg on the turned
+ *     exit is a wall too, so it crushes / splits there as well.
+ * The whole-line turn (any ball of the line in a triangle) is in triangle-bend-line.scenario.ts.
  */
 
 const DELTA: Record<Direction, [number, number]> = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
@@ -237,23 +238,32 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
 
-  // ===== 2. a triangle leg is not a backer for crush / split =====
+  // ===== 2. (reverted 2026-11-09) a triangle leg backs a crush / split like a wall =====
   ...([1, 2, 3] as const).map(ps => defineScenario({
-    name: `B-028 P${ps} pushes s1 against a triangle leg from outside: nothing happens`,
+    name: `B-028 reverted: P${ps} pushes s1 against a triangle leg from outside: it crushes`,
     width: 5, height: 3,
     setup: (board) => { board.tile(1, 3, { triangle: 'tl' }).snowball(1, 2, 1).player(1, 1, ps); },
     actions: ['right'],
-    verify: (result) => expectNoOp(result),
+    verify: (result) => {
+      expectEmpty(result.level, 1, 2);
+      expectFlake(result, 1, 2, true, 'crushed against the leg');
+      expectObject(result.level, 1, 1, 'player', ps);
+    },
   })),
   ...([2, 3] as const).map(ps => defineScenario({
-    name: `B-028 P${ps} pushes s2 against a triangle leg from outside: no split`,
+    name: `B-028 reverted: P${ps} pushes s2 against a triangle leg from outside: it splits`,
     width: 5, height: 3,
     setup: (board) => { board.tile(1, 3, { triangle: 'bl' }).snowball(1, 2, 2).player(1, 1, ps); },
     actions: ['right'],
-    verify: (result) => expectNoOp(result),
+    verify: (result) => {
+      expectEmpty(result.level, 1, 2);
+      expectObject(result.level, 0, 2, 'snowball', 1);
+      expectObject(result.level, 2, 2, 'snowball', 1);
+      expectObject(result.level, 1, 1, 'player', ps);
+    },
   })),
   ...(['tl', 'tr', 'bl', 'br'] as TriangleCorner[]).flatMap(corner => SOLID[corner].map(leg => defineScenario({
-    name: `B-028 P2 pushes s1 onto the ${leg} leg of ${corner} from outside, vertical and horizontal: no crush`,
+    name: `B-028 reverted: P2 pushes s1 onto the ${leg} leg of ${corner} from outside: it crushes`,
     width: 5, height: 5,
     setup: (board) => {
       // The ball stands next to the triangle, on the leg side, and is pushed toward it.
@@ -262,14 +272,24 @@ export const scenarios: ScenarioDefinition[] = [
       board.tile(2, 2, { triangle: corner }).snowball(br, bc, 1).player(pr, pc, 2);
     },
     actions: [OPP[leg]],
-    verify: (result) => expectNoOp(result),
+    verify: (result) => {
+      const [br, bc] = step(2, 2, leg);
+      const [pr, pc] = step(br, bc, leg);
+      expectEmpty(result.level, br, bc);
+      expectFlake(result, br, bc, true, 'crushed against the leg');
+      expectObject(result.level, pr, pc, 'player', 2);
+    },
   }))),
   defineScenario({
-    name: 'B-028 a ball in the triangle cell behind the leg does not make it a crush either',
+    name: 'B-028 reverted: a ball in the triangle cell behind the leg does not matter, the outside ball crushes',
     width: 5, height: 3,
     setup: (board) => { board.tile(1, 3, { triangle: 'tl' }).snowball(1, 3, 1).snowball(1, 2, 1).player(1, 1, 2); },
     actions: ['right'],
-    verify: (result) => expectNoOp(result),
+    verify: (result) => {
+      expectEmpty(result.level, 1, 2);
+      expectFlake(result, 1, 2, true, 'crushed against the leg');
+      expectObject(result.level, 1, 3, 'snowball', 1);
+    },
   }),
   defineScenario({
     name: 'B-028 (B-006) P2 pushes s2+s1 where the s1 is backed by a triangle leg: nothing happens',
@@ -354,22 +374,30 @@ export const scenarios: ScenarioDefinition[] = [
     verify: (result) => { expectFlake(result, 2, 2, true, 'crushed on the edge'); },
   }),
   defineScenario({
-    name: 'B-028 s1 in ◥ turned onto another triangle leg: nothing happens',
+    name: 'B-028 reverted: s1 in ◥ turned onto another triangle leg crushes (the leg is a wall)',
     width: 5, height: 5,
     setup: (board) => {
       board.tile(1, 2, { triangle: 'tr' }).snowball(1, 2, 1).player(1, 1, 2).tile(2, 2, { triangle: 'tl' });
     },
     actions: ['right'],
-    verify: (result) => expectNoOp(result),
+    verify: (result) => {
+      expectEmpty(result.level, 1, 2);
+      expectFlake(result, 1, 2, true, 'crushed on the other leg');
+      expectObject(result.level, 1, 1, 'player', 2);
+    },
   }),
   defineScenario({
-    name: 'B-028 s2 in ◥ turned onto another triangle leg: no split',
+    name: 'B-028 reverted: s2 in ◥ turned onto another triangle leg splits; both halves blocked make a snowman',
     width: 5, height: 5,
     setup: (board) => {
       board.tile(1, 2, { triangle: 'tr' }).snowball(1, 2, 2).player(1, 1, 3).tile(2, 2, { triangle: 'tr' });
     },
     actions: ['right'],
-    verify: (result) => expectNoOp(result),
+    // Split across the turned direction (down): left is the player, right is the ◥'s own leg.
+    verify: (result) => {
+      expectObject(result.level, 1, 2, 'snowman', 1);
+      expectObject(result.level, 1, 1, 'player', 3);
+    },
   }),
   defineScenario({
     name: 'B-028 unchanged: P1 s1 in ◥ turned into the board edge crushes',

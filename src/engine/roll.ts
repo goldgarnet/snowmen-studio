@@ -63,13 +63,14 @@ export function rollSnowball(
 }
 
 export function rollSnowballGroup(
-  level: Level, positions: Position[], dir: Direction, _turnCount: number, onTick?: RollTickHook,
+  level: Level, positions: Position[], dirs: Direction | Direction[], _turnCount: number, onTick?: RollTickHook,
 ): void {
   const balls: Ball[] = [];
-  for (const pos of positions) {
+  positions.forEach((pos, i) => {
     const obj = level.objects[pos.row][pos.col];
+    const dir = Array.isArray(dirs) ? dirs[i] : dirs;
     if (obj?.type === 'snowball') balls.push({ pos: { ...pos }, obj, dir });
-  }
+  });
   if (balls.length > 0) rollBalls(level, balls, onTick);
 }
 

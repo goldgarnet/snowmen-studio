@@ -26,7 +26,7 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
-    name: 'B-01 P1 crushes a size-1 snowball its own triangle turns onto the board edge (B-028 keeps this)',
+    name: 'B-01 P1 crushes a size-1 snowball against a triangle leg',
     width: 3, height: 1,
     setup: (b) => { b.tile(0, 1, { triangle: 'tl' }).snowball(0, 1, 1).player(0, 2, 1); },
     actions: ['left'],

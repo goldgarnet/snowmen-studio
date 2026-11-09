@@ -1,6 +1,6 @@
 import { Level, GameObject, Position, Direction } from '../types';
 import { isInBounds } from '../utils/level';
-import { getNextPos, canMoveTo, canLeaveTile, canPassEdge, isBacked, isTriangleLegAhead, yellowWallsSolid } from './helpers';
+import { getNextPos, canMoveTo, canLeaveTile, canPassEdge, isBacked, yellowWallsSolid } from './helpers';
 import { rollSnowball, rollSnowballGroup, TRI_DEFLECT, type RollTickHook } from './roll';
 import { applyForce } from './force';
 
@@ -42,23 +42,41 @@ export function executePush(
   // Get objects A, B, C in push direction
   const a = objInfo(objA);
 
-  // A triangle links its two open edges (B-013, team decision 2026-11-05): a ball resting
-  // inside one is not crushed against the cell's own leg. The push turns with the mirror,
-  // as a rolling ball does, and the line ahead is judged along the turned direction.
-  const triangle = level.tiles[posA.row][posA.col].triangle;
-  const lineDir = (a.isSnowball && triangle && TRI_DEFLECT[triangle][dir]) || dir;
+  // A triangle links its two open edges (B-013, team decision 2026-11-05; extended to the
+  // whole line by the user decision of 2026-11-09): a snowball resting inside one is not
+  // pressed against the cell's own leg. Whichever ball of the line — A, B or C — stands in
+  // a triangle and is pushed toward a solid leg, the line turns there with the mirror, as a
+  // rolling ball does, and the members beyond it are looked up along the turned direction.
+  // Each member keeps its own direction: straight before the turn, turned after it. Only
+  // snowballs turn; blocks, lasers and snowmen take the leg like a wall, as before.
+  const dirA = lineTurn(level, posA, dir);
 
-  const posB = getNextPos(posA, lineDir);
+  const posB = getNextPos(posA, dirA);
   const b = getObjAt(level, posB);
+  const dirB = b.isSnowball ? lineTurn(level, posB, dirA) : dirA;
 
-  const posC = (b.exists && isInBounds(level, posB)) ? getNextPos(posB, lineDir) : null;
+  const posC = (b.exists && isInBounds(level, posB)) ? getNextPos(posB, dirB) : null;
   const c = posC ? getObjAt(level, posC) : { exists: false, type: 'wall' as const, size: 100, isSnowball: false, isWall: true, isBlock: false };
+  const dirC = posC && c.isSnowball ? lineTurn(level, posC, dirB) : dirB;
 
   // The push table only describes A, B, and C. A fourth ordinary object is not a
   // wall: it merely prevents C from moving in rules that need an empty D cell.
   // Keep C's real identity so that an unspecified long chain safely becomes a no-op.
-  return resolvePush(level, playerPos, posA, posB, posC, lineDir, ps, a, b, c,
-    isBacked(level, posB, lineDir), turnCount, onRollTick);
+  return resolvePush(level, playerPos, posA, posB, posC, dirA, dirB, dirC, ps, a, b, c,
+    isBacked(level, posB, dirB), turnCount, onRollTick);
+}
+
+/**
+ * The direction a line member leaves its cell when the line reaches it moving `dir`: a
+ * snowball resting in a triangle cell and pushed toward one of its solid legs turns with
+ * the mirror (TRI_DEFLECT keys are exactly the solid legs); anything else goes straight.
+ */
+function lineTurn(level: Level, pos: Position, dir: Direction): Direction {
+  if (!isInBounds(level, pos)) return dir;
+  const obj = level.objects[pos.row][pos.col];
+  const triangle = level.tiles[pos.row][pos.col].triangle;
+  if (obj?.type !== 'snowball' || !triangle) return dir;
+  return TRI_DEFLECT[triangle][dir] ?? dir;
 }
 
 interface ObjInfo {
@@ -98,19 +116,19 @@ function getObjAt(level: Level, pos: Position): ObjInfo {
 
 function resolvePush(
   level: Level, playerPos: Position, posA: Position, posB: Position,
-  posC: Position | null, dir: Direction,
+  posC: Position | null, dirA: Direction, dirB: Direction, dirC: Direction,
   ps: number, a: ObjInfo, b: ObjInfo, c: ObjInfo,
   backedAtB: boolean, turnCount: number, onRollTick?: RollTickHook,
 ): PushResult {
   // Check if A can physically move (arch constraints)
   const objA = level.objects[posA.row][posA.col]!;
-  const aCanMove = canMoveTo(level, posA, dir, objA) && !b.exists;
-  const aCanMoveIntoB = canMoveTo(level, posA, dir, objA);
+  const aCanMove = canMoveTo(level, posA, dirA, objA) && !b.exists;
+  const aCanMoveIntoB = canMoveTo(level, posA, dirA, objA);
   // For "force" (crash/split) we don't need A to ENTER B — only to be able to leave
   // its own tile and cross the edge toward B. This makes a snowball pressed against
   // the board edge crash (leave a flake) exactly like one pressed against a wall;
   // canMoveTo would wrongly return false for the out-of-bounds edge case.
-  const aCanPress = canLeaveTile(level, posA, dir, objA) && canPassEdge(level, posA, dir, objA);
+  const aCanPress = canLeaveTile(level, posA, dirA, objA) && canPassEdge(level, posA, dirA, objA);
 
   // A is a wall/tree (size 100)
   if (a.isWall) return { level, playerMoved: false };
@@ -121,7 +139,7 @@ function resolvePush(
   // reaching B. Without this priority, a snowball beyond a blocking edge masks the
   // closer barrier and a direct push incorrectly becomes a no-op.
   if (a.isSnowball && ps >= a.size && b.exists && !aCanMoveIntoB) {
-    return doForceA(level, posA, dir, turnCount);
+    return doForceA(level, posA, dirA, turnCount);
   }
 
   // ===== PLAYER SIZE 1 =====
@@ -131,31 +149,30 @@ function resolvePush(
       if ((a.isSnowball && a.size === 1) || (a.type === 'snowman' && a.size === 1) || a.isBlock) {
         if (aCanMove) return doMove1(level, playerPos, posA, posB);
       }
-      // Terrain (tunnel side, closed partition) stops the ball exactly like a wall
-      // does, so a size-1 player crushes it just as P2/P3 do. A triangle leg does not
-      // (B-028): doForceA turns that case into a no-op.
-      if (a.isSnowball && a.size === 1) return doForceA(level, posA, dir, turnCount);
+      // Terrain (tunnel side, triangle leg, closed partition) stops the ball exactly
+      // like a wall does, so a size-1 player crushes it just as P2/P3 do.
+      if (a.isSnowball && a.size === 1) return doForceA(level, posA, dirA, turnCount);
       return { level, playerMoved: false };
     }
     if (!c.exists) {
       // A+B, C=NULL (posC in bounds and empty, OR posB OOB)
       if (a.isSnowball && a.size === 1 && (b.isWall || b.isBlock)) {
-        if (aCanPress) return doForceA(level, posA, dir, turnCount);
+        if (aCanPress) return doForceA(level, posA, dirA, turnCount);
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 1) {
-        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 1, turnCount);
+        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 1, turnCount);
         return { level, playerMoved: false };
       }
       return { level, playerMoved: false };
     }
     // A+B+C all exist
     if (a.isSnowball && a.size === 1 && (b.isWall || b.isBlock)) {
-      if (aCanMoveIntoB) return doForceA(level, posA, dir, turnCount);
+      if (aCanMoveIntoB) return doForceA(level, posA, dirA, turnCount);
       return { level, playerMoved: false };
     }
     if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 1) {
-      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 1, turnCount);
+      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 1, turnCount);
       return { level, playerMoved: false };
     }
     return { level, playerMoved: false };
@@ -166,12 +183,12 @@ function resolvePush(
     if (!b.exists) {
       // A alone
       if (a.isSnowball && a.size === 1) {
-        if (aCanMove) return doRollA(level, playerPos, posA, dir, turnCount, onRollTick);
-        return doForceA(level, posA, dir, turnCount);
+        if (aCanMove) return doRollA(level, playerPos, posA, dirA, turnCount, onRollTick);
+        return doForceA(level, posA, dirA, turnCount);
       }
       if ((a.type === 'snowman' && a.size === 1) || a.isBlock || (a.isSnowball && a.size === 2) || (a.type === 'snowman' && a.size === 2)) {
         if (aCanMove) return doMove1(level, playerPos, posA, posB);
-        if (a.isSnowball) return doForceA(level, posA, dir, turnCount);
+        if (a.isSnowball) return doForceA(level, posA, dirA, turnCount);
         return { level, playerMoved: false };
       }
       if (a.type === 'snowman' && a.size === 3) return { level, playerMoved: false };
@@ -183,35 +200,35 @@ function resolvePush(
       if (a.size === 1 && b.size === 1 && !b.isWall &&
         (a.isSnowball || a.type === 'snowman' || a.isBlock) &&
         (b.isSnowball || b.type === 'snowman' || b.isBlock)) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
       }
 
       if (a.isSnowball && a.size === 1 && b.isWall) {
-        return doForceA(level, posA, dir, turnCount);
+        return doForceA(level, posA, dirA, turnCount);
       }
       // The block/laser behind A could not move (its own terrain stops it), so A is
       // pressed against a rigid object that stays put — the same as a wall.
       if (a.isSnowball && a.size === 1 && b.isBlock) {
-        return doForceA(level, posA, dir, turnCount);
+        return doForceA(level, posA, dirA, turnCount);
       }
       // A=s1 snowball, B=s1 snowball, C empty: build only if backed
       if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 1) {
-        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 1, turnCount);
+        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 1, turnCount);
         return { level, playerMoved: false };
       }
       // A size-1 ball can combine with a size-2 ball when that front ball is
       // stopped by a hard backer, including an edge arch it cannot fit through.
       if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 2) {
-        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 2, turnCount);
+        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 2, turnCount);
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 1 && !b.isWall && !b.isBlock && b.size >= 2) {
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 2 && (b.isWall || b.isBlock)) {
-        return doForceA(level, posA, dir, turnCount);
+        return doForceA(level, posA, dirA, turnCount);
       }
       if (a.isSnowball && a.size === 2 && (b.isSnowball || b.type === 'snowman')) {
         return { level, playerMoved: false };
@@ -228,19 +245,19 @@ function resolvePush(
     // flake — consistent with a size-2 snowball splitting against a backed block
     // (below) and with size-1/size-3 players.
     if (a.isSnowball && a.size === 1 && (b.isWall || b.isBlock)) {
-      return doForceA(level, posA, dir, turnCount);
+      return doForceA(level, posA, dirA, turnCount);
     }
     if (a.isSnowball && a.size === 2 && (b.isWall || b.isBlock)) {
-      return doForceA(level, posA, dir, turnCount);
+      return doForceA(level, posA, dirA, turnCount);
     }
     // A=s1 snowball, B=s1 snowball, C exists: build only if backed
     if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 1) {
-      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 1, turnCount);
+      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 1, turnCount);
       return { level, playerMoved: false };
     }
     // A=s1 snowball, B=s2 snowball, C exists: build only if backed
     if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 2) {
-      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 2, turnCount);
+      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 2, turnCount);
       return { level, playerMoved: false };
     }
     return { level, playerMoved: false };
@@ -251,8 +268,8 @@ function resolvePush(
     if (!b.exists) {
       // A alone
       if (a.isSnowball) {
-        if (aCanMove) return doRollA(level, playerPos, posA, dir, turnCount, onRollTick);
-        return doForceA(level, posA, dir, turnCount);
+        if (aCanMove) return doRollA(level, playerPos, posA, dirA, turnCount, onRollTick);
+        return doForceA(level, posA, dirA, turnCount);
       }
       if (a.type === 'snowman' || a.isBlock) {
         if (aCanMove) return doMove1(level, playerPos, posA, posB);
@@ -264,67 +281,67 @@ function resolvePush(
     if (!c.exists) {
       // A+B, C=NULL
       if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 1) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doRoll2(level, playerPos, posA, posB, dir, turnCount, onRollTick);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doRoll2(level, playerPos, posA, posB, dirA, dirB, turnCount, onRollTick);
         }
         // can't roll: if backed, build snowman size 1
-        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 1, turnCount);
+        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 1, turnCount);
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 2) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
-        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 2, turnCount);
+        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 2, turnCount);
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 1 && b.type === 'snowman' && b.size <= 2) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
       }
       if (a.isSnowball && a.size === 1 && b.type === 'snowman' && b.size >= 3) {
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 1) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 2) {
-        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 3, turnCount);
+        if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 3, turnCount);
         return { level, playerMoved: false };
       }
       if (a.isSnowball && a.size === 2 && b.type === 'snowman' && b.size === 1) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
       }
       if (a.isSnowball && a.size === 2 && b.type === 'snowman' && b.size >= 2) {
         return { level, playerMoved: false };
       }
       if (a.isSnowball && b.isBlock) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
         // The block cannot move (terrain stops it), so A is pressed against it.
-        return doForceA(level, posA, dir, turnCount);
+        return doForceA(level, posA, dirA, turnCount);
       }
       if (a.isSnowball && b.isWall) {
-        return doForceA(level, posA, dir, turnCount);
+        return doForceA(level, posA, dirA, turnCount);
       }
       if ((a.type === 'snowman' && a.size === 1 || a.isBlock) && b.size <= 2 && !b.isWall) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
       }
       if ((a.type === 'snowman' && a.size === 1 || a.isBlock) && (b.size >= 3 || b.isWall)) {
         return { level, playerMoved: false };
       }
       if (a.type === 'snowman' && a.size === 2 && b.size <= 1 && !b.isWall) {
-        if (aCanMoveIntoB && canMoveObj(level, posB, dir)) {
-          return doMove2(level, playerPos, posA, posB, dir);
+        if (aCanMoveIntoB && canMoveObj(level, posB, dirB)) {
+          return doMove2(level, playerPos, posA, posB, dirB);
         }
       }
       if (a.type === 'snowman' && a.size === 2 && (b.size >= 2 || b.isWall)) {
@@ -341,9 +358,9 @@ function resolvePush(
       // the way first). Only check arch/tunnel passability for B, and let canMoveObj
       // handle C → D (where D must be in-bounds and empty).
       const objB = level.objects[posB.row][posB.col];
-      const bCanPass = !!objB && canMoveTo(level, posB, dir, objB);
-      if (posC && aCanMoveIntoB && bCanPass && canMoveObj(level, posC, dir)) {
-        return doMove3(level, playerPos, posA, posB, posC, dir);
+      const bCanPass = !!objB && canMoveTo(level, posB, dirB, objB);
+      if (posC && aCanMoveIntoB && bCanPass && canMoveObj(level, posC, dirC)) {
+        return doMove3(level, playerPos, posA, posB, posC, dirC);
       }
     }
 
@@ -351,23 +368,23 @@ function resolvePush(
     // when B is backed. C may be any hard backer — a wall, but also a block or laser
     // that is itself stuck (size 1, so it must not be excluded by a size test).
     if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 1) {
-      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 1, turnCount);
+      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 1, turnCount);
       return { level, playerMoved: false };
     }
 
     if (a.isSnowball && a.size === 1 && b.isWall) {
-      return doForceA(level, posA, dir, turnCount);
+      return doForceA(level, posA, dirA, turnCount);
     }
     // A is pressed against a block/laser and the whole chain could not move (the
     // three-object move above failed, or C is too heavy): A crushes, whatever C is.
     if (a.isSnowball && a.size === 1 && b.isBlock) {
-      return doForceA(level, posA, dir, turnCount);
+      return doForceA(level, posA, dirA, turnCount);
     }
     if (a.isSnowball && a.size === 1 && b.type === 'snowman' && b.size === 1 && c.size >= 2) {
       return { level, playerMoved: false };
     }
     if (a.isSnowball && a.size === 1 && b.isSnowball && b.size === 2) {
-      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 2, turnCount);
+      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 2, turnCount);
       return { level, playerMoved: false };
     }
     if (a.isSnowball && a.size === 1 && b.type === 'snowman' && b.size === 2) {
@@ -382,11 +399,11 @@ function resolvePush(
     }
 
     if (a.isSnowball && a.size === 2 && (b.isWall || b.isBlock)) {
-      return doForceA(level, posA, dir, turnCount);
+      return doForceA(level, posA, dirA, turnCount);
     }
     if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 1) return { level, playerMoved: false };
     if (a.isSnowball && a.size === 2 && b.isSnowball && b.size === 2) {
-      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dir, 3, turnCount);
+      if (backedAtB) return doBuildSnowman(level, playerPos, posA, posB, dirA, 3, turnCount);
       return { level, playerMoved: false };
     }
     if (a.isSnowball && a.size === 2 && !b.isSnowball) {
@@ -448,10 +465,10 @@ function doRollA(
 }
 
 function doRoll2(
-  level: Level, playerPos: Position, posA: Position, posB: Position, dir: Direction,
+  level: Level, playerPos: Position, posA: Position, posB: Position, dirA: Direction, dirB: Direction,
   turnCount: number, onRollTick?: RollTickHook,
 ): PushResult {
-  const posC = getNextPos(posB, dir);
+  const posC = getNextPos(posB, dirB);
   moveObj(level, posB, posC);
   pickFlake(level, posC);
   moveObj(level, posA, posB);
@@ -459,20 +476,17 @@ function doRoll2(
   moveObj(level, playerPos, posA);
   pickFlake(level, posA);
 
-  rollSnowballGroup(level, [posB, posC], dir, turnCount, onRollTick);
+  // Each ball keeps its own direction: when the line turned at B, A now rests in B's
+  // triangle cell still moving dirA and turns there on the next tick, following B.
+  rollSnowballGroup(level, [posB, posC], [dirA, dirB], turnCount, onRollTick);
 
   return { level, playerMoved: true };
 }
 
 function doForceA(level: Level, posA: Position, dir: Direction, turnCount: number): PushResult {
-  // B-028 (user decision 2026-11-09): a triangle leg is never a backer for a crush or a
-  // split. A ball pressed against a leg — from outside the triangle, or turned by its own
-  // mirror straight into another triangle's leg — stays as it is and the push is a no-op.
-  // The leg is the nearest boundary, so whatever lies beyond it does not matter. A ball
-  // turned by its own mirror into a wall or the board edge still crushes (dir here is the
-  // turned line, which leaves the ball's own cell through an open side).
-  if (isTriangleLegAhead(level, posA, dir)) return { level, playerMoved: false };
-  // Force: player stays in place, only the force effect is applied
+  // Force: player stays in place, only the force effect is applied. A triangle leg outside
+  // the ball's own cell backs a crush or a split exactly like a wall (the user decision of
+  // 2026-11-09 reverts B-028's second rule); `dir` is A's own, possibly turned, direction.
   applyForce(level, posA, dir, turnCount);
   return { level, playerMoved: true };
 }
