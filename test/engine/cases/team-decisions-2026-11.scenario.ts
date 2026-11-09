@@ -197,14 +197,16 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
-    name: 'team B-013: a ball pressed against a triangle leg from outside still crushes, the leg is a wall',
+    // Changed by B-028 (user decision 2026-11-09): a triangle leg never backs a crush.
+    name: 'team B-013 / B-028: a ball pressed against a triangle leg from outside is not crushed, nothing happens',
     width: 5,
     height: 3,
     setup: (board) => { board.tile(1, 3, { triangle: 'tl' }).snowball(1, 2, 1).player(1, 1, 2); },
     actions: ['right'],
     verify: (result) => {
       expectObject(result.level, 1, 1, 'player', 2);
-      expect(result.level.tiles[1][2].isFlake, 'crushed against the solid leg');
+      expectObject(result.level, 1, 2, 'snowball', 1);
+      expect(!result.level.tiles[1][2].isFlake, 'no flake: the leg is not a backer');
     },
   }),
 

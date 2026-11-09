@@ -206,6 +206,21 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
 }
 
 /**
+ * Is the boundary crossed when leaving `pos` in `dir` a solid triangle leg — the leg of
+ * `pos`'s own triangle or of the next cell's? (B-028, user decision 2026-11-09: a triangle
+ * leg links two open sides and is "always a push"; it never backs a crush or a split.
+ * It still backs a snowman build — see isBacked.)
+ */
+export function isTriangleLegAhead(level: Level, pos: Position, dir: Direction): boolean {
+  const tile = level.tiles[pos.row][pos.col];
+  if (tile.triangle && TRI_SOLID[tile.triangle].includes(dir)) return true;
+  const next = getNextPos(pos, dir);
+  if (!isInBounds(level, next)) return false;
+  const nextTile = level.tiles[next.row][next.col];
+  return !!nextTile.triangle && TRI_SOLID[nextTile.triangle].includes(getOppositeDirection(dir));
+}
+
+/**
  * A solid (closed) yellow partition encloses its whole cell: nothing enters or leaves
  * it, its trapped object casts no shadow outside, and a laser standing inside cannot
  * fire out of it. (Its interior is not shade — the sun still gets in, 2026-10-29.)

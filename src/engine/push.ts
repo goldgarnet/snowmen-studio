@@ -1,6 +1,6 @@
 import { Level, GameObject, Position, Direction } from '../types';
 import { isInBounds } from '../utils/level';
-import { getNextPos, canMoveTo, canLeaveTile, canPassEdge, isBacked, yellowWallsSolid } from './helpers';
+import { getNextPos, canMoveTo, canLeaveTile, canPassEdge, isBacked, isTriangleLegAhead, yellowWallsSolid } from './helpers';
 import { rollSnowball, rollSnowballGroup, TRI_DEFLECT, type RollTickHook } from './roll';
 import { applyForce } from './force';
 
@@ -131,8 +131,9 @@ function resolvePush(
       if ((a.isSnowball && a.size === 1) || (a.type === 'snowman' && a.size === 1) || a.isBlock) {
         if (aCanMove) return doMove1(level, playerPos, posA, posB);
       }
-      // Terrain (tunnel side, triangle leg, closed partition) stops the ball exactly
-      // like a wall does, so a size-1 player crushes it just as P2/P3 do.
+      // Terrain (tunnel side, closed partition) stops the ball exactly like a wall
+      // does, so a size-1 player crushes it just as P2/P3 do. A triangle leg does not
+      // (B-028): doForceA turns that case into a no-op.
       if (a.isSnowball && a.size === 1) return doForceA(level, posA, dir, turnCount);
       return { level, playerMoved: false };
     }
@@ -464,6 +465,13 @@ function doRoll2(
 }
 
 function doForceA(level: Level, posA: Position, dir: Direction, turnCount: number): PushResult {
+  // B-028 (user decision 2026-11-09): a triangle leg is never a backer for a crush or a
+  // split. A ball pressed against a leg — from outside the triangle, or turned by its own
+  // mirror straight into another triangle's leg — stays as it is and the push is a no-op.
+  // The leg is the nearest boundary, so whatever lies beyond it does not matter. A ball
+  // turned by its own mirror into a wall or the board edge still crushes (dir here is the
+  // turned line, which leaves the ball's own cell through an open side).
+  if (isTriangleLegAhead(level, posA, dir)) return { level, playerMoved: false };
   // Force: player stays in place, only the force effect is applied
   applyForce(level, posA, dir, turnCount);
   return { level, playerMoved: true };

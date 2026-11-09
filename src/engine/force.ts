@@ -1,6 +1,7 @@
 import { Level, GameObject, Position, Direction } from '../types';
 import { isInBounds } from '../utils/level';
 import { getNextPos, getPerpendicularDirs, canMoveTo } from './helpers';
+import { TRI_DEFLECT } from './roll';
 
 /**
  * Apply a "force" (crush / split) to the snowball at `pos`, pushed in `dir`. Only the
@@ -103,10 +104,16 @@ function planSplitShove(level: Level, origin: Position, dir: Direction): SplitSh
   // Occupied: strength-1 can shove ONE pushable object (size ≤ 1, not a wall/tree) into
   // an empty passable cell beyond. No snowman is ever built by a split shove.
   if (targetObj.size > 1 || targetObj.type === 'wall' || targetObj.type === 'tree') return null;
-  const beyond = getNextPos(target, dir);
+  // B-028 (user decision 2026-11-09): a snowball resting in a triangle cell, shoved toward
+  // the cell's solid leg, turns with the mirror and goes one cell out of the other open
+  // side — the same turn B-013 gives a player's push. Blocks, lasers and snowmen do not
+  // turn. If the turned cell is closed, the half stays in the origin cell as before.
+  const triangle = level.tiles[target.row][target.col].triangle;
+  const shoveDir = (targetObj.type === 'snowball' && triangle && TRI_DEFLECT[triangle][dir]) || dir;
+  const beyond = getNextPos(target, shoveDir);
   if (!isInBounds(level, beyond)) return null;
   if (level.objects[beyond.row][beyond.col]) return null;
-  if (!canMoveTo(level, target, dir, targetObj)) return null;
+  if (!canMoveTo(level, target, shoveDir, targetObj)) return null;
   return { target, shoved: { obj: targetObj, to: beyond } };
 }
 
