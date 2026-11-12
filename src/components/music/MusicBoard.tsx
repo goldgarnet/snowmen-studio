@@ -616,7 +616,7 @@ export default function MusicBoard({ userId, userName }: MusicBoardProps) {
           {flash && <span className="detail-flash">{flash}</span>}
           {data && (
             <span className="music-stats" title="저장소에 올린 음악 파일의 합계">
-              {samples.length}곡 · 채택 {adoptedCount} · {formatBytes(totalBytes) || '0 KB'}
+              {samples.length}곡 · 채택 {adoptedCount} · {formatBytes(totalBytes)}
             </span>
           )}
           <button type="button" className="btn btn-sm" onClick={() => void load()} title="다른 사람이 올린 곡까지 다시 불러와요">새로 고침</button>

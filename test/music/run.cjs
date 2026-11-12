@@ -80,6 +80,7 @@ test('시간 표시', () => {
 });
 
 test('크기 표시', () => {
+  assert.equal(m.formatBytes(0), '0 KB');
   assert.equal(m.formatBytes(1), '1 KB');
   assert.equal(m.formatBytes(500 * 1024), '500 KB');
   assert.equal(m.formatBytes(4.25 * 1024 * 1024), '4.3 MB');
