@@ -49,6 +49,7 @@
 .chapter-desc { color: var(--text-dim); font-size: 13.5px; margin-top: 6px; white-space: pre-wrap; }
 .chapter-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .chapter-header-actions .btn { white-space: nowrap; }
+.chapter-header-actions a.btn { text-decoration: none; }   /* 다른 탭으로 가는 링크 단추 (음악 듣기 · 스테이지 보기) */
 
 /* ---- 스테이지 목록 ---- */
 .stage-list { display: flex; flex-direction: column; gap: 12px; }
