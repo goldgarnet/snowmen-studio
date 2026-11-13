@@ -2,7 +2,7 @@ import { Level, Direction, GameStatus, Position } from '../types';
 import { cloneLevel, findPlayer } from '../utils/level';
 import { recalcShadows, clearShadows } from './shadow';
 import { executePush } from './push';
-import { yellowWallsSolid } from './helpers';
+import { isButtonPressed, yellowWallsSolid } from './helpers';
 
 export interface TurnResult {
   level: Level;
@@ -40,15 +40,16 @@ let ageClock = 0;
 function nextAge(): number { return ++ageClock; }
 
 /**
- * The goal is "active" (clearable) unless the level uses key footplates and one or
- * more of them is not currently covered by an object (the player counts too). When
- * no key tiles exist this is always true.
+ * The goal is "active" (clearable) unless the level uses green buttons and one or
+ * more of them is not currently pressed — an object (the player counts too) whose
+ * mass (= size) is at least the button's required mass must stand on it (2026-11-13).
+ * When no green buttons exist this is always true.
  */
 export function isGoalActive(level: Level): boolean {
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       if (!level.tiles[r][c].isKeyTile) continue;
-      if (!level.objects[r][c]) return false;
+      if (!isButtonPressed(level, r, c)) return false;
     }
   }
   return true;
@@ -415,7 +416,9 @@ function endOfTurn(level: Level): void {
   if (level.hasShadow) recalcShadows(level);
   else clearShadows(level);
 
-  // 2. Melting / growing
+  // 2. Melting / growing. A flake on a warm cell in the sun melts first and cools the
+  //    cell, so an object resting on that flake never melts on it (B-015).
+  meltSunlitFlakes(level);
   const sizesBefore = snapshotSizes(level);
   processMelting(level);
 
@@ -450,6 +453,22 @@ function sizesChanged(level: Level, snap: (number | null)[][]): boolean {
     }
   }
   return false;
+}
+
+/**
+ * A flake lies on a warm cell only when a snowball was crushed there (force.ts). It keeps
+ * while the cell is shaded; once the cell is in the sun at the end of a turn it melts and
+ * the cell turns cold (team decision 2026-11-13). Eating it first cools the cell as usual.
+ */
+function meltSunlitFlakes(level: Level): void {
+  for (const row of level.tiles) {
+    for (const tile of row) {
+      if (tile.isFlake && tile.isWarm && !tile.isShade && !tile.isVoid) {
+        tile.isFlake = false;
+        tile.isWarm = false;
+      }
+    }
+  }
 }
 
 function processMelting(level: Level): void {

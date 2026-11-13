@@ -188,6 +188,8 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   const [terrainFillMode, setTerrainFillMode] = useState<TerrainFillMode | null>('cool');
   const [treeHeight, setTreeHeight] = useState<number>(2);
   const [laserDir, setLaserDir] = useState<'right'|'left'|'up'|'down'>('right');
+  // 초록 · 노랑 버튼을 놓을 때의 요구 질량(1~3). 2026-11-13 팀 결정: 질량 = 크기.
+  const [buttonMassChoice, setButtonMassChoice] = useState<1 | 2 | 3>(1);
   const [triCorner, setTriCorner] = useState<TriangleCorner>('tl');
   const [showImportExport, setShowImportExport] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -687,12 +689,14 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         break;
       case 'keyTile':
         tile.isKeyTile = true;
+        tile.buttonMass = buttonMassChoice > 1 ? buttonMassChoice : undefined;
         break;
       // A triangle wall and a yellow button/wall cannot share a cell: the map code stores
       // both in the same slot, so the yellow part would silently vanish on save (B-12).
       case 'yellowButton':
         if (tile.triangle) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.isYellowButton = true;
+        tile.buttonMass = buttonMassChoice > 1 ? buttonMassChoice : undefined;
         break;
       case 'yellowWall':
         if (tile.triangle) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
@@ -784,10 +788,12 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         }
         if (tile.isYellowButton) {
           tile.isYellowButton = false;
+          if (!tile.isKeyTile) delete tile.buttonMass;
           break;
         }
         if (tile.isKeyTile) {
           tile.isKeyTile = false;
+          delete tile.buttonMass;
           break;
         }
         if (tile.isSoulSwap) {
@@ -1191,6 +1197,22 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
                     if (Number.isFinite(nextHeight)) setTreeHeight(Math.min(31, Math.max(1, Math.round(nextHeight))));
                   }} />
               </label>
+            </div>
+          )}
+          {(selectedTool === 'keyTile' || selectedTool === 'yellowButton') && (
+            <div className="tree-height-input">
+              <span style={{fontSize:12,color:'var(--text-dim)',marginBottom:4,display:'block'}}>요구 질량 (이만큼 무거운 것이 올라가야 눌림)</span>
+              <div style={{display:'flex',gap:4}} role="group" aria-label="버튼 요구 질량">
+                {([1, 2, 3] as const).map((m) => (
+                  <button key={m}
+                    aria-pressed={buttonMassChoice === m}
+                    title={m === 1 ? '무엇이든 올라가면 눌림' : `크기 ${m} 이상이 올라가야 눌림`}
+                    style={{flex:1,padding:'3px 0',fontSize:13,fontWeight:700,background:buttonMassChoice===m?(selectedTool==='keyTile'?'#2f9e57':'#c99a1e'):'var(--surface)',color:buttonMassChoice===m?'#fff':'var(--text)',border:`1px solid ${buttonMassChoice===m?'transparent':'var(--border-strong)'}`,borderRadius:4,cursor:'pointer'}}
+                    onClick={() => setButtonMassChoice(m)}>
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {selectedTool === 'laser' && (

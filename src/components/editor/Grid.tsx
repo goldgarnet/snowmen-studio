@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useRef, useEffect, useId, useLayoutEffect, type TouchEvent as ReactTouchEvent } from 'react';
 import { GameObject, Level, Tile } from '../../types';
-import { yellowWallsSolid } from '../../engine/helpers';
+import { buttonMass, isButtonPressed, isPressedBy, yellowWallsSolid } from '../../engine/helpers';
 import './Grid.css';
 
 interface GridProps {
@@ -125,8 +125,8 @@ const GridCell = memo(function GridCell({
         <TunnelOverlay size={cellSize} isRow={tile.isRowArch} />
       )}
       {tile.isSoulSwap && <SoulSwapOverlay size={cellSize} />}
-      {tile.isKeyTile && <GreenButtonOverlay size={cellSize} />}
-      {tile.isYellowButton && <YellowButtonOverlay size={cellSize} />}
+      {tile.isKeyTile && <GreenButtonOverlay size={cellSize} mass={obj ? null : buttonMass(tile)} />}
+      {tile.isYellowButton && <YellowButtonOverlay size={cellSize} mass={obj ? null : buttonMass(tile)} />}
       {tile.isYellowWall && <YellowWallOverlay size={cellSize} solid={yellowSolid} />}
       {tile.isHole && <HoleOverlay size={cellSize} />}
       {tile.isCrack && <CrackOverlay size={cellSize} warm={!!tile.isWarm} armed={!!tile.crackArmed} />}
@@ -138,6 +138,15 @@ const GridCell = memo(function GridCell({
         >
           {renderObject(obj, cellSize, snowmanFilterId)}
         </div>
+      )}
+      {/* 버튼 위에 무언가 있으면 요구 질량을 모서리에 — 눌렸으면 칠한다 (2026-11-13) */}
+      {!tile.isVoid && obj && (tile.isKeyTile || tile.isYellowButton) && cellSize >= 18 && (
+        <ButtonMassBadge
+          size={cellSize}
+          mass={buttonMass(tile)}
+          green={!!tile.isKeyTile}
+          pressed={isPressedBy(tile, obj)}
+        />
       )}
       {isSelected && <div className="cell-selection-overlay" />}
     </div>
@@ -373,7 +382,7 @@ export default function Grid({
   let goalActive = true;
   for (let r = 0; r < level.height && goalActive; r++) {
     for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isKeyTile && !level.objects[r][c]) { goalActive = false; break; }
+      if (level.tiles[r][c].isKeyTile && !isButtonPressed(level, r, c)) { goalActive = false; break; }
     }
   }
 
@@ -737,24 +746,47 @@ function SoulSwapOverlay({ size }: { size: number }) {
 }
 
 // Green button (formerly the key footplate): gates the goal.
-function GreenButtonOverlay({ size }: { size: number }) {
+// 버튼 가운데의 숫자 = 요구 질량. 물체가 올라가 있으면 숫자는 모서리 표시(ButtonMassBadge)로 옮긴다.
+function ButtonMassText({ mass, color, size }: { mass: number; color: string; size: number }) {
+  if (size < 16) return null;   // 썸네일처럼 작은 칸에는 숫자를 그리지 않는다
+  return (
+    <text x="20" y="24.3" textAnchor="middle" fontSize="12.5" fontWeight="800" fill={color}
+      fontFamily="Pretendard, -apple-system, 'Malgun Gothic', sans-serif">{mass}</text>
+  );
+}
+
+function GreenButtonOverlay({ size, mass }: { size: number; mass: number | null }) {
   return (
     <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
       <circle cx="20" cy="20" r="12" fill="none" stroke="#2f9e57" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
       <circle cx="20" cy="20" r="9" fill="#3fbf6a" stroke="#268a48" strokeWidth="1.8" opacity="0.92" />
-      <circle cx="20" cy="20" r="4.5" fill="#8fe6ab" opacity="0.9" />
+      <circle cx="20" cy="20" r={mass == null ? 4.5 : 6.4} fill="#8fe6ab" opacity="0.9" />
+      {mass != null && <ButtonMassText mass={mass} color="#14532d" size={size} />}
     </svg>
   );
 }
 
 // Yellow button: pressing all of them removes every yellow wall.
-function YellowButtonOverlay({ size }: { size: number }) {
+function YellowButtonOverlay({ size, mass }: { size: number; mass: number | null }) {
   return (
     <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
       <circle cx="20" cy="20" r="12" fill="none" stroke="#c99a1e" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
       <circle cx="20" cy="20" r="9" fill="#f2c53a" stroke="#bd9018" strokeWidth="1.8" opacity="0.95" />
-      <circle cx="20" cy="20" r="4.5" fill="#ffe89a" opacity="0.95" />
+      <circle cx="20" cy="20" r={mass == null ? 4.5 : 6.4} fill="#ffe89a" opacity="0.95" />
+      {mass != null && <ButtonMassText mass={mass} color="#6b4a06" size={size} />}
     </svg>
+  );
+}
+
+// 물체가 올라간 버튼의 요구 질량 — 물체에 가리지 않게 칸 오른쪽 위에. 눌렸으면(질량이 넉넉하면) 칠한다.
+function ButtonMassBadge({ size, mass, green, pressed }: { size: number; mass: number; green: boolean; pressed: boolean }) {
+  const d = Math.max(13, Math.round(size * 0.34));
+  return (
+    <div
+      className={`button-mass-badge ${green ? 'green' : 'yellow'}${pressed ? ' pressed' : ''}`}
+      style={{ width: d, height: d, fontSize: Math.round(d * 0.66) }}
+      title={pressed ? `요구 질량 ${mass} · 눌림` : `요구 질량 ${mass} · 아직 안 눌림`}
+    >{mass}</div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Level, GameObject, Position, Direction, TriangleCorner } from '../types';
+import { Level, GameObject, Position, Direction, Tile, TriangleCorner } from '../types';
 import { getDirectionDelta, getOppositeDirection, isInBounds, getObjectHeight } from '../utils/level';
 
 // Triangle wall: the right-angle corner has two solid leg edges. Moving across a
@@ -15,10 +15,34 @@ export function getNextPos(pos: Position, dir: Direction): Position {
   return { row: pos.row + delta.row, col: pos.col + delta.col };
 }
 
+/** Required mass of the button on this tile (1..3). Buttons without a value need 1. */
+export function buttonMass(tile: Tile): number {
+  const mass = tile.buttonMass ?? 1;
+  return Number.isFinite(mass) ? Math.min(3, Math.max(1, Math.round(mass))) : 1;
+}
+
+/**
+ * Mass of an object that rests on a button = its size (team decision 2026-11-13):
+ * snowball 1·2, snowman/player 1·2·3, block/laser 1. Walls and trees (size 100) are
+ * never pushed onto a button; if the editor put one there it presses anything.
+ */
+export function objectMass(obj: GameObject): number {
+  return obj.size;
+}
+
+/** A green/yellow button is pressed while the object on it is at least as heavy as it requires. */
+export function isPressedBy(tile: Tile, obj: GameObject | null | undefined): boolean {
+  return !!obj && objectMass(obj) >= buttonMass(tile);
+}
+
+export function isButtonPressed(level: Level, row: number, col: number): boolean {
+  return isPressedBy(level.tiles[row][col], level.objects[row][col]);
+}
+
 /**
  * Yellow walls are solid unless there is at least one yellow button AND every
- * yellow button is currently covered by an object. (With no yellow buttons, the
- * walls never disappear — they behave like plain walls.)
+ * yellow button is currently pressed (an object of at least its required mass on it).
+ * With no yellow buttons, the walls never disappear — they behave like plain walls.
  */
 export function yellowWallsSolid(level: Level): boolean {
   let hasButton = false;
@@ -26,11 +50,11 @@ export function yellowWallsSolid(level: Level): boolean {
     for (let c = 0; c < level.width; c++) {
       if (level.tiles[r][c].isYellowButton) {
         hasButton = true;
-        if (!level.objects[r][c]) return true; // an uncovered button → walls solid
+        if (!isButtonPressed(level, r, c)) return true; // a button not pressed → walls solid
       }
     }
   }
-  return !hasButton; // no buttons → solid; all buttons covered → not solid
+  return !hasButton; // no buttons → solid; all buttons pressed → not solid
 }
 
 /**

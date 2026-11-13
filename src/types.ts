@@ -34,9 +34,13 @@ export interface Tile {
   // Green button (formerly "key footplate"): while any green button exists on the
   // map, the goal is only active when every green button is covered by an object.
   isKeyTile?: boolean;
-  // Yellow button: while ALL yellow buttons are covered, every yellow wall
-  // disappears (toggles back when any yellow button becomes uncovered).
+  // Yellow button: while ALL yellow buttons are pressed, every yellow wall
+  // disappears (toggles back when any yellow button stops being pressed).
   isYellowButton?: boolean;
+  // Required mass of the green/yellow button on this tile (2026-11-13 team decision):
+  // the button counts as pressed only while the object on it has mass (= size) of at
+  // least this much. 1..3; undefined = 1, which is how every pre-existing button reads.
+  buttonMass?: number;
   // Yellow wall: acts like a solid wall unless all yellow buttons are pressed.
   isYellowWall?: boolean;
   // (Orange buttons/walls and portals were removed from the game on 2026-11-03 by team

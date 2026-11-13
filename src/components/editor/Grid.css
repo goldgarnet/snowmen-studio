@@ -99,6 +99,10 @@
 .grid-cell.flake {
   background: #d8eeff;
 }
+/* 그늘진 따뜻한 칸에서 부서진 눈꽃 — 칸은 따뜻한 채다(볕이 들면 녹는다, 2026-11-13). */
+.grid-cell.warm.flake {
+  background: #f5e6c8;
+}
 
 .grid-cell.goal {
   background: linear-gradient(135deg, rgba(60, 200, 100, 0.18), rgba(40, 180, 80, 0.08));
@@ -241,3 +245,25 @@
   line-height: 1;
   pointer-events: none;
 }
+
+/* 버튼 요구 질량 — 물체가 올라가 있을 때 칸 오른쪽 위 (2026-11-13). 눌렸으면 칠한다. */
+.button-mass-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.92);
+}
+.button-mass-badge.green { border-color: #268a48; color: #1d6b38; }
+.button-mass-badge.yellow { border-color: #bd9018; color: #7a5507; }
+.button-mass-badge.green.pressed { background: #2f9e57; color: #fff; }
+.button-mass-badge.yellow.pressed { background: #d9a520; color: #fff; }

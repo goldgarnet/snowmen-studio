@@ -1,4 +1,5 @@
 import { Level, Tile, GameObject, SunDirection, TriangleCorner } from '../types';
+import { buttonMass } from '../engine/helpers';
 
 const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const SUN_DIRS: SunDirection[] = ['left', 'right', 'up', 'down'];
@@ -47,6 +48,13 @@ const TRIANGLE_OBJECT_MAGIC = 0b0101; // 4 bits
 // Optional board-mask sub-section. Kept separate from the original five v5 flags
 // so every previously generated code keeps the same layout.
 const VOID_MAGIC = 0b0110; // 4 bits
+// Optional button-mass sub-section (2026-11-13): green/yellow buttons that need more
+// than mass 1. [MASS_MAGIC(4)] [count(11)] [index(11) + mass(2)]*count, after the void
+// list. A button with no entry needs mass 1, so every older code keeps its meaning and a
+// map whose buttons all need 1 encodes byte-for-byte like before. Older decoders (game
+// level_io.gd, adventure levelCode.js) stop after the void list and read such a map with
+// every button at mass 1 until they are ported.
+const BUTTON_MASS_MAGIC = 0b1001; // 4 bits
 
 const TRI_CORNERS: TriangleCorner[] = ['tl', 'tr', 'bl', 'br'];
 
@@ -203,9 +211,14 @@ export function encodeLevelCode(level: Level): string {
   const triBlocks: { idx: number; corner: number }[] = [];
   const triangleObjects: { idx: number; obj: GameObject }[] = [];
   const voidTiles: number[] = [];
+  const massButtons: { idx: number; mass: number }[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       if (level.tiles[r][c].isVoid) voidTiles.push(r * level.width + c);
+      const tile = level.tiles[r][c];
+      if (!tile.isVoid && (tile.isKeyTile || tile.isYellowButton) && buttonMass(tile) > 1) {
+        massButtons.push({ idx: r * level.width + c, mass: buttonMass(tile) });
+      }
       const obj = level.objects[r][c];
       if (obj && obj.type === 'block' && obj.triangleCorner) {
         triBlocks.push({ idx: r * level.width + c, corner: Math.max(0, TRI_CORNERS.indexOf(obj.triangleCorner)) });
@@ -216,7 +229,7 @@ export function encodeLevelCode(level: Level): string {
     }
   }
 
-  if (special.length > 0 || triBlocks.length > 0 || triangleObjects.length > 0 || voidTiles.length > 0) {
+  if (special.length > 0 || triBlocks.length > 0 || triangleObjects.length > 0 || voidTiles.length > 0 || massButtons.length > 0) {
     pushBits(bits, EXT_MAGIC, 8);
     pushBits(bits, special.length, EXT_COUNT_BITS);
     for (const s of special) {
@@ -243,6 +256,14 @@ export function encodeLevelCode(level: Level): string {
       pushBits(bits, VOID_MAGIC, 4);
       pushBits(bits, voidTiles.length, EXT_COUNT_BITS);
       for (const idx of voidTiles) pushBits(bits, idx, EXT_INDEX_BITS);
+    }
+    if (massButtons.length > 0) {
+      pushBits(bits, BUTTON_MASS_MAGIC, 4);
+      pushBits(bits, massButtons.length, EXT_COUNT_BITS);
+      for (const b of massButtons) {
+        pushBits(bits, b.idx, EXT_INDEX_BITS);
+        pushBits(bits, b.mass, 2);
+      }
     }
   }
 
@@ -460,6 +481,20 @@ function decodeLevelCodeWith(code: string, onTileFlags?: (index: number, flags: 
           if (r < 0 || r >= height || c < 0 || c >= width) continue;
           tiles[r][c] = { ...createVoidDecodeTile() };
           objects[r][c] = null;
+        }
+      }
+
+      if (pos + 4 <= bits.length && readBits(bits, pos, 4) === BUTTON_MASS_MAGIC) {
+        pos += 4;
+        const massCount = readBits(bits, pos, EXT_COUNT_BITS); pos += EXT_COUNT_BITS;
+        for (let i = 0; i < massCount; i++) {
+          const idx = readBits(bits, pos, EXT_INDEX_BITS); pos += EXT_INDEX_BITS;
+          const mass = readBits(bits, pos, 2); pos += 2;
+          const r = Math.floor(idx / width);
+          const c = idx % width;
+          if (r < 0 || r >= height || c < 0 || c >= width) continue;
+          const t = tiles[r][c];
+          if ((t.isKeyTile || t.isYellowButton) && mass >= 2) t.buttonMass = mass;
         }
       }
     }
