@@ -13,6 +13,18 @@
 /** 가입 신청을 승인하는 계정(luffy84). 실제 권한은 DB 의 is_signup_approver 가 정한다. */
 export const SIGNUP_APPROVER_ID = 'b807cfa1-b912-4a27-a0a5-af2a302e4577';
 
+/**
+ * 음악을 올리고 고치고 지우는 계정 — luffy84(김정훈) · jbin1003(황정빈). 2026-11-13 사용자 결정.
+ * 실제 권한은 DB 의 is_music_uploader 가 정한다(supabase/migrations/2026-11-13_music_library.sql).
+ */
+export const MUSIC_UPLOADER_IDS: readonly string[] = [
+  'b807cfa1-b912-4a27-a0a5-af2a302e4577',   // luffy84 김정훈
+  '01bf932f-c8f4-4837-8ed1-417a3e1ee791',   // jbin1003 황정빈
+];
+
+export const isMusicUploader = (accountId: string | null | undefined): boolean =>
+  !!accountId && MUSIC_UPLOADER_IDS.includes(accountId);
+
 export interface Member {
   /** 전체 이름 (칩 툴팁에 보임) */
   name: string;

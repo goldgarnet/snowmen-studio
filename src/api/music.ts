@@ -1,19 +1,14 @@
 import { supabase } from '../lib/supabase';
 import { audioType, COMMON_KEY, safeStorageName } from '../lib/music';
-import type { MapStatus } from './types';
 
-// 챕터 음악 — 챕터마다 올린 후보 곡(샘플)과 피드백.
-// 테이블 · 저장소는 supabase/migrations/2026-11-12_chapter_music.sql.
-
-/** 채택 · 보류 · 반려 · 검토중 — 맵 허브와 같은 값과 이름(STATUS_LABEL)을 쓴다. */
-export type MusicStatus = MapStatus;
+// 음악 — 김정훈 · 황정빈이 올린 곡과 각자의 플레이리스트.
+// 테이블 · 저장소는 supabase/migrations/2026-11-12_chapter_music.sql, 2026-11-13_music_library.sql.
 
 export interface MusicSample {
   id: string;
   chapter_id: string | null;   // 없으면 공통 (타이틀 · 엔딩 등)
   title: string;
   note: string;
-  status: MusicStatus;
   path: string;                // 저장소(music-samples) 안의 경로
   file_name: string;           // 올린 파일의 원래 이름
   size_bytes: number | null;
@@ -25,42 +20,51 @@ export interface MusicSample {
   updated_at: string;
 }
 
-export interface MusicComment {
+/** 내 플레이리스트. 만든 사람만 보고 고친다(DB 가 막는다). */
+export interface MusicPlaylist {
   id: string;
+  owner_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MusicPlaylistItem {
+  id: string;
+  playlist_id: string;
   sample_id: string;
-  author_id: string | null;
-  author_name: string;
-  body: string;
-  at_sec: number | null;       // 곡의 몇 초 지점에 단 피드백 (없으면 곡 전체)
+  sort_order: number;
   created_at: string;
 }
 
 export interface MusicData {
   samples: MusicSample[];
-  comments: MusicComment[];
+  playlists: MusicPlaylist[];
+  items: MusicPlaylistItem[];
 }
 
 const BUCKET = 'music-samples';
 const PAGE = 1000;   // Supabase 는 한 번에 1000줄까지만 돌려준다
 
-/** 듣기 주소가 살아 있는 시간(초). 화면은 이보다 일찍 새 주소를 받는다(musicUrlFresh). */
+/** 듣기 주소가 살아 있는 시간(초). 화면은 이보다 일찍 새 주소를 받는다(urls.ts). */
 export const SIGNED_URL_SECONDS = 6 * 60 * 60;
 
-/** SQL 을 아직 실행하지 않아 테이블 · 함수가 없을 때 나는 오류인가. */
+/** SQL 을 아직 실행하지 않아 테이블이 없을 때 나는 오류인가. */
 export function isMusicNotInstalled(e: unknown): boolean {
   const err = e as { code?: unknown; message?: unknown } | null;
   if (!err) return false;
-  if (['PGRST202', 'PGRST204', 'PGRST205', '42P01', '42703', '42883'].includes(String(err.code))) return true;
+  if (['PGRST204', 'PGRST205', '42P01', '42703'].includes(String(err.code))) return true;
   return typeof err.message === 'string'
-    && /music_\w+|set_music_status/.test(err.message)
+    && /music_\w+/.test(err.message)
     && /does not exist|could not find|schema cache/i.test(err.message);
 }
 
-async function readAll<T>(table: string): Promise<T[]> {
+async function readAll<T>(table: string, column: string): Promise<T[]> {
   const rows: T[] = [];
   for (;;) {
     const { data, error } = await supabase.from(table).select('*')
-      .order('created_at', { ascending: true }).order('id').range(rows.length, rows.length + PAGE - 1);
+      .order(column, { ascending: true }).order('id').range(rows.length, rows.length + PAGE - 1);
     if (error) throw error;
     rows.push(...((data ?? []) as T[]));
     if ((data ?? []).length < PAGE) return rows;
@@ -68,11 +72,12 @@ async function readAll<T>(table: string): Promise<T[]> {
 }
 
 export async function loadMusic(): Promise<MusicData> {
-  const [samples, comments] = await Promise.all([
-    readAll<MusicSample>('music_samples'),
-    readAll<MusicComment>('music_comments'),
+  const [samples, playlists, items] = await Promise.all([
+    readAll<MusicSample>('music_samples', 'created_at'),
+    readAll<MusicPlaylist>('music_playlists', 'sort_order'),
+    readAll<MusicPlaylistItem>('music_playlist_items', 'sort_order'),
   ]);
-  return { samples, comments };
+  return { samples, playlists, items };
 }
 
 /** 행을 먼저 지우고 파일을 지운다. 파일 삭제가 실패해도 화면에 듣지 못하는 곡이 남지 않는다. */
@@ -82,7 +87,7 @@ async function removeStored(paths: string[]): Promise<void> {
   if (error) console.warn('music: 저장소 파일을 지우지 못했습니다', error);
 }
 
-/** 곡 하나를 올린다. 저장소에 파일을 넣고 행을 만든다(행이 실패하면 파일도 지운다). */
+/** 곡 하나를 올린다(김정훈 · 황정빈만). 저장소에 파일을 넣고 행을 만든다(행이 실패하면 파일도 지운다). */
 export async function uploadMusicSample(input: {
   chapterId: string | null;
   file: File;
@@ -117,27 +122,21 @@ export async function uploadMusicSample(input: {
   }
 }
 
-/** 제목 · 메모 · 칸 옮기기. 올린 사람만 된다(다른 사람이면 DB 가 한 줄도 바꾸지 않는다). */
+/** 제목 · 메모 · 챕터 옮기기 (김정훈 · 황정빈만 — 다른 계정이면 DB 가 한 줄도 바꾸지 않는다). */
 export async function updateMusicSample(
   id: string, patch: Partial<Pick<MusicSample, 'title' | 'note' | 'chapter_id'>>,
 ): Promise<MusicSample> {
   const { data, error } = await supabase.from('music_samples')
     .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select();
   if (error) throw error;
-  if (!data?.length) throw new Error('올린 사람만 고칠 수 있어요.');
+  if (!data?.length) throw new Error('음악을 올리는 계정만 고칠 수 있어요.');
   return data[0] as MusicSample;
-}
-
-/** 채택 · 보류 · 반려 · 검토중 — 회의에서 누구나 바꾼다. */
-export async function setMusicStatus(id: string, status: MusicStatus): Promise<void> {
-  const { error } = await supabase.rpc('set_music_status', { p_sample_id: id, p_status: status });
-  if (error) throw error;
 }
 
 export async function deleteMusicSample(sample: Pick<MusicSample, 'id' | 'path'>): Promise<void> {
   const { data, error } = await supabase.from('music_samples').delete().eq('id', sample.id).select('id');
   if (error) throw error;
-  if (!data?.length) throw new Error('올린 사람만 지울 수 있어요.');
+  if (!data?.length) throw new Error('음악을 올리는 계정만 지울 수 있어요.');
   await removeStored([sample.path]);
 }
 
@@ -162,14 +161,44 @@ export async function musicDownloadUrl(sample: Pick<MusicSample, 'path' | 'file_
   return data.signedUrl;
 }
 
-export async function addMusicComment(row: Pick<MusicComment, 'sample_id' | 'author_name' | 'body' | 'at_sec'>): Promise<MusicComment> {
-  const { data, error } = await supabase.from('music_comments').insert(row).select().single();
+// ---------------------------------------------------------------- 내 플레이리스트
+
+export async function createPlaylist(name: string, sortOrder: number): Promise<MusicPlaylist> {
+  const { data, error } = await supabase.from('music_playlists')
+    .insert({ name, sort_order: sortOrder }).select().single();
   if (error) throw error;
-  return data as MusicComment;
+  return data as MusicPlaylist;
 }
 
-export async function deleteMusicComment(id: string): Promise<void> {
-  const { data, error } = await supabase.from('music_comments').delete().eq('id', id).select('id');
+export async function renamePlaylist(id: string, name: string): Promise<MusicPlaylist> {
+  const { data, error } = await supabase.from('music_playlists')
+    .update({ name, updated_at: new Date().toISOString() }).eq('id', id).select().single();
   if (error) throw error;
-  if (!data?.length) throw new Error('쓴 사람만 지울 수 있어요.');
+  return data as MusicPlaylist;
+}
+
+export async function deletePlaylist(id: string): Promise<void> {
+  const { error } = await supabase.from('music_playlists').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function addToPlaylist(playlistId: string, sampleId: string, sortOrder: number): Promise<MusicPlaylistItem> {
+  const { data, error } = await supabase.from('music_playlist_items')
+    .insert({ playlist_id: playlistId, sample_id: sampleId, sort_order: sortOrder }).select().single();
+  if (error) throw error;
+  return data as MusicPlaylistItem;
+}
+
+export async function removeFromPlaylist(itemId: string): Promise<void> {
+  const { error } = await supabase.from('music_playlist_items').delete().eq('id', itemId);
+  if (error) throw error;
+}
+
+/** 플레이리스트 안 순서를 저장한다 — 바뀐 줄만. */
+export async function reorderPlaylist(changes: { id: string; sort_order: number }[]): Promise<void> {
+  const results = await Promise.all(
+    changes.map((c) => supabase.from('music_playlist_items').update({ sort_order: c.sort_order }).eq('id', c.id)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
 }

@@ -1,8 +1,8 @@
-/* ===================== 챕터 음악 ===================== */
-/* 틀(.chapters · .chapters-side · .chapter-header)은 챕터 구성과 같이 쓴다. 여기는 곡 줄 · 파형 · 재생 막대만. */
+/* ===================== 음악 탭 ===================== */
+/* 틀(.chapters · .chapters-side · .chapter-header)은 챕터 구성과 같이 쓴다. 여기는 곡 표 · 메뉴 · 우측 하단 플레이어. */
 
-/* 재생 막대가 떠 있으면 마지막 곡이 막대에 가리지 않게 아래를 비운다. */
-.music.with-bar { padding-bottom: 140px; }
+/* 플레이어가 떠 있으면 마지막 곡이 플레이어에 가리지 않게 아래를 비운다. */
+.music.with-player { padding-bottom: 170px; }
 
 .music-head-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .music-stats { font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
@@ -15,28 +15,37 @@
 }
 
 /* ---- 왼쪽 목록 ---- */
-.music-side-all { margin-bottom: 8px; border-color: var(--line); font-weight: 700; }
-.music-side-all .chapters-item-name { font-size: 14px; }
-.chapters-item-count.music-count-adopted {
-  color: var(--status-accepted); background: var(--status-accepted-soft);
-  border-color: transparent; font-weight: 700;
+.music-side-label {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 4px 4px 6px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.4px; color: var(--text-faint);
 }
+.music-side-label.with-action { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.music-side-add {
+  border: none; background: none; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+  color: var(--accent); font: inherit; font-size: 12px; font-weight: 700;
+}
+.music-side-add:hover { background: var(--accent-soft); }
+.music-side-all { margin-bottom: 6px; border-color: var(--line); }
+.music-side-all .chapters-item-name { font-weight: 700; }
+.music-side-hint { padding: 6px 6px 2px; font-size: 12px; line-height: 1.5; color: var(--text-faint); }
 
 /* ---- 오른쪽 ---- */
 .music-main { position: relative; }
+.music-view-kind { display: block; margin-bottom: 2px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.4px; color: var(--text-faint); }
 .music-summary { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
-.music-hint { font-size: 12.5px; color: var(--text-faint); margin: -4px 0 14px; }
+.music-view-head .chapter-header-actions .btn { gap: 6px; }
 .music-empty p { margin: 0 0 8px; }
 
-.music-dropzone {
-  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 46px 20px; font: inherit; cursor: pointer; text-align: center;
-  border: 2px dashed var(--border-strong); border-radius: var(--radius-lg);
-  background: var(--panel); color: var(--text-dim);
+.music-upload-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: -4px 0 14px; padding: 8px 12px; border-radius: 12px;
+  background: var(--panel); border: 1px dashed var(--border-strong);
 }
-.music-dropzone b { font-size: 15px; color: var(--text); }
-.music-dropzone span { font-size: 13px; }
-.music-dropzone:hover { border-color: var(--accent); color: var(--text); }
+.music-upload-target { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim); }
+.music-upload-target .field-select { width: auto; padding: 5px 10px; font-size: 13px; }
+.music-upload-hint { font-size: 12px; color: var(--text-faint); }
+
+.music-toolbar-hint { margin: -4px 0 10px; font-size: 12px; color: var(--text-faint); }
 
 .music-drop-overlay {
   position: absolute; inset: -6px; z-index: 5; pointer-events: none;
@@ -45,9 +54,7 @@
   background: color-mix(in srgb, var(--accent-soft) 88%, transparent);
   color: var(--accent); font-size: 15px;
 }
-.music-drop-overlay span {
-  background: var(--surface); border-radius: 999px; padding: 8px 18px; box-shadow: var(--shadow);
-}
+.music-drop-overlay span { background: var(--surface); border-radius: 999px; padding: 8px 18px; box-shadow: var(--shadow); }
 
 /* 올리는 중인 파일 */
 .music-uploads { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -61,77 +68,129 @@
 .music-upload.done .music-upload-state { color: var(--status-accepted); font-weight: 700; }
 .music-upload.error { background: var(--status-rejected-soft); border-color: transparent; }
 .music-upload.error .music-upload-state { color: var(--status-rejected); font-weight: 600; }
-.music-upload .music-link-btn { margin-left: 0; }
-
-/* 상태 묶음 */
-.music-group { margin-bottom: 18px; }
-.music-group-title {
-  display: flex; align-items: center; gap: 6px; margin: 0 0 8px;
-  font-size: 13px; font-weight: 800; color: var(--text-dim);
+.music-link-btn {
+  padding: 0 2px; border: none; background: none; cursor: pointer;
+  color: var(--text-faint); font: inherit; font-size: 12px;
 }
-.music-group-title span { font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 0 8px; background: var(--surface-3); }
-.music-group-title.status-accepted { color: var(--status-accepted); }
-.music-group-title.status-accepted span { background: var(--status-accepted-soft); }
-.music-group-title.status-pending { color: var(--status-pending); }
-.music-group-title.status-pending span { background: var(--status-pending-soft); }
-.music-group-title.status-held { color: var(--status-held); }
-.music-group-title.status-held span { background: var(--status-held-soft); }
-.music-group-title.status-rejected { color: var(--status-rejected); }
-.music-group-title.status-rejected span { background: var(--status-rejected-soft); }
+.music-link-btn:hover { color: var(--danger); text-decoration: underline; }
 
-.music-more {
-  display: block; width: 100%; padding: 10px; font: inherit; font-size: 13px; cursor: pointer;
-  border: 1px dashed var(--border-strong); border-radius: 12px;
-  background: transparent; color: var(--text-dim);
+/* ---- 곡 표 ---- */
+.music-table {
+  --cols: 52px minmax(0, 1fr) minmax(0, 190px) 92px 56px 40px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: visible;
 }
-.music-more:hover { color: var(--text); background: var(--surface-2); }
-
-/* ---- 곡 한 줄 ---- */
-.music-list { display: flex; flex-direction: column; gap: 10px; }
-.music-row {
-  display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start;
-  padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-  scroll-margin: 90px 0 150px;
+.music-table.no-chapter { --cols: 52px minmax(0, 1fr) 92px 56px 40px; }
+.music-table.no-chapter .music-td.chapter { display: none; }
+.music-tr {
+  position: relative; display: grid; grid-template-columns: var(--cols); align-items: center; gap: 8px;
+  min-height: 52px; padding: 4px 10px 4px 6px; border-top: 1px solid var(--line);
+  scroll-margin: 90px 0 190px;
 }
-.music-row.current { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.music-row.compact { padding: 9px 12px; gap: 10px; grid-template-columns: 38px minmax(0, 1fr); }
-
-.music-play {
-  width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
-  display: grid; place-items: center; padding: 0;
-  background: var(--accent-soft); color: var(--accent);
-  transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease;
+.music-tr:first-child { border-top: none; }
+.music-tr:not(.music-thead):hover { background: var(--surface-hover); }
+.music-tr.current { background: var(--accent-soft); }
+.music-tr.current .music-title-btn { color: var(--accent); }
+.music-tr.dragging { opacity: 0.45; }
+.music-tr.drop-before::before, .music-tr.drop-after::after {
+  content: ''; position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 2px; background: var(--accent);
 }
-.music-play:hover { background: var(--accent); color: var(--accent-contrast); }
-.music-play:active { transform: scale(0.95); }
-.music-play.playing { background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-accent); }
-.music-play:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.music-row.compact .music-play { width: 38px; height: 38px; }
+.music-tr.drop-before::before { top: -2px; }
+.music-tr.drop-after::after { bottom: -2px; }
+.music-tr.flash { animation: music-flash 1.6s ease; }
+@keyframes music-flash { 0%, 40% { background: color-mix(in srgb, var(--star) 28%, var(--surface)); } }
 
-.music-row-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.music-row-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
-.music-no { font-size: 12px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
-.music-title {
-  min-width: 0; max-width: 100%; font-size: 14.5px; font-weight: 700;
+.music-thead {
+  min-height: 36px; font-size: 11.5px; font-weight: 700; color: var(--text-faint);
+  border-bottom: 1px solid var(--line); border-radius: 14px 14px 0 0;
+}
+.music-td { min-width: 0; font-size: 13px; color: var(--text-dim); }
+.music-td.no { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.music-thead .music-td.no { justify-content: center; }
+.music-td.title { display: flex; flex-direction: column; gap: 1px; }
+.music-td.chapter { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-td.date, .music-td.dur { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.music-td.dur { text-align: right; }
+.music-td.more { display: flex; justify-content: flex-end; }
+
+.music-drag { display: grid; place-items: center; width: 14px; height: 30px; color: var(--text-faint); cursor: grab; opacity: 0; }
+.music-tr:hover .music-drag { opacity: 1; }
+.music-drag:active { cursor: grabbing; }
+
+.music-row-play {
+  position: relative; display: grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  border: none; border-radius: 50%; background: transparent; color: var(--text-dim); cursor: pointer;
+  font: inherit; font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.music-row-play .music-row-hover { display: none; }
+.music-tr:hover .music-row-play .music-row-idle,
+.music-row-play:focus-visible .music-row-idle { display: none; }
+.music-tr:hover .music-row-play .music-row-hover,
+.music-row-play:focus-visible .music-row-hover { display: grid; place-items: center; }
+.music-row-play:hover { background: var(--accent); color: var(--accent-contrast); }
+.music-row-play.current { color: var(--accent); }
+.music-row-play.current:hover { color: var(--accent-contrast); }
+.music-row-idle { display: grid; place-items: center; }
+.music-num { color: var(--text-faint); }
+
+.music-title-btn {
+  align-self: flex-start; max-width: 100%; padding: 0; border: none; background: none; cursor: pointer; text-align: left;
+  color: var(--text); font: inherit; font-size: 14px; font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.music-meta { font-size: 12px; color: var(--text-faint); }
-.music-note { margin: 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.music-inline-error { font-size: 12.5px; color: var(--danger); }
+.music-title-btn:hover { text-decoration: underline; }
+.music-sub { font-size: 12px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 파형 */
-.music-row-wave { display: flex; align-items: center; gap: 10px; }
-.music-row-time {
-  flex: 0 0 auto; min-width: 86px; text-align: right;
-  font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+/* 재생 중 표시 — 움직이는 막대 셋 */
+.music-eq { display: inline-flex; align-items: flex-end; gap: 2px; width: 14px; height: 13px; }
+.music-eq i { display: block; width: 3px; height: 100%; border-radius: 1px; background: currentColor; transform-origin: bottom; animation: music-eq 0.9s ease-in-out infinite; }
+.music-eq i:nth-child(2) { animation-delay: -0.3s; }
+.music-eq i:nth-child(3) { animation-delay: -0.6s; }
+.music-eq.paused i { animation-play-state: paused; }
+@keyframes music-eq { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .music-eq i { animation: none; transform: scaleY(0.7); } }
+
+/* ⋯ 메뉴 */
+.music-menu { position: relative; display: inline-flex; }
+.music-more-btn {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: none; border-radius: 8px;
+  background: transparent; color: var(--text-faint); cursor: pointer;
 }
-.music-row-time b { color: var(--accent); font-weight: 700; }
+.music-more-btn:hover, .music-more-btn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+.music-menu-pop {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 190px;
+  display: flex; flex-direction: column; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow-lg);
+}
+.music-menu-pop.up { top: auto; bottom: calc(100% + 4px); }
+.music-menu-pop button {
+  padding: 8px 10px; border: none; border-radius: 8px; background: none; cursor: pointer; text-align: left;
+  color: var(--text); font: inherit; font-size: 13px; white-space: nowrap;
+}
+.music-menu-pop button:hover:not(:disabled) { background: var(--surface-2); }
+.music-menu-pop button:disabled { color: var(--text-faint); cursor: default; }
+.music-menu-pop button.divider { margin-top: 5px; border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; padding-top: 10px; }
+.music-menu-pop button.danger { color: var(--danger); }
+
+.music-table .sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* 창 */
+.music-modal-file { margin: 10px 0 0; font-size: 12px; color: var(--text-faint); overflow-wrap: anywhere; }
+.music-save-modal { max-width: 420px; width: min(420px, 94vw); }
+.music-save-track { margin: -8px 0 12px; font-size: 13.5px; color: var(--text-dim); overflow-wrap: anywhere; }
+.music-save-empty { margin: 0 0 12px; font-size: 13px; color: var(--text-faint); }
+.music-save-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 40vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.music-save-list li + li { border-top: 1px solid var(--line); }
+.music-save-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; font-size: 14px; }
+.music-save-row:hover { background: var(--surface-hover); }
+.music-save-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+.music-save-new { display: flex; gap: 8px; }
+.music-save-new .field-input { flex: 1; min-width: 0; }
+
+/* ---- 파형 (우측 하단 플레이어의 재생 위치) ---- */
 .music-wave-wrap { position: relative; flex: 1; min-width: 0; }
-.music-wave {
-  position: relative; height: 44px; cursor: pointer; border-radius: 6px;
-  touch-action: none; user-select: none;
-}
+.music-wave { position: relative; height: 40px; cursor: pointer; border-radius: 6px; touch-action: none; user-select: none; }
 .music-wave-wrap.compact .music-wave { height: 30px; }
 .music-wave:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .music-wave svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
@@ -139,113 +198,13 @@
 .music-wave:hover .music-wave-base path { fill: var(--text-faint); }
 .music-wave.active .music-wave-base path { fill: color-mix(in srgb, var(--accent) 30%, var(--border-strong)); }
 .music-wave-played path { fill: var(--accent); }
-.music-wave-head {
-  position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
-  background: var(--accent); border-radius: 2px; pointer-events: none;
-}
-/* 피드백을 단 지점 — 누르면 그 지점부터 */
+.music-wave-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); border-radius: 2px; pointer-events: none; }
 .music-wave-mark {
   position: absolute; top: -6px; z-index: 1; width: 11px; height: 11px; margin-left: -5.5px; padding: 0;
   border-radius: 50%; border: 2px solid var(--surface); background: var(--star); cursor: pointer;
-  box-shadow: var(--shadow-sm);
-}
-.music-wave-mark:hover { transform: scale(1.25); }
-
-/* 상태 · 도구 */
-.music-row-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
-/* 맵 상세의 채택 · 보류 · 반려 단추(StatusControl)를 줄 안 크기로 */
-.music-row-actions .status-btn { flex: 0 0 auto; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 12.5px; }
-.music-row-tools { display: flex; gap: 2px; flex-wrap: wrap; }
-.music-tool {
-  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px;
-  border: 1px solid transparent; border-radius: 8px; background: transparent; cursor: pointer;
-  color: var(--text-dim); font: inherit; font-size: 12.5px; font-weight: 600;
-}
-.music-tool:hover { background: var(--surface-2); border-color: var(--line); color: var(--text); }
-.music-tool.active { background: var(--accent-soft); color: var(--accent); }
-.music-tool.danger:hover { color: var(--danger); }
-.music-tool-count {
-  min-width: 18px; padding: 0 6px; border-radius: 999px; line-height: 17px; text-align: center;
-  font-size: 11px; background: var(--accent); color: var(--accent-contrast);
 }
 
-/* 피드백 */
-.music-feedback { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--line); }
-.music-feedback-empty { margin: 0; font-size: 12.5px; color: var(--text-faint); }
-.music-feedback-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.music-feedback-list li { padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
-.music-feedback-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
-.music-feedback-when { font-size: 11.5px; color: var(--text-faint); }
-.music-feedback-body { margin: 4px 0 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.music-time-chip {
-  border: none; border-radius: 999px; padding: 1px 8px; cursor: pointer;
-  background: var(--status-held-soft); color: var(--status-held);
-  font: inherit; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
-}
-.music-time-chip::before { content: '▶ '; font-size: 9px; }
-.music-time-chip:hover { filter: brightness(0.96); }
-.music-link-btn {
-  margin-left: auto; padding: 0 2px; border: none; background: none; cursor: pointer;
-  color: var(--text-faint); font: inherit; font-size: 12px;
-}
-.music-link-btn:hover { color: var(--danger); text-decoration: underline; }
-.music-feedback-form { display: flex; flex-direction: column; gap: 6px; }
-.music-feedback-form .field-textarea { min-height: 58px; }
-.music-feedback-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.music-at-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.music-feedback-tip { font-size: 12px; color: var(--text-faint); }
-
-/* ---- 채택곡 모아 듣기 ---- */
-.music-overview { display: flex; flex-direction: column; gap: 14px; }
-.music-ov { padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
-.music-ov-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.music-ov-name { font-size: 15px; font-weight: 800; color: var(--text); text-decoration: none; }
-.music-ov-name:hover { color: var(--accent); text-decoration: underline; }
-.music-ov-counts { font-size: 12px; color: var(--text-faint); }
-.music-ov-empty { margin: 0; padding: 4px 2px; font-size: 13px; color: var(--text-faint); }
-
-/* ---- 아래 재생 막대 ---- */
-.music-bar {
-  position: fixed; left: 50%; bottom: 16px; z-index: 40; transform: translateX(-50%);
-  /* 사이트 전체가 1.05배 확대(body zoom)라 화면 폭도 그만큼 나눈다. */
-  width: min(1060px, calc(100vw / 1.05 - 32px));
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 10px 14px; border-radius: 16px;
-  background: var(--panel-strong); backdrop-filter: blur(14px);
-  border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg);
-}
-.music-bar-info {
-  flex: 1 1 190px; min-width: 0; display: flex; flex-direction: column; gap: 1px;
-  padding: 0; border: none; background: none; cursor: pointer; text-align: left; color: var(--text); font: inherit;
-}
-.music-bar-title { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.music-bar-sub { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.music-bar-info:hover .music-bar-title { color: var(--accent); }
-.music-bar-controls { display: flex; align-items: center; gap: 6px; }
-.music-icon-btn {
-  width: 32px; height: 32px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
-  display: grid; place-items: center; background: transparent; color: var(--text-dim); font-size: 14px;
-}
-.music-icon-btn:hover { background: var(--surface-2); color: var(--text); }
-.music-bar-play {
-  width: 40px; height: 40px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
-  display: grid; place-items: center; background: var(--accent); color: var(--accent-contrast);
-  box-shadow: var(--shadow-accent);
-}
-.music-bar-play:hover { background: var(--accent-hover); }
-.music-bar-seek { flex: 2 1 250px; min-width: 200px; display: flex; align-items: center; gap: 8px; }
-.music-bar-time { min-width: 38px; text-align: center; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .music-range { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
-.music-range:disabled { cursor: default; }
-.music-bar-mode { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
-.music-bar-mode button {
-  padding: 4px 10px; border: none; border-radius: 999px; cursor: pointer;
-  background: transparent; color: var(--text-dim); font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
-}
-.music-bar-mode button:hover:not(.active) { color: var(--text); }
-.music-bar-mode button.active { background: var(--accent); color: var(--accent-contrast); }
-.music-bar-volume { display: flex; align-items: center; gap: 6px; width: 120px; color: var(--text-dim); }
-.music-bar-error { flex-basis: 100%; font-size: 12.5px; color: var(--danger); }
 
 .music-spinner {
   display: inline-block; width: 16px; height: 16px; border-radius: 50%;
@@ -255,15 +214,122 @@
 @keyframes music-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .music-spinner { animation-duration: 2.4s; } }
 
-/* 창 */
-.music-modal-file { margin: 10px 0 0; font-size: 12px; color: var(--text-faint); overflow-wrap: anywhere; }
-.music-modal-note { font-size: 12.5px; color: var(--text-faint); }
+/* ===================== 우측 하단 플레이어 ===================== */
+/* 모든 화면에 뜨므로 작게 둔다. 사이트 전체가 1.05배 확대(body zoom)라 화면 폭도 그만큼 나눈다. */
+.mini-player {
+  position: fixed; right: 16px; bottom: 16px; z-index: 60;
+  width: min(336px, calc(100vw / 1.05 - 24px));
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 8px;
+  background: var(--panel-strong); backdrop-filter: blur(14px);
+  border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: var(--shadow-lg);
+  color: var(--text);
+}
+.mini-player.collapsed {
+  width: auto; max-width: min(300px, calc(100vw / 1.05 - 24px));
+  flex-direction: row; align-items: center; gap: 4px; padding: 5px 6px 5px 5px; border-radius: 999px;
+}
+.mini-top { display: flex; align-items: flex-start; gap: 2px; }
+.mini-title {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 0; border: none; background: none;
+  cursor: pointer; text-align: left; color: inherit; font: inherit;
+}
+.mini-title-text { font-size: 13.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-title:hover .mini-title-text { color: var(--accent); }
+.mini-sub { font-size: 11.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-pill-title {
+  min-width: 0; max-width: 190px; padding: 0 4px; border: none; background: none; cursor: pointer;
+  color: var(--text); font: inherit; font-size: 12.5px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mini-icon {
+  position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: none; border-radius: 50%; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 13px;
+}
+.mini-icon:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.mini-icon:disabled { opacity: 0.35; cursor: default; }
+.mini-icon.on { color: var(--accent); }
+.mini-icon.on::after {
+  content: ''; position: absolute; bottom: 2px; left: 50%; width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 50%; background: currentColor;
+}
+.mini-play {
+  flex: 0 0 auto; display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
+  border: none; border-radius: 50%; background: var(--accent); color: var(--accent-contrast); cursor: pointer;
+  box-shadow: var(--shadow-accent);
+}
+.mini-play:hover { background: var(--accent-hover); }
+.mini-play.small { width: 32px; height: 32px; box-shadow: none; }
+.mini-seek { display: flex; flex-direction: column; gap: 2px; }
+.mini-times { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.mini-source { flex: 1; min-width: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); }
+.mini-controls { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+.mini-sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+.mini-rate-btn {
+  flex: 0 0 auto; min-width: 38px; height: 26px; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--text-dim); cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700;
+}
+.mini-rate-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.mini-rate-btn.on { color: var(--accent); border-color: var(--accent); }
+.mini-error { font-size: 12px; color: var(--danger); }
 
+/* 펼친 창 (대기열 · 배속 · 소리) — 플레이어 바로 위에 뜬다 */
+.mini-pop {
+  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 1;
+  display: flex; flex-direction: column; gap: 2px; padding: 8px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: var(--shadow-lg);
+}
+.mini-pop-title { padding: 2px 6px 6px; font-size: 11.5px; font-weight: 800; color: var(--text-faint); }
+.mini-rate { width: 150px; }
+.mini-rate button {
+  padding: 7px 10px; border: none; border-radius: 8px; background: none; cursor: pointer; text-align: left;
+  color: var(--text); font: inherit; font-size: 13px;
+}
+.mini-rate button:hover { background: var(--surface-2); }
+.mini-rate button.active { color: var(--accent); font-weight: 800; background: var(--accent-soft); }
+.mini-volume { width: 210px; gap: 8px; padding: 10px 12px; }
+.mini-volume .music-range { width: 100%; }
+.mini-text-btn {
+  align-self: flex-start; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--text-dim); cursor: pointer; font: inherit; font-size: 12px;
+}
+.mini-text-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.mini-queue { width: 100%; max-height: min(52vh, 420px); padding: 8px 6px; }
+.mini-queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 2px 8px 8px; font-size: 13px; }
+.mini-queue-head span { font-size: 11.5px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-queue ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1; }
+.mini-queue li { display: flex; align-items: center; border-radius: 8px; }
+.mini-queue li:hover { background: var(--surface-2); }
+.mini-queue li.current { background: var(--accent-soft); }
+.mini-queue li.played .mini-queue-title { color: var(--text-faint); }
+.mini-queue-track {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 7px 8px; border: none; background: none;
+  cursor: pointer; text-align: left; color: var(--text); font: inherit; font-size: 13px;
+}
+.mini-queue-no { flex: 0 0 22px; text-align: center; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.mini-queue li.current .mini-queue-no, .mini-queue li.current .mini-queue-title { color: var(--accent); font-weight: 700; }
+.mini-queue-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-queue-time { font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.mini-queue-remove {
+  flex: 0 0 auto; width: 26px; height: 26px; margin-right: 4px; border: none; border-radius: 50%; background: none;
+  color: var(--text-faint); cursor: pointer; font-size: 12px; opacity: 0;
+}
+.mini-queue li:hover .mini-queue-remove, .mini-queue-remove:focus-visible { opacity: 1; }
+.mini-queue-remove:hover { background: var(--surface); color: var(--danger); }
+
+/* 다크 모드: 공용 단추 · 입력칸은 흰 바탕이라 밝은 글씨가 묻힌다(사이트 전체의 오래된 문제). 이 탭과 창에서만 맞춘다. */
+[data-theme="dark"] .music .btn:not(.btn-primary),
+[data-theme="dark"] .music .field-input,
+[data-theme="dark"] .music .field-select,
+[data-theme="dark"] .music-save-modal .btn:not(.btn-primary),
+[data-theme="dark"] .music-save-modal .field-input { background: var(--surface-2); border-color: var(--border-strong); color: var(--text); }
+[data-theme="dark"] .music .btn-danger { color: var(--danger); }
+
+@media (max-width: 860px) {
+  .music-table { --cols: 44px minmax(0, 1fr) 56px 36px; }
+  .music-table.no-chapter { --cols: 44px minmax(0, 1fr) 56px 36px; }
+  .music-td.chapter, .music-td.date { display: none; }
+}
 @media (max-width: 640px) {
-  .music-row { grid-template-columns: 38px minmax(0, 1fr); gap: 10px; padding: 10px; }
-  .music-play { width: 38px; height: 38px; }
-  .music-row-time { min-width: 0; }
-  .music-bar { bottom: 8px; gap: 8px; padding: 8px 10px; }
-  .music-bar-volume { display: none; }
-  .music.with-bar { padding-bottom: 190px; }
+  .mini-player { right: 8px; bottom: 8px; }
+  .music.with-player { padding-bottom: 190px; }
 }

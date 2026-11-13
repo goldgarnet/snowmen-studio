@@ -14,7 +14,7 @@ import ConfirmModal from '../common/ConfirmModal';
 import MapDetail from '../hub/MapDetail';
 import * as nav from '../../lib/nav';
 import { chapterUrl, isChapterListUrl, splitUrl } from '../../lib/hubState';
-import { musicUrl } from '../../lib/music';
+import { chapterMusicUrl } from '../../lib/music';
 import './chapters.css';
 
 // 스테이지 번호는 저장되지 않고 위치에서 파생된다: "챕터번호-순번" (예: 2-1).
@@ -413,7 +413,7 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
   const openChapterMusic = (e: MouseEvent<HTMLAnchorElement>, chapterId: string) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    nav.go(musicUrl(chapterId));
+    nav.go(chapterMusicUrl(chapterId));
   };
 
   // map_id → 배치된 스테이지 번호 (전 챕터). 챕터 번호와 챕터 안 순서로 계산.
@@ -610,7 +610,7 @@ export default function ChapterComposer({ onStartMapRecording }: ChapterComposer
                   {selected.description && <p className="chapter-desc">{selected.description}</p>}
                 </div>
                 <div className="chapter-header-actions">
-                  <a className="btn" href={musicUrl(selected.id)} onClick={(e) => openChapterMusic(e, selected.id)}>음악 듣기</a>
+                  <a className="btn" href={chapterMusicUrl(selected.id)} onClick={(e) => openChapterMusic(e, selected.id)}>음악 듣기</a>
                   <button className="btn" onClick={() => setEditingChapter(selected)}>챕터 수정</button>
                   <button className="btn btn-danger" onClick={() => setDeleteChapterTarget(selected)}>챕터 삭제</button>
                   <button className="btn btn-primary" onClick={() => setPickerMode('add')}>+ 스테이지 추가</button>

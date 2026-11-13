@@ -14,6 +14,7 @@ import SolvedBoard from './components/solved/SolvedBoard';
 import TestWorkbench from './components/test/TestWorkbench';
 import DesignWorkspace from './components/design/DesignWorkspace';
 import MusicBoard from './components/music/MusicBoard';
+import MusicProvider from './components/music/MusicProvider';
 import { getMap } from './api/maps';
 import type { MapRow } from './api/types';
 import * as nav from './lib/nav';
@@ -329,12 +330,15 @@ export default function App() {
     <GuardContext.Provider value={{ register, attempt }}>
       {/* '풀었어요' 체크 상태 — 허브 카드와 맵 상세가 같이 본다. 계정이 바뀌면 새로 읽는다. */}
       <ClearsProvider key={profile.id} userId={profile.id}>
-        <div className="app">
-          <TopNav tab={tab} setTab={guardedSetTab} userName={profile.name} actions={profile.id === SIGNUP_APPROVER_ID ? <SignupRequests /> : null} onLogout={() => attempt(signOut)} />
-          <main className="app-main">
-            {content}
-          </main>
-        </div>
+        {/* 음악 재생기 — 탭을 옮겨도 이어서 들리고, 우측 하단에 작은 플레이어를 띄운다. */}
+        <MusicProvider>
+          <div className="app">
+            <TopNav tab={tab} setTab={guardedSetTab} userName={profile.name} actions={profile.id === SIGNUP_APPROVER_ID ? <SignupRequests /> : null} onLogout={() => attempt(signOut)} />
+            <main className="app-main">
+              {content}
+            </main>
+          </div>
+        </MusicProvider>
       </ClearsProvider>
 
       {pending && (
