@@ -4,6 +4,7 @@ import { createLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
 import GameLevelExport from '../common/GameLevelExport';
 import { useAuth } from '../../context/AuthContext';
+import { useClears } from '../../context/ClearsContext';
 import { useGuard, StudioApi } from '../../context/GuardContext';
 import {
   listMyMaps, insertMap, updateMap, deleteMap, registeredToISO, isoToDateStr,
@@ -78,6 +79,7 @@ export default function MapStudio({
   editMapId, playing, onEditRouteChange, onPlayRouteChange, onExitPlay,
 }: MapStudioProps) {
   const { profile } = useAuth();
+  const { reloadMap: reloadClears } = useClears();
   const guard = useGuard();
   const [maps, setMaps] = useState<MapRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -409,9 +411,13 @@ export default function MapStudio({
     const code = encodeLevelCode(level);
     const codeChanged = !!editId && code !== savedCode;
     if (editId) {
-      const row = await updateMap(editId, { title: editTitle || null, code });
+      const row = await updateMap(editId, {
+        ...(editTitle !== savedTitle && { title: editTitle || null }),
+        ...(codeChanged && { code }),
+      });
       // Layout changed → every recorded 풀이 no longer solves it. Wipe them.
       if (codeChanged) await deleteSolutionsForMap(editId);
+      void reloadClears(editId);
       setEditRow(row);
       setSavedCode(code);
       setSavedTitle(editTitle);
@@ -617,9 +623,12 @@ export default function MapStudio({
       const codeChanged = p.code !== savedCode;
       const updated = await updateMap(editId, {
         title: p.title, author_name: p.author_name, comment: p.comment,
-        author_difficulty: p.difficulty, code: p.code, created_at, published: true, published_at,
+        author_difficulty: p.difficulty, published: true, published_at,
+        ...(codeChanged && { code: p.code }),
+        ...((!editRow || p.registered_on !== isoToDateStr(editRow.created_at)) && { created_at }),
       });
       if (codeChanged) await deleteSolutionsForMap(editId);
+      void reloadClears(editId);
       setPublished(true); setEditRow(updated);
     } else {
       const row = await insertMap({

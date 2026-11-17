@@ -138,8 +138,10 @@ export default function MapDetail({
   const saveEdit = async (p: UploadPayload) => {
     const updated = await updateMap(map.id, {
       title: p.title, author_name: p.author_name, comment: p.comment,
-      author_difficulty: p.difficulty, created_at: registeredToISO(p.registered_on),
+      author_difficulty: p.difficulty,
+      ...(p.registered_on !== isoToDateStr(map.created_at) && { created_at: registeredToISO(p.registered_on) }),
     });
+    void reloadClears(updated.id);
     setMap(updated); onChanged(updated); patchCachedMap(updated); setEditing(false);
     showFlash('수정되었습니다');
   };
