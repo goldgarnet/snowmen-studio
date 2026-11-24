@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState } from '../../types';
 import { gameStateFromCode } from '../../utils/game';
+import { applyMapSkins } from '../../lib/mapSkins';
 import Simulator from './Simulator';
 import './PlayView.css';
 
@@ -17,7 +18,11 @@ interface PlayViewProps {
 // for test-playing a map you're editing and for playing a hub map. The Simulator
 // renders the single top bar (back + title on the left, turn/controls on the right).
 export default function PlayView({ code, title, backLabel = '나가기', onClose }: PlayViewProps) {
-  const [gameState, setGameState] = useState<GameState | null>(() => gameStateFromCode(code));
+  const [gameState, setGameState] = useState<GameState | null>(() => {
+    const state = gameStateFromCode(code);
+    if (state) applyMapSkins(state.level, code);
+    return state;
+  });
 
   return (
     <div className="play-view">

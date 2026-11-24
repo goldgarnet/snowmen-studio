@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect, useId, useLayoutEffect, type TouchEvent as ReactTouchEvent } from 'react';
-import { GameObject, Level, Tile } from '../../types';
+import { BodySkin, GameObject, Level, Tile } from '../../types';
 import { buttonMass, isButtonPressed, isPressedBy, yellowWallsSolid } from '../../engine/helpers';
 import './Grid.css';
 
@@ -950,12 +950,106 @@ function LaserBeamOverlay({ level, cellSize, yellowSolid }: {
   );
 }
 
+// Sweat drops on a melting player (also drawn over a character skin).
+function MeltingSweat() {
+  return (
+    <g className="melting-sweat">
+      <ellipse cx="7" cy="20" rx="2.5" ry="4" fill="#3cc8ff" opacity="0.9" />
+      <circle cx="7" cy="16.5" r="2" fill="#3cc8ff" opacity="0.9" />
+      <ellipse cx="33" cy="22" rx="2.5" ry="4" fill="#3cc8ff" opacity="0.8" />
+      <circle cx="33" cy="18.5" r="2" fill="#3cc8ff" opacity="0.8" />
+      <ellipse cx="15" cy="33" rx="2" ry="3" fill="#3cc8ff" opacity="0.7" />
+      <circle cx="15" cy="30.5" r="1.6" fill="#3cc8ff" opacity="0.7" />
+    </g>
+  );
+}
+
+const SKIN_LINE = '#5b4a42';
+const SKIN_BASE: Record<BodySkin, string> = { chiikawa: '#ffffff', hachiware: '#ffffff', usagi: '#fff1b3' };
+const HACHIWARE_BLUE = '#8cb2e0';
+
+// A map's character skin (lib/mapSkins.ts) drawn in place of the player or a snowman, at the
+// same size scale. The body holding the soul has open eyes; an empty body (a snowman) has
+// closed eyes and the snowman glow.
+function SkinnedBody({ skin, size, isPlayer, isMelting, snowmanFilterId, px }: {
+  skin: BodySkin; size: number; isPlayer: boolean; isMelting: boolean; snowmanFilterId: string; px: number;
+}) {
+  const scale = size === 1 ? 0.65 : size === 2 ? 0.85 : 1;
+  const base = SKIN_BASE[skin];
+  const line = { stroke: SKIN_LINE, strokeWidth: 1.1, strokeLinejoin: 'round' as const };
+  const ears = skin === 'chiikawa' ? (
+    <>
+      <circle cx="12.6" cy="10.4" r="3.2" fill={base} {...line} />
+      <circle cx="27.4" cy="10.4" r="3.2" fill={base} {...line} />
+    </>
+  ) : skin === 'hachiware' ? (
+    <>
+      <polygon points="10.6,13.6 12.2,4.6 18.4,9.4" fill={HACHIWARE_BLUE} {...line} />
+      <polygon points="29.4,13.6 27.8,4.6 21.6,9.4" fill={HACHIWARE_BLUE} {...line} />
+    </>
+  ) : (
+    <>
+      <ellipse cx="15.4" cy="4.6" rx="2.7" ry="7" transform="rotate(-8 15.4 4.6)" fill={base} {...line} />
+      <ellipse cx="24.6" cy="4.6" rx="2.7" ry="7" transform="rotate(8 24.6 4.6)" fill={base} {...line} />
+    </>
+  );
+  const eyes = isPlayer ? (
+    <>
+      <circle cx="16" cy="18.6" r="1.5" fill="#2b2522" />
+      <circle cx="24" cy="18.6" r="1.5" fill="#2b2522" />
+      <circle cx="16.5" cy="18.1" r="0.5" fill="#fff" />
+      <circle cx="24.5" cy="18.1" r="0.5" fill="#fff" />
+    </>
+  ) : (
+    <>
+      <path d="M14.4 18.4 q1.6 1.3 3.2 0" fill="none" stroke="#2b2522" strokeWidth="1" strokeLinecap="round" />
+      <path d="M22.4 18.4 q1.6 1.3 3.2 0" fill="none" stroke="#2b2522" strokeWidth="1" strokeLinecap="round" />
+    </>
+  );
+  const mouth = skin === 'usagi'
+    ? <path d="M18.8 21.7 h2.4 q0 2.5 -1.2 2.5 q-1.2 0 -1.2 -2.5 z" fill="#7a3434" />
+    : <path d="M18.6 22 q0.7 0.9 1.4 0 q0.7 0.9 1.4 0" fill="none" stroke="#2b2522" strokeWidth="0.8" strokeLinecap="round" />;
+  return (
+    <svg width={px} height={px} viewBox="0 0 40 40" overflow="visible">
+      <g transform={`translate(20,22) scale(${scale}) translate(-20,-22)`}
+        filter={isPlayer ? undefined : `url(#${snowmanFilterId})`}>
+        <ellipse cx="12.6" cy="30.4" rx="2.3" ry="1.7" fill={base} {...line} />
+        <ellipse cx="27.4" cy="30.4" rx="2.3" ry="1.7" fill={base} {...line} />
+        <ellipse cx="20" cy="31.6" rx="7.6" ry="6" fill={base} {...line} />
+        {ears}
+        <circle cx="20" cy="18" r="10.5" fill={base} {...line} />
+        {skin === 'hachiware' && (
+          <>
+            {/* Blue top of the head, parted by a white ∧ above the eyes. */}
+            <path d="M9.55 16.5 A10.5 10.5 0 0 1 30.45 16.5 Z" fill={HACHIWARE_BLUE} />
+            <polygon points="20,11.2 13.6,16.6 26.4,16.6" fill={base} />
+            <circle cx="20" cy="18" r="10.5" fill="none" {...line} />
+          </>
+        )}
+        <ellipse cx="13.2" cy="21.4" rx="2" ry="1.2" fill="#ffadc0" opacity="0.9" />
+        <ellipse cx="26.8" cy="21.4" rx="2" ry="1.2" fill="#ffadc0" opacity="0.9" />
+        {eyes}
+        {mouth}
+      </g>
+      {isPlayer && isMelting && <MeltingSweat />}
+      <text x="34" y="10" textAnchor="middle" fontSize="9" fontWeight="bold"
+        fill={isPlayer ? '#345' : '#46a'} opacity="0.8">{size}</text>
+    </svg>
+  );
+}
+
 function renderObject(
-  obj: { type: string; size: number; isMelting: boolean; treeHeight?: number; triangleCorner?: string },
+  obj: { type: string; size: number; isMelting: boolean; treeHeight?: number; triangleCorner?: string; skin?: BodySkin },
   cellSize: number,
   snowmanFilterId: string,
 ) {
   const s = cellSize * 0.85;
+  if (obj.skin && (obj.type === 'player' || obj.type === 'snowman')) {
+    return (
+      <SkinnedBody skin={obj.skin} size={obj.size} isPlayer={obj.type === 'player'}
+        isMelting={obj.isMelting} snowmanFilterId={snowmanFilterId} px={s} />
+    );
+  }
   switch (obj.type) {
     case 'player': {
       const scale = obj.size === 1 ? 0.65 : obj.size === 2 ? 0.85 : 1;
@@ -969,14 +1063,7 @@ function renderObject(
             <line x1="14" y1="20" x2="8" y2="16" stroke="#654" strokeWidth="1.5" strokeLinecap="round" />
             <line x1="26" y1="20" x2="32" y2="16" stroke="#654" strokeWidth="1.5" strokeLinecap="round" />
           </g>
-          {obj.isMelting && <g className="melting-sweat">
-            <ellipse cx="7" cy="20" rx="2.5" ry="4" fill="#3cc8ff" opacity="0.9" />
-            <circle cx="7" cy="16.5" r="2" fill="#3cc8ff" opacity="0.9" />
-            <ellipse cx="33" cy="22" rx="2.5" ry="4" fill="#3cc8ff" opacity="0.8" />
-            <circle cx="33" cy="18.5" r="2" fill="#3cc8ff" opacity="0.8" />
-            <ellipse cx="15" cy="33" rx="2" ry="3" fill="#3cc8ff" opacity="0.7" />
-            <circle cx="15" cy="30.5" r="1.6" fill="#3cc8ff" opacity="0.7" />
-          </g>}
+          {obj.isMelting && <MeltingSweat />}
           <text x="34" y="10" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#345" opacity="0.8">{obj.size}</text>
         </svg>
       );

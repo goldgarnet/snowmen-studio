@@ -63,6 +63,8 @@ export interface Tile {
   triangle?: TriangleCorner;
 }
 
+export type BodySkin = 'hachiware' | 'chiikawa' | 'usagi';
+
 export interface GameObject {
   type: ObjectType;
   size: number;
@@ -77,6 +79,9 @@ export interface GameObject {
   // Runtime-only stable identity for matching an object across tick snapshots during
   // editor-play animation. It is ignored by the level-code serializer.
   motionId?: string;
+  // Presentation only: a character drawn for this body on one map (lib/mapSkins.ts). The
+  // engine never reads it; soul moves copy it to the rebuilt body. Not serialized.
+  skin?: BodySkin;
 }
 
 export interface Position {

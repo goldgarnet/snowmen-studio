@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { gameStateFromCode } from '../../utils/game';
+import { applyMapSkins } from '../../lib/mapSkins';
 import {
   advanceSolutionState,
   createSolutionState,
@@ -26,7 +27,7 @@ const DEFAULT_SPEED = 6;
 // Replays a stored 풀이 step by step. Derived steps are cached, so normal forward
 // playback executes only the next move instead of replaying every preceding move.
 export default function SolutionPlayer({ code, solution, title, onClose }: SolutionPlayerProps) {
-  const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
+  const startLevel = useMemo(() => applyMapSkins(gameStateFromCode(code)?.level ?? null, code), [code]);
   const moves = useMemo<SolutionMove[] | null>(() => decodeSolution(solution), [solution]);
   const total = moves?.length ?? 0;
 

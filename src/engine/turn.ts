@@ -534,6 +534,8 @@ function soulTransfer(level: Level, playerPos: { row: number; col: number }): vo
     // target body had so re-entering it doesn't reset its melt progress.
     isMelting: snowman.isMelting,
     createdAt: 0,
+    // So is a map's character skin (presentation only, lib/mapSkins.ts).
+    ...(snowman.skin ? { skin: snowman.skin } : {}),
   };
 }
 
@@ -551,12 +553,14 @@ function doSoulSwap(level: Level, fromPos: Position, targetPos: Position, ts: nu
     size: body.size,
     isMelting: body.isMelting,
     createdAt: ts,
+    ...(body.skin ? { skin: body.skin } : {}),
   };
   level.objects[targetPos.row][targetPos.col] = {
     type: 'player',
     size: target.size,
     isMelting: target.isMelting,
     createdAt: 0,
+    ...(target.skin ? { skin: target.skin } : {}),
   };
 }
 

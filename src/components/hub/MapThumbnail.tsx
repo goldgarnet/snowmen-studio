@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { decodeLevelCode } from '../../utils/levelCode';
+import { applyMapSkins } from '../../lib/mapSkins';
 import Grid from '../editor/Grid';
 import './MapThumbnail.css';
 
@@ -14,7 +15,7 @@ interface MapThumbnailProps {
 // image is derived on the fly from the map code that already exists, so this adds
 // no server storage — only a little client-side render work.
 export default function MapThumbnail({ code, className }: MapThumbnailProps) {
-  const level = useMemo(() => decodeLevelCode(code), [code]);
+  const level = useMemo(() => applyMapSkins(decodeLevelCode(code), code), [code]);
 
   if (!level || level.width === 0 || level.height === 0) {
     return (

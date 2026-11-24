@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { gameStateFromCode } from '../../utils/game';
+import { applyMapSkins } from '../../lib/mapSkins';
 import { readPlayCheckpoint, writePlayCheckpoint, type PlayCheckpoint } from '../../utils/playCheckpoint';
 import {
   advanceSolutionState,
@@ -68,7 +69,7 @@ export default function SolutionRecorder({
   code, mapId, playerId, initial, onSave, onCancel, title, backLabel = '상세로',
 }: SolutionRecorderProps) {
   const heading = title ?? '플레이';
-  const startLevel = useMemo(() => gameStateFromCode(code)?.level ?? null, [code]);
+  const startLevel = useMemo(() => applyMapSkins(gameStateFromCode(code)?.level ?? null, code), [code]);
   const initialMoves = useMemo(() => (initial ? decodeSolution(initial) : null) ?? [], [initial]);
   const initialRecording = useMemo<RecordingState>(() => (
     startLevel ? createRecordingState(startLevel, initialMoves) : { moves: initialMoves, states: [] }
