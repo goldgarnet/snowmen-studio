@@ -416,9 +416,7 @@ function endOfTurn(level: Level): void {
   if (level.hasShadow) recalcShadows(level);
   else clearShadows(level);
 
-  // 2. Melting / growing. A flake on a warm cell in the sun melts first and cools the
-  //    cell, so an object resting on that flake never melts on it (B-015).
-  meltSunlitFlakes(level);
+  // 2. Melting / growing
   const sizesBefore = snapshotSizes(level);
   processMelting(level);
 
@@ -453,22 +451,6 @@ function sizesChanged(level: Level, snap: (number | null)[][]): boolean {
     }
   }
   return false;
-}
-
-/**
- * A flake lies on a warm cell only when a snowball was crushed there (force.ts). It keeps
- * while the cell is shaded; once the cell is in the sun at the end of a turn it melts and
- * the cell turns cold (team decision 2026-11-13). Eating it first cools the cell as usual.
- */
-function meltSunlitFlakes(level: Level): void {
-  for (const row of level.tiles) {
-    for (const tile of row) {
-      if (tile.isFlake && tile.isWarm && !tile.isShade && !tile.isVoid) {
-        tile.isFlake = false;
-        tile.isWarm = false;
-      }
-    }
-  }
 }
 
 function processMelting(level: Level): void {

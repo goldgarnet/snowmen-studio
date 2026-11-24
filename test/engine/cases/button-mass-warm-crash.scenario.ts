@@ -17,10 +17,10 @@ import {
  *  1. Every green/yellow button shows a required mass (1–3). A button counts as pressed
  *     only while the object on it has mass ≥ that value. Mass = size: snowball 1·2,
  *     snowman/player 1·2·3, block/laser 1. Buttons from older maps need 1.
- *  2. A size-1 snowball crushed on a WARM cell: in the sun no flake is left and the cell
- *     turns cold. In shade the flake stays and the cell stays warm; when the shade leaves
- *     (end of a turn), the uneaten flake melts and the cell turns cold (정은후 2026-11-13).
- *     On a cold cell it still leaves a flake.
+ *  2. A size-1 snowball crushed on a WARM cell leaves no flake and the cell turns cold at
+ *     once, in sun or shade. On a cold cell it still leaves a flake. (Until the user's
+ *     decision of 2026-11-25 a shaded warm cell kept the flake and stayed warm until the
+ *     shade left — 정은후 2026-11-13.)
  */
 
 function codeLevel(setup: (level: Level) => void): Level {
@@ -44,11 +44,15 @@ export const scenarios: ScenarioDefinition[] = [
       expect(!result.level.tiles[0][1].isFlake, 'no flake may be made on a warm cell');
       expect(!result.level.tiles[0][1].isWarm, 'the warm cell must turn cold');
       expectObject(result.level, 0, 0, 'player', 1);
+      for (const frame of result.turns[0].frames) {
+        const cell = frame.level.tiles[0][1];
+        expect(!cell.isFlake && !cell.isWarm, `${frame.phase}: the cell is cold from the crush on, never a flake`);
+      }
     },
   }),
   defineScenario({
     // Sun from the left, so a block casts its shadow one cell to the right.
-    name: 'crushed on a shaded warm cell: the flake stays and the cell stays warm',
+    name: 'crushed on a shaded warm cell: no flake either, the cell turns cold at once',
     width: 3,
     height: 2,
     setup: (board) => {
@@ -60,12 +64,16 @@ export const scenarios: ScenarioDefinition[] = [
       const cell = result.level.tiles[0][1];
       expectEmpty(result.level, 0, 1);
       expect(!!cell.isShade, 'the cell is in the block\'s shadow');
-      expect(!!cell.isFlake, 'in shade the snowball becomes a flake');
-      expect(!!cell.isWarm, 'the shaded cell stays warm');
+      expect(!cell.isFlake, 'a shaded warm cell gets no flake');
+      expect(!cell.isWarm, 'the shaded warm cell turns cold');
+      for (const frame of result.turns[0].frames) {
+        const shown = frame.level.tiles[0][1];
+        expect(!shown.isFlake && !shown.isWarm, `${frame.phase}: the cell is cold from the crush on, never a flake`);
+      }
     },
   }),
   defineScenario({
-    name: 'when the shade leaves, the uneaten flake on a warm cell melts and the cell turns cold',
+    name: 'after a crush in shade the cell stays cold with no flake when the shade leaves',
     width: 3,
     height: 3,
     setup: (board) => {
@@ -81,17 +89,17 @@ export const scenarios: ScenarioDefinition[] = [
     verify: (result) => {
       for (const i of [0, 1]) {
         const cell = result.turns[i].level.tiles[1][1];
-        expect(!!cell.isFlake && !!cell.isWarm, `turn ${i + 1}: still shaded, so the warm flake stays`);
+        expect(!!cell.isShade, `turn ${i + 1}: the cell is still in the block's shadow`);
+        expect(!cell.isFlake && !cell.isWarm, `turn ${i + 1}: shaded, yet already a cold cell with no flake`);
       }
       expectObject(result.level, 0, 0, 'block', 1);
       const cell = result.level.tiles[1][1];
       expect(!cell.isShade, 'the shade has left the cell');
-      expect(!cell.isFlake, 'the flake melted');
-      expect(!cell.isWarm, 'the cell turned cold');
+      expect(!cell.isFlake && !cell.isWarm, 'still a cold cell with no flake');
     },
   }),
   defineScenario({
-    name: 'eating the warm flake while it is shaded grows the eater and cools the cell',
+    name: 'nothing to eat after a crush in shade: the player stepping onto the cell keeps its size',
     width: 3,
     height: 3,
     setup: (board) => {
@@ -104,15 +112,15 @@ export const scenarios: ScenarioDefinition[] = [
     },
     actions: ['up', 'up'],
     verify: (result) => {
-      expectObject(result.level, 1, 1, 'player', 2);
+      expectObject(result.level, 1, 1, 'player', 1);
       const cell = result.level.tiles[1][1];
-      expect(!cell.isFlake && !cell.isWarm, 'the flake was eaten and the cell is cold');
+      expect(!cell.isFlake && !cell.isWarm, 'the cell is cold with no flake');
     },
   }),
   defineScenario({
-    // B-015: nothing melts on a flake. The shading ball melts down in the sun, the shade
-    // leaves, the flake melts first and cools the cell — the P3 standing on it stays whole.
-    name: 'an object standing on the warm flake does not melt when the shade leaves',
+    // The size-2 ball shades the crushed cell, then melts down in the sun and the shade
+    // leaves; the crushed cell was already cold, so the P3 standing on it never melts.
+    name: 'an object standing on the cell cooled by a crush in shade does not melt when the shade leaves',
     width: 3,
     height: 3,
     setup: (board) => {
@@ -126,10 +134,9 @@ export const scenarios: ScenarioDefinition[] = [
     actions: ['up', 'up', 'wait'],
     verify: (result) => {
       const afterCrush = result.turns[0].level.tiles[1][1];
-      expect(!!afterCrush.isFlake && !!afterCrush.isWarm, 'shaded by the size-2 ball: the warm flake stays');
+      expect(!afterCrush.isFlake && !afterCrush.isWarm, 'the crush left a cold cell with no flake');
+      expect(!result.level.tiles[1][1].isShade, 'the shade has left the cell');
       expectObject(result.level, 1, 1, 'player', 3);
-      const cell = result.level.tiles[1][1];
-      expect(!cell.isFlake && !cell.isWarm, 'the flake melted and cooled the cell');
       expect(!result.level.objects[1][1]!.isMelting, 'the P3 on it never started melting');
     },
   }),

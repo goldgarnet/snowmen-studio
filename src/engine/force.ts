@@ -17,13 +17,13 @@ export function applyForce(
   if (!obj || obj.type !== 'snowball') return false;
 
   if (obj.size === 1) {
-    // Crashes: disappears and leaves a flake. A warm cell stays warm under it (team
-    // decision 2026-11-13): the flake survives only while the cell is shaded — at the end
-    // of the turn a flake on a warm cell in the sun melts and the cell turns cold
-    // (meltSunlitFlakes in turn.ts). With no shade that is the same turn, so the snowball
-    // just leaves a cold cell.
+    // Crashes: disappears. A cold cell gets a flake. A warm cell gets no flake and turns
+    // cold at once, in sun or shade (team decision 2026-11-13; until the user's decision
+    // of 2026-11-25 a shaded warm cell kept a flake and stayed warm until the shade left).
+    const tile = level.tiles[pos.row][pos.col];
     level.objects[pos.row][pos.col] = null;
-    level.tiles[pos.row][pos.col].isFlake = true;
+    if (tile.isWarm) tile.isWarm = false;
+    else tile.isFlake = true;
     return true;
   }
 
