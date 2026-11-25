@@ -1,3 +1,4 @@
+import { cycleSoul, executeSkipTurn } from '../../../src/engine/turn';
 import {
   defineScenario,
   expect,
@@ -14,7 +15,10 @@ import {
  * The soul moves last — after melting — whether the player died or stays on an armed soul
  * footplate. Until then the soul moved the moment the body died (before the melt) and the
  * footplate fired before the melt. A soul that lands on a snowman standing on an active
- * goal still clears in that same turn (Q-14).
+ * goal still clears in that same turn (Q-14), judged on the board after the melt — a green
+ * button whose cover melted away that turn no longer counts.
+ * A snowman that shrank in the sun is already melting: a soul that enters it shrinks on the
+ * next sunlit turn, with no one-turn sweat warning (user decision 2026-11-25).
  */
 export const scenarios: ScenarioDefinition[] = [
   defineScenario({
@@ -69,6 +73,70 @@ export const scenarios: ScenarioDefinition[] = [
     verify: (result) => {
       expectStatus(result, 'cleared');
       expectObject(result.level, 0, 3, 'player', 2);
+    },
+  }),
+  defineScenario({
+    // The green button is held by a size-1 ball in the sun. The player dies in the beam; the
+    // ball melts away; only then does the soul reach the snowman on the goal — locked now.
+    name: 'a soul that reaches the goal snowman after the melt does not clear on a button whose cover melted away',
+    width: 4,
+    height: 2,
+    setup: (board) => {
+      board
+        .player(0, 0, 2)
+        .laser(1, 1, 'up')
+        .snowman(0, 3, 2).tile(0, 3, { isGoal: true })
+        .snowball(1, 3, 1).tile(1, 3, { isKeyTile: true, isWarm: true });
+    },
+    actions: ['right'],
+    verify: (result) => {
+      expectStatus(result, 'playing');
+      expectObject(result.level, 0, 3, 'player', 2);
+      expectEmpty(result.level, 1, 3);
+    },
+  }),
+  defineScenario({
+    // The player walks into the hole; the size-3 snowman in the sun melts to 2 as a snowman,
+    // then takes the soul. It is already melting, so the next sunlit turn shrinks it at once.
+    name: 'a soul that enters a snowman melting in the sun keeps melting: no sweat warning first',
+    width: 5,
+    height: 2,
+    setup: (board) => {
+      board
+        .player(0, 0, 2)
+        .tile(0, 1, { isHole: true })
+        .snowman(0, 3, 3).tile(0, 3, { isWarm: true })
+        .tile(1, 4, { isGoal: true });
+    },
+    actions: ['right', 'wait', 'wait'],
+    verify: (result) => {
+      const first = result.turns[0].level.objects[0][3];
+      expect(first?.type === 'player' && first.size === 2 && first.isMelting === true, 'the new body is size 2 and already melting');
+      const second = result.turns[1].level.objects[0][3];
+      expect(second?.type === 'player' && second.size === 1, 'the next sunlit turn shrinks it at once');
+      expectStatus(result, 'gameover');
+      expectEmpty(result.level, 0, 3);
+    },
+  }),
+  defineScenario({
+    // Before any turn the sunlit snowman has not melted yet, so it is not melting: the soul
+    // that enters it with M gets the usual sweat warning first.
+    name: 'at the start a sunlit snowman has not melted yet: M into it gives the sweat warning first',
+    width: 4,
+    height: 1,
+    setup: (board) => {
+      board.level.soulSwapEnabled = true;
+      board.player(0, 0, 2).snowman(0, 2, 2).tile(0, 2, { isWarm: true }).tile(0, 3, { isGoal: true });
+    },
+    actions: [],
+    verify: (result) => {
+      const cycled = cycleSoul(result.level)!;
+      expectObject(cycled, 0, 2, 'player', 2);
+      expect(!cycled.objects[0][2]!.isMelting, 'not melting yet');
+      const after = executeSkipTurn(cycled).level;
+      expectObject(after, 0, 2, 'player', 2);
+      expect(after.objects[0][2]!.isMelting === true, 'the first sunlit turn only warns');
+      expectObject(executeSkipTurn(after).level, 0, 2, 'player', 1);
     },
   }),
   defineScenario({

@@ -496,6 +496,10 @@ function processMelting(level: Level): void {
       } else if (obj.type === 'snowball' || obj.type === 'snowman') {
         if (isHeated) {
           obj.size -= 1;
+          // A snowman shrinking in the sun is already melting (user decision 2026-11-25):
+          // a soul that enters it carries on melting on the next sunlit turn, without the
+          // one-turn sweat warning a fresh body gets. (A snowball never takes a soul.)
+          if (obj.type === 'snowman') obj.isMelting = true;
         } else if (obj.isMelting) {
           // "Melting" belongs to the body. A vacated body that rests out of the sun cools
           // down just as a possessed one would, so when the soul returns it gets the

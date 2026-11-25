@@ -111,7 +111,7 @@ export const scenarios: ScenarioDefinition[] = [
       );
       expectStatus(result, 'playing');
       expectObject(result.level, 0, 3, 'player', 1);
-      expect(result.level.objects[0][3]?.isMelting === false, 'it melted as a snowman, so no melting warning carries over');
+      expect(result.level.objects[0][3]?.isMelting === true, 'it melted in the sun as a snowman, so the new body is already melting (2026-11-25)');
       expectObject(result.level, 0, 5, 'snowman', 1);
     },
   }),
