@@ -99,6 +99,9 @@ export interface Level {
   // Transient (not saved in the map code): the soul-swap footplate the player is
   // "armed" on. The swap fires one turn after stepping on, if still on that plate.
   soulSwapArmedAt?: Position | null;
+  // Transient, within one turn only: where the player died. The soul moves last in the
+  // turn, after melting and the death re-check (judgment order, user 2026-11-25).
+  soulDiedAt?: Position | null;
   tiles: Tile[][];
   objects: (GameObject | null)[][];
 }

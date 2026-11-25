@@ -11,11 +11,11 @@ import {
 
 /**
  * Rule change (2026-10-26): the player may walk into a hole. The move is a valid turn;
- * the body falls in at the turn's hole step (soul footplate → hole → laser → end of
- * turn), so the soul jumps to the nearest snowman (distance → age → reading order)
- * BEFORE the end-of-turn melt, exactly as when a crack crumbles beneath it or a laser
- * hits it. No snowman left → game over. The hole stays a hole: it does not cool, and it
- * swallows the next body that walks in too.
+ * the body falls in at the turn's hole step (hole → laser → end of turn), and the soul
+ * moves to the nearest snowman (distance → age → reading order) as the LAST step of the
+ * turn, after melting and the death re-check (judgment order, user 2026-11-25 — until
+ * then the soul moved at the hole step, before the melt). No snowman left → game over.
+ * The hole stays a hole: it does not cool, and it swallows the next body that walks in.
  */
 export const scenarios: ScenarioDefinition[] = [
   defineScenario({
@@ -86,7 +86,7 @@ export const scenarios: ScenarioDefinition[] = [
     },
   }),
   defineScenario({
-    name: 'a sunlit snowman that takes the soul of a player who walked into a hole only starts melting that turn',
+    name: 'a sunlit snowman that takes the soul of a player who walked into a hole melts as a snowman first; the soul moves last',
     width: 6,
     height: 1,
     setup: (board) => {
@@ -95,7 +95,7 @@ export const scenarios: ScenarioDefinition[] = [
         .tile(0, 1, { isHole: true })
         .snowman(0, 3, 2)
         .tile(0, 3, { isWarm: true })
-        // Control: a snowman left in the same sun shrinks at once.
+        // Control: a snowman left in the same sun shrinks the same way.
         .snowman(0, 5, 2)
         .tile(0, 5, { isWarm: true });
     },
@@ -105,12 +105,13 @@ export const scenarios: ScenarioDefinition[] = [
         result,
         0,
         'resolved',
-        (level) => level.objects[0][3]?.type === 'player' && level.objects[0][3]?.size === 2,
-        'the soul must move at the hole step, before the end-of-turn melt',
+        (level) => !level.objects.some(row => row.some(o => o?.type === 'player'))
+          && level.objects[0][3]?.type === 'snowman' && level.objects[0][3]?.size === 2,
+        'at the hole step the body is gone and the soul has not moved yet',
       );
       expectStatus(result, 'playing');
-      expectObject(result.level, 0, 3, 'player', 2);
-      expect(result.level.objects[0][3]?.isMelting === true, 'the new body must only get the melting warning this turn');
+      expectObject(result.level, 0, 3, 'player', 1);
+      expect(result.level.objects[0][3]?.isMelting === false, 'it melted as a snowman, so no melting warning carries over');
       expectObject(result.level, 0, 5, 'snowman', 1);
     },
   }),

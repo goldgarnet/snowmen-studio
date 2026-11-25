@@ -123,18 +123,24 @@ function applyLaserCheck(level: Level): void {
  */
 export function applyTurnZero(level: Level): GameStatus {
   applyLaserCheck(level);
+  // The editor refuses a player start inside a beam; if one still dies here the soul
+  // moves at once, as the last step of this turn-zero judgment.
+  if (level.soulDiedAt) {
+    const diedAt = level.soulDiedAt;
+    level.soulDiedAt = null;
+    soulTransfer(level, diedAt);
+  }
   if (!findPlayer(level)) return 'gameover';
   return isLevelCleared(level) ? 'cleared' : 'playing';
 }
 
 /**
- * Remove every object at `positions` as ONE simultaneous event. All non-player bodies
- * are cleared first, and only then does a removed player look for a new body, so the
- * soul can never land in a snowman that is dying in the same event and then hop on from
- * there (the target is always the surviving snowman nearest the player).
+ * Remove every object at `positions` as ONE simultaneous event. A removed player only
+ * marks where it died (`soulDiedAt`): the soul looks for a new body last in the turn,
+ * after melting and the death re-check (moveSoul — judgment order, user 2026-11-25), so
+ * it always lands in a snowman that survived the whole turn.
  */
 function removeObjects(level: Level, positions: Position[], coolTiles: boolean): void {
-  const deadPlayers: Position[] = [];
   const seen = new Set<string>();
   for (const pos of positions) {
     const key = `${pos.row},${pos.col}`;
@@ -144,9 +150,26 @@ function removeObjects(level: Level, positions: Position[], coolTiles: boolean):
     if (!obj) continue;
     if (coolTiles) level.tiles[pos.row][pos.col].isWarm = false;
     level.objects[pos.row][pos.col] = null;
-    if (obj.type === 'player') deadPlayers.push(pos);
+    if (obj.type === 'player') level.soulDiedAt = { row: pos.row, col: pos.col };
   }
-  for (const pos of deadPlayers) soulTransfer(level, pos);
+}
+
+/**
+ * 영혼 이동 처리 — the last step of the turn (judgment order, user 2026-11-25). A player
+ * that died this turn (hole, laser, melt) hands its soul to the nearest surviving
+ * snowman; game over if none is left. Otherwise a soul footplate the player has stayed
+ * on since last turn fires. Both happen after melting, so a body that receives the soul
+ * has already melted this turn as a snowman.
+ */
+function moveSoul(level: Level, ts: number): void {
+  const diedAt = level.soulDiedAt;
+  if (diedAt) {
+    level.soulDiedAt = null;
+    if (!findPlayer(level)) soulTransfer(level, diedAt);
+    return;
+  }
+  const pos = findPlayer(level);
+  if (pos) resolveSoulFootplate(level, pos, ts);
 }
 
 // === v5 mechanics: holes, cracked tiles ===
@@ -154,8 +177,9 @@ function removeObjects(level: Level, positions: Position[], coolTiles: boolean):
 // decision. Old map codes still carry their bits; the decoder drops them.)
 
 // Any object resting on a hole falls in and disappears. A player that ends up on a
-// hole (it walked in, or a cracked tile crumbled beneath it) dies — the soul jumps to
-// the nearest snowman, mirroring a full melt. The hole stays, and its tile does not cool.
+// hole (it walked in, or a cracked tile crumbled beneath it) dies — its soul moves to the
+// nearest snowman at the end of the turn (moveSoul). The hole stays, and its tile does
+// not cool.
 export function applyHoles(level: Level): void {
   const fallen: Position[] = [];
   for (let r = 0; r < level.height; r++) {
@@ -224,10 +248,10 @@ export function executeSkipTurn(level: Level): TurnResult {
   if (!playerPos) return { level: newLevel, status: 'gameover', frames };
 
   const turnCount = nextAge();
-  // Waiting on an armed soul footplate fires the delayed transfer.
-  resolveSoulFootplate(newLevel, playerPos, turnCount);
+  // 즉사 판정(레이저 — 대기는 구멍 위로 가지 않는다). 대기 턴에는 클리어 판정이 녹기 뒤 한 번뿐이다(B-016).
+  // Waiting on an armed soul footplate fires the delayed transfer at the end of the turn (moveSoul).
   applyLaserCheck(newLevel);
-  endOfTurn(newLevel);
+  endOfTurn(newLevel, turnCount);
 
   const finalPlayerPos = findPlayer(newLevel);
   if (!finalPlayerPos) {
@@ -314,36 +338,25 @@ function finishMovedTurn(
   // object movement with one API, rather than treating player/forced moves specially.
   if (!hadRollingTick) recordFrame(frames, newLevel, 'movement', motionIds);
 
-  const newPlayerPos = findPlayer(newLevel);
-
-  // Soul-swap footplate (delayed one turn — see resolveSoulFootplate).
-  if (newPlayerPos) {
-    resolveSoulFootplate(newLevel, newPlayerPos, turnCount);
-  }
-
-  // Holes swallow anything that landed on one — a player who walked into a hole too,
-  // so its soul moves on before the end-of-turn melt.
+  // 1. 즉사 판정 — holes swallow anything that landed on one (a player who walked into a
+  //    hole too), then lasers fire. A player killed here hands on its soul only at the end
+  //    of the turn (moveSoul).
   applyHoles(newLevel);
-
-  // Lasers fire before the goal is evaluated: stepping onto a goal that sits on a
-  // laser beam kills the player (death takes priority over clearing).
   applyLaserCheck(newLevel);
   if (!hadRollingTick) recordFrame(frames, newLevel, 'resolved', motionIds);
 
+  // 2. 클리어 판정 — a living player on an active goal clears (death takes priority).
   const afterLaserPos = findPlayer(newLevel);
-  if (!afterLaserPos) {
-    recordFrame(frames, newLevel, 'turn-end', motionIds);
-    return { level: newLevel, status: 'gameover', frames };
+  if (afterLaserPos) {
+    const goalTile = newLevel.tiles[afterLaserPos.row][afterLaserPos.col];
+    if (goalTile.isGoal && isGoalActive(newLevel)) {
+      recordFrame(frames, newLevel, 'turn-end', motionIds);
+      return { level: newLevel, status: 'cleared', frames };
+    }
   }
 
-  // Survived the laser and standing on an active goal → cleared.
-  const goalTile = newLevel.tiles[afterLaserPos.row][afterLaserPos.col];
-  if (goalTile.isGoal && isGoalActive(newLevel)) {
-    recordFrame(frames, newLevel, 'turn-end', motionIds);
-    return { level: newLevel, status: 'cleared', frames };
-  }
-
-  endOfTurn(newLevel);
+  // 3.–6. the rest of the turn, ending with the soul (endOfTurn).
+  endOfTurn(newLevel, turnCount);
 
   const finalPlayerPos = findPlayer(newLevel);
   if (!finalPlayerPos) {
@@ -395,35 +408,39 @@ function ensureMotionIds(level: Level, turnIds: Set<string>): void {
   }
 }
 
-function endOfTurn(level: Level): void {
-  // 0. Cracked tiles armed on a previous turn crumble into holes now; anything still
-  //    sitting on them falls in (a player there dies → soul transfer).
+/**
+ * The rest of a turn after the moves, in the judgment order the user set on 2026-11-25:
+ * 즉사 판정 (holes → lasers) → 클리어 판정 → 이동 판정 (every object until it stops, with
+ * buttons and cracks) → 따뜻한 칸 판정 → 즉사 재판정 → 영혼 이동 처리. The first three ran
+ * during the move (each rolling tick and right after it); this finishes the cracks, then
+ * melts, re-checks deaths and moves the soul. The caller judges the goal once more after it.
+ */
+function endOfTurn(level: Level, ts: number): void {
+  // 3. 이동 판정, cracks: tiles armed on a previous turn crumble into holes now, and tiles
+  //    covered now — or rolled across this turn (Q-16 c) — arm for the next turn. Arming
+  //    comes before melting: a small snowball that ends the turn on a warm crack melts
+  //    away below, and the crack must still remember it was stepped on.
   convertArmedCracks(level);
-  applyHoles(level);
-  // A block that fell in may have been holding back a beam. It hits now, before the goal
-  // is judged and before the soul that moved here is treated as safe (B-017, team
-  // decision 2026-11-05). Everything else on a beam was removed earlier in the turn.
-  applyLaserCheck(level);
-
-  // 0b. Arm cracks covered right now (crumble next turn). This must run BEFORE melting:
-  //     a small snowball that ends the turn on a warm crack melts away below, and the
-  //     crack must still remember it was stepped on.
   armCoveredCracks(level);
 
-  // 1. Recalculate shadows (if shadow mechanic is enabled). With shadows off there is no
-  //    shade at all — not even inside a closed partition, which is drawn as a border and
-  //    lets the sun in (B-11 decision, 9/29), nor in a tunnel cell (B-007).
+  // 4. 따뜻한 칸 판정. Shadows first (only with the shadow mechanic on — with shadows off
+  //    there is no shade at all, not even inside a closed partition (B-11, 9/29) or a
+  //    tunnel cell (B-007)), then melting; a body worn down to 0 disappears and its tile
+  //    becomes cool.
   if (level.hasShadow) recalcShadows(level);
   else clearShadows(level);
-
-  // 2. Melting / growing
   const sizesBefore = snapshotSizes(level);
   processMelting(level);
-
-  // 3. Check for dead objects (size 0): only on full disappearance, mark tile cool
   processDeadObjects(level);
 
-  // 4. If sizes changed, recalc shadows
+  // 5. 즉사 재판정 — holes, then lasers: anything on a crack that crumbled this turn falls
+  //    in, and a beam that the falling block was holding back hits now (B-017).
+  applyHoles(level);
+  applyLaserCheck(level);
+
+  // 6. 영혼 이동 처리 — a dead player's soul, or a soul footplate (moveSoul).
+  moveSoul(level, ts);
+
   if (level.hasShadow && sizesChanged(level, sizesBefore)) {
     recalcShadows(level);
   }
