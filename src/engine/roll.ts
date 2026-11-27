@@ -1,6 +1,6 @@
 import { Level, GameObject, Position, Direction, TriangleCorner } from '../types';
 import { isInBounds } from '../utils/level';
-import { getNextPos, canMoveTo, yellowWallsSolid } from './helpers';
+import { getNextPos, canMoveTo, redWallsSolid, yellowWallsSolid } from './helpers';
 
 // Triangle-mirror reflection — a snowball that has ENTERED a triangle cell turns 90°
 // based on the direction it came in (like a light ray hitting the diagonal mirror).
@@ -376,7 +376,10 @@ const BEAM_DIRS: Record<string, [number, number]> = {
 const BEAM_BLOCKERS = new Set(['wall', 'block', 'tree', 'laser']);
 
 function killBallsOnBeam(level: Level, balls: Ball[]): void {
+  // Both wall states are taken before any ball is hit: a hit sets a ball's size to 0 in
+  // the loop below, which would otherwise release a button halfway through.
   const yellowSolid = yellowWallsSolid(level);
+  const redSolid = redWallsSolid(level);
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const laser = level.objects[r][c];
@@ -392,7 +395,7 @@ function killBallsOnBeam(level: Level, balls: Ball[]): void {
           if (balls.some(ball => ball.pos.row === cr && ball.pos.col === cc)) hit.size = 0;
           break;
         }
-        if (yellowSolid && level.tiles[cr][cc].isYellowWall) break;
+        if ((yellowSolid && level.tiles[cr][cc].isYellowWall) || (redSolid && level.tiles[cr][cc].isRedWall)) break;
         cr += dr;
         cc += dc;
       }

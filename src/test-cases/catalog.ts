@@ -101,6 +101,40 @@ function buildClosingWall(): Level {
   return level;
 }
 
+// P0-40: one of two red buttons is enough (OR) — every red wall of the column opens.
+function buildRedOr(): Level {
+  const level = basicLevel(8, 5);
+  object(level, 2, 1, 'player', 1);
+  tile(level, 2, 2, { isRedButton: true });
+  tile(level, 4, 6, { isRedButton: true });
+  for (const row of [1, 2, 3]) tile(level, row, 4, { isRedWall: true });
+  return level;
+}
+
+// P0-41: the rear ball rolls off the only red button into the red wall and is sealed in.
+function buildRedClosingWall(): Level {
+  const level = basicLevel(8, 5);
+  const row = 2;
+  object(level, row, 0, 'player', 3);
+  object(level, row, 1, 'snowball', 1);
+  object(level, row, 2, 'snowball', 1);
+  tile(level, row, 2, { isRedButton: true });
+  tile(level, row, 3, { isRedWall: true });
+  return level;
+}
+
+// P0-42: the ball passing the only red button opens the wall for that one tick.
+function buildRedLaser(): Level {
+  const level = basicLevel(8, 7);
+  const row = 3;
+  object(level, row, 1, 'player', 2);
+  object(level, row, 2, 'snowball', 1);
+  tile(level, row, 4, { isRedButton: true });
+  tile(level, 4, 2, { isRedWall: true });
+  object(level, 5, 2, 'laser', 1, { laserDirection: 'up' });
+  return level;
+}
+
 function buildImpact(): Level {
   const level = basicLevel(12, 5);
   const row = 2;
@@ -304,6 +338,9 @@ const visualCases: Record<string, Pick<TestCaseDefinition, 'actions' | 'build'>>
   'P0-37': { actions: ['right'], build: buildSplitShoveIntoTriangle },
   'P0-38': { actions: ['down'], build: buildPressOnTriangleLeg },
   'P0-39': { actions: ['up'], build: buildBendAtB },
+  'P0-40': { actions: ['right'], build: buildRedOr },
+  'P0-41': { actions: ['right'], build: buildRedClosingWall },
+  'P0-42': { actions: ['right'], build: buildRedLaser },
   'P1-15a': { actions: ['right'], build: buildSplitShoveMotionIds },
   'P1-15b': { actions: ['up', 'right', 'right', 'right', 'down', 'left', 'left', 'down'], build: buildSoulBodyMotionIds },
   'P2-06': { actions: ['right', 'right', 'right', 'right', 'right', 'right'], build: buildLegacyPortalOrangeCode },
@@ -328,12 +365,12 @@ const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
   ['P0-16', 'P0', '질량', '굴림 중 눈송이로 질량 변화', '열차 구성원이 굴러가며 눈송이를 먹는다.', '다음 충돌 전에 총질량이 갱신된다.'],
   ['P0-17', 'P0', '그룹 분리', '열차의 뒤쪽 큰 공만 아치에 막힘', '모든 구성원의 경계를 독립적으로 검사한다.', '막힌 prefix는 정지하고 앞 suffix는 계속 굴러간다.'],
   ['P0-18', 'P0', '그룹 분리', '닫히는 노란 벽 안의 공 정지', '벽 뒤·벽 안·벽 앞 공을 구분한다.', '갇힌 공과 뒤쪽은 정지하고 앞 suffix만 진행한다.'],
-  ['P0-19', 'P0', '색상 벽', '닫힌 색상 벽은 받침이 됨', '닫힌 벽은 이동 차단과 단단한 받침으로 동작한다.', '압착·분할과 일반 굴림이 같은 판정을 사용한다.'],
+  ['P0-19', 'P0', '색상 벽', '닫힌 색상 벽은 받침이 됨', '닫힌 노란·빨간 벽은 이동 차단과 단단한 받침으로 동작한다.', '압착·분할과 일반 굴림이 같은 판정을 사용한다.'],
   ['P0-20', 'P0', '지형', '터널·삼각 벽·void 혼합 분리', '한 열차가 서로 다른 지형을 동시에 만난다.', '공별 canCross와 점유 전파로 suffix가 결정된다.'],
   ['P0-21', 'P0', '버튼·레이저', '마지막 노란 버튼과 레이저의 같은 tick', '눈덩이가 마지막 버튼을 누른다.', 'movement에서 버튼을 누르고 resolved에서 레이저가 반응한다.'],
   ['P0-22', 'P0', '버튼·레이저', '게임 오버 후 활성 굴림 유지', '레이저로 플레이어가 먼저 사망한다.', 'gameover여도 이미 시작된 눈덩이는 계속 굴러간다.'],
   ['P0-23', 'P0', '특수 타일', '굴림 중 구멍', '눈덩이가 구멍으로 들어간다.', '눈덩이가 제거되고 굴림이 종료된다.'],
-  ['P0-25', 'P0', '레이저', '레이저 차단 순서', '벽·삼각 벽·닫힌 노란 벽이 빔 경로에 있다.', '빔은 삼각 벽을 통과하고 일반 벽과 닫힌 노란 벽에서 멈춘다.'],
+  ['P0-25', 'P0', '레이저', '레이저 차단 순서', '벽·삼각 벽·닫힌 노란·빨간 벽이 빔 경로에 있다.', '빔은 삼각 벽을 통과하고 일반 벽과 닫힌 노란·빨간 벽에서 멈춘다.'],
   ['P0-26', 'P0', '질량', '삼각 칸 공의 꺾인 묶음', '굴러온 공이 삼각 칸에 멈춘 공을 친다. 그 공의 거울 출구에 다른 공이 붙어 있다.', '두 공을 한 묶음(질량 2)으로 센다. 질량 1이 맞으면 굴러온 공만 멈춘다. 출구가 비면 예전처럼 거울 방향으로 나가고, 질량이 같으면 묶음 전체가 나간다(B-001). 더 무거우면 함께 굴러간다(P0-32).'],
   ['P0-27', 'P0', '클리어', '굴림 중 초록 버튼 클리어', '플레이어가 목표에 선 채 민 공이 마지막 초록 버튼으로 굴러간다.', '공이 버튼 위에 있는 tick에 목표가 열리므로 그 턴은 클리어이고, 판이 거기서 멈춰 공은 버튼 위에 남는다. 같은 tick의 사망이 먼저다(B-002, B-027).'],
   ['P0-28', 'P0', '합성', '아치 너머 눈사람 — 플레이어도 통과', 'P2가 높이 1 아치 너머의 눈덩이 쪽으로 크기 1 눈덩이를 민다.', '플레이어가 A→B 경계를 지날 수 없으므로 합성하지 않는다(무반응). P1은 같은 자리에서 합성한다(B-003).'],
@@ -345,6 +382,11 @@ const rawCases: Omit<TestCaseDefinition, 'actions' | 'build'>[] = [
   ['P0-37', 'P0', '직접 힘', '쪼개진 반쪽이 삼각 칸 공을 밀기', '크기 2 눈덩이가 쪼개지며 위쪽 반쪽이 ◥ 칸의 B1을 막힌 변 쪽으로 민다.', 'B1이 거울을 따라 꺾여 한 칸 밀리고 반쪽이 ◥ 칸에 들어간다. 꺾인 칸이 막혔으면 반쪽은 가운데에 남는다. 상자·레이저는 꺾이지 않는다(B-028).'],
   ['P0-38', 'P0', '직접 힘', '삼각 벽 다리에 눌린 눈덩이', 'P2가 삼각 칸 밖의 B2를 ◤의 막힌 위 변 쪽으로 아래로 민다.', '다리는 벽이다. B2는 좌우로 쪼개지고 B1은 부서진다. 다리에 받쳐 눈사람 만들기도 그대로다(B-028 둘째 규칙 되돌림, 2026-11-09).'],
   ['P0-39', 'P0', '직접 힘', '줄의 뒤 공이 삼각 칸에서 꺾임', 'P2가 B1을 밀고, 그 앞 B1은 ◤ 칸 안에 있어 막힌 위 변 쪽으로 밀린다.', '줄이 ◤에서 꺾여 앞 공은 오른쪽 초록 버튼으로, 뒤 공은 ◤ 칸으로 간다. 눈사람이 생기지 않는다. 꺾인 출구가 막히면 ◤ 칸에 눈사람(2026-11-09).'],
+  ['P0-40', 'P0', '빨간 버튼', '빨간 버튼 OR', '플레이어가 빨간 버튼 둘 중 하나에 올라선다(2026-11-28 사용자 요청).', '빨간 버튼이 하나라도 요구 질량 이상으로 눌리면 모든 빨간 벽이 열린다. 둘 다 눌려도 열려 있고, 아무것도 안 눌렸거나 빨간 버튼이 없으면 닫혀 있다. 노란 벽(전부 눌러야 열림)·목표와는 무관하다.'],
+  ['P0-41', 'P0', '빨간 버튼', '닫히는 빨간 벽 안의 공 정지 (OR 대조)', '두 공 열차의 뒤 공이 유일한 빨간 버튼 위에서 출발해 바로 옆 빨간 벽 칸으로 굴러간다.', '앞 공이 벽을 지나가는 동안은 뒤 공이 버튼을 눌러 열려 있다. 뒤 공이 벽 칸에 들어간 tick에 닫혀 그 공은 갇히고 앞 공은 계속 굴러간다. 다른 빨간 버튼이 눌려 있으면 둘 다 지나간다(노랑은 반대로 닫힌다).'],
+  ['P0-42', 'P0', '빨간 버튼', '빨간 버튼을 스친 tick의 레이저', '굴러가는 공이 유일한 빨간 버튼 위를 지나간다. 빨간 벽 너머의 레이저가 플레이어를 겨눈다.', '공이 버튼 위에 있는 그 tick에만 벽이 열려 빔이 플레이어를 맞힌다(사망이 클리어보다 먼저). 공은 계속 굴러가고 벽은 다시 닫힌다. 레이저 판정 한 번은 스냅숏 하나다.'],
+  ['P0-43', 'P0', '에디터', '같은 칸 배치 규칙', '버튼(초록·노랑·빨강)과 균열·구멍, 빨간 버튼과 빨간 벽, 노란 벽과 빨간 벽, 빨간 버튼과 다른 버튼, 삼각 칸과 노랑·빨강을 한 칸에 놓으려 한다.', '브러시가 거부하고 안내문을 띄운다. 다른 색 버튼을 벽 칸 안에 두는 것과 기존 초록+노랑 칸은 된다. 이미 겹친 맵(버튼+균열 3개)과 빨간 버튼 없는 빨간 벽은 열 때 칸을 짚어 경고만 하고, 코드·저장은 그대로다.'],
+  ['P0-44', 'P0', '저장', '빨간 칸의 맵 코드', '빨간 벽과 질량 1·2·3 빨간 버튼이 노랑·초록·void·삼각·질량 버튼과 섞인 판을 저장한다.', '질량 구간 뒤의 RED 구간(0b1100)에 칸 번호와 코드(0 벽, 1~3 버튼 질량)로 들어가 그대로 돌아온다. 빨강이 없는 맵의 코드는 한 글자도 바뀌지 않는다.'],
   ['P1-02', 'P1', '턴 종료', '금 간 타일의 두 턴 붕괴', '균열 타일은 다음 턴 종료에 붕괴한다.', '막힌 입력은 붕괴를 진행시키지 않는다.'],
   ['P1-03', 'P1', '턴 종료', '햇빛과 녹기', '따뜻한 타일에서 오브젝트가 녹는다.', '플레이어와 눈덩이의 녹기 시점이 다르다.'],
   ['P1-04', 'P1', '턴 종료', '그림자 갱신', '이동·성장·벽 상태 변경 후 그림자를 계산한다.', 'void에는 그림자를 만들지 않는다.'],

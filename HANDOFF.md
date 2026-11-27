@@ -123,13 +123,15 @@ snowmen-studio/
 엔진은 결정적(deterministic)이어야 함(풀이 재생 재현성). `turn.ts`가 `Date.now()` 대신 **단조 증가 카운터 `nextAge()`** 사용(팀원 커밋). 이걸 깨지 말 것.
 
 ### 타일 vs 오브젝트
-- **타일 속성**: 따뜻/차가움, 눈꽃(`isFlake`), 골(`isGoal`), 가로/세로 터널(`isRowArch`/`isColumnArch`+`isShade`), 영혼 발판(`isSoulSwap`), **초록 버튼**(`isKeyTile`), **노랑 버튼/노랑 벽**(`isYellowButton`/`isYellowWall`), 삼각 벽(`triangle`), 엣지 아치(`edgeArchTop`/`edgeArchLeft`, 높이1/2).
+- **타일 속성**: 따뜻/차가움, 눈꽃(`isFlake`), 골(`isGoal`), 가로/세로 터널(`isRowArch`/`isColumnArch`+`isShade`), 영혼 발판(`isSoulSwap`), **초록 버튼**(`isKeyTile`), **노랑 버튼/노랑 벽**(`isYellowButton`/`isYellowWall`), **빨간 버튼/빨간 벽**(`isRedButton`/`isRedWall`, 2026-11-28), 버튼 요구 질량(`buttonMass`, 1~3), 구멍(`isHole`), 균열(`isCrack`), 삼각 벽(`triangle`), 엣지 아치(`edgeArchTop`/`edgeArchLeft`, 높이1/2).
 - **오브젝트**: 플레이어(possessed 눈사람), 눈덩이(snowball, size1/2), 눈사람(snowman, size1/2/3), 벽, 블록, 나무(tree=벽 취급), 레이저.
 - 에디터 UI에선 "타일" 섹션에 지형(따뜻/차가움/아치1/아치2/골)만, 나머지는 전부 "오브젝트" 섹션에 **시각적으로만** 재편(내부 로직 불변).
 
 ### 초록/노랑 버튼·벽
 - **초록 버튼**(`isKeyTile`, 구 "열쇠 발판"): 눌리지 않은(오브젝트 안 올라간) 초록 버튼이 하나라도 있으면 골이 잠김(`isGoalActive`).
 - **노랑 벽**: 모든 노랑 버튼이 눌리면(오브젝트가 올라감) 사라짐(토글). `yellowWallsSolid(level)`(engine/helpers) = 버튼 없거나 하나라도 안 눌림 → solid. **solid 노랑벽은 이동/힘(isBacked)/레이저(turn·roll)/굴림 + push의 `getObjAt`에서 전부 벽처럼 취급**.
+- **빨간 벽**(2026-11-28): 빨간 버튼이 **하나라도** 눌리면 모든 빨간 벽이 열림(OR). `redWallsSolid(level)` = 눌린 빨간 버튼이 없음(버튼이 없어도) → solid. 닫힌 빨간 벽도 노랑과 똑같이 이동/힘/레이저/굴림/그림자/`getObjAt`에서 벽. 칸이 닫혔는지는 `isClosedWallTile(level, tile)` 하나로, 레이저·그림자 한 번은 `closedWallJudge(level)`로 판정(색마다 한 번, 그 색 벽 칸을 만날 때만 버튼을 훑음). 노랑·목표와 무관. 맵 코드는 질량 구간 뒤 RED 구간(ENGINE_ALGORITHMS 19절).
+- **같은 칸 배치 규칙**(에디터, 2026-11-28): 버튼(초록·노랑·빨강)은 균열·구멍과 한 칸에 못 놓는다. 빨간 버튼+빨간 벽, 노랑 벽+빨간 벽, 빨간 버튼+다른 버튼, 삼각+노랑·빨강도 거부. 표는 `src/utils/tileRules.ts`(`brushRefusal`·`cellConflicts`). 이미 겹친 맵은 엔진·디코더 그대로, 에디터가 열 때 칸을 짚어 경고만(ENGINE_ALGORITHMS 11.4절).
 
 ### 영혼 발판 = 한 턴 지연
 - `level.soulSwapArmedAt`(transient, 코드에 저장 안 함, cloneLevel이 전파). 밟은 턴엔 무장만, 다음 턴 같은 발판이면 이동. `resolveSoulFootplate`(turn.ts).
@@ -137,7 +139,7 @@ snowmen-studio/
 - soulSwapEnabled 맵은 플레이 화면 상단에 `.sim-notice` 안내 배너.
 
 ### 레이저
-- `applyLaserCheck`(turn.ts)가 매 턴 빔을 쏴 비-blocker 오브젝트를 죽임(size=0 → processDeadObjects 제거). blocker = wall/block/tree/laser. 닫힌 노란 벽에서 빔이 정지하고 삼각 벽은 통과한다.
+- `applyLaserCheck`(turn.ts)가 매 턴 빔을 쏴 비-blocker 오브젝트를 죽임(size=0 → processDeadObjects 제거). blocker = wall/block/tree/laser. 닫힌 노란·빨간 벽에서 빔이 정지하고 삼각 벽은 통과한다.
 - **executeTurn은 레이저를 골 클리어보다 먼저** 판정 → 레이저 빔 위 골에 진입하면 클리어 아니라 사망(gameover) 우선.
   **[낡음]** 지금은 사망 → 영혼 이동이고, 옮겨 간 몸이 활성 목표 위면 클리어다(Q-14). 남은 눈사람이 없을 때만 gameover.
 - **굴러가는 눈덩이 + 레이저**: `roll.ts`의 `killIfOnBeam`이 각 굴림 스텝 후 검사. `rollSnowball`/`rollGroup` **시작 시점에도** 검사(push 헬퍼가 시작 칸으로 한 칸 먼저 옮기므로, 그 칸이 빔이면 즉시 소멸).
@@ -149,7 +151,7 @@ snowmen-studio/
 - 핵심: 눈덩이가 **못 움직이게 backing되면 FORCED** — size1→눈꽃, size2→쪼개짐(→ size1 눈사람). **블록도 벽처럼 backing** 함.
   **[낡음]** size1 눈사람은 쪼개진 두 반쪽이 양쪽 다 막힌 **직접** 힘에서만 생긴다. 간접 힘은 눈사람을 만들지 않고, 쪼개진 반쪽이 이웃을 밀어낼 때도 눈사람은 없다(Q-02, ENGINE_ALGORITHMS 7.2·8절).
 - "밀기 파워 사다리": 플레이어1은 블록도 못 밈(눈덩이 부서짐), 플레이어2는 단일블록(뒤 빈칸)은 밀지만 막힌 블록엔 눈덩이 부서짐, 플레이어3은 size1 3연쇄까지 밀어냄.
-- 눈덩이 vs 노랑벽(solid): `getObjAt`가 노랑벽을 벽으로 취급 → 눈덩이 눌러 눈꽃.
+- 눈덩이 vs 노랑·빨간 벽(solid): `getObjAt`가 닫힌 벽을 벽으로 취급 → 눈덩이 눌러 눈꽃.
 
 ### 굴림(roll.ts) — 눈꽃 흡수
 - 그룹으로 굴러갈 때 **모든 눈덩이**가 각자 밟은 칸의 눈꽃을 흡수해야 함(`handleRollFlakeAll`). 선두만 처리하면 뒤 눈덩이가 눈꽃을 건너뜀(이번 세션 수정). 단일 눈덩이는 size2까지만.

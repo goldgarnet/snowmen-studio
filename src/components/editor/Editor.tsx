@@ -1,8 +1,9 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Level, SunDirection, Tile, GameObject, TriangleCorner } from '../../types';
 import { createDefaultTile, createLevel, cloneLevel, deserializeLevel } from '../../utils/level';
 import { encodeLevelCode, decodeLevelCode } from '../../utils/levelCode';
 import { isPlayerInLaserBeam } from '../../engine/turn';
+import { brushRefusal, cellConflicts } from '../../utils/tileRules';
 import Grid from './Grid';
 import './Editor.css';
 
@@ -20,6 +21,8 @@ export type EditorTool =
   | 'keyTile'
   | 'yellowButton'
   | 'yellowWall'
+  | 'redButton'
+  | 'redWall'
   | 'hole'
   | 'crackWarm'
   | 'crackCool'
@@ -41,7 +44,7 @@ export type EditorTool =
 type TerrainFillMode = 'warm' | 'cool';
 type Hotkey = { code: string; label: string; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean };
 
-const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'removeGround', 'restoreGround', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
+const DRAG_TOOLS: EditorTool[] = ['warm', 'cool', 'removeGround', 'restoreGround', 'flake', 'soulSwap', 'keyTile', 'yellowButton', 'yellowWall', 'redButton', 'redWall', 'hole', 'crackWarm', 'crackCool', 'wall', 'eraser'];
 
 // Object tools place an object in the cell; they clear any hole there first (an object
 // can't sit on a hole), matching the "no objects on holes" rule.
@@ -81,6 +84,8 @@ const TOOL_HOTKEYS: Partial<Record<EditorTool, Hotkey>> = {
   keyTile: { code: 'KeyK', label: 'K' },
   yellowWall: { code: 'KeyY', label: 'Y' },
   yellowButton: { code: 'KeyY', label: 'Y', shiftKey: true },
+  redWall: { code: 'KeyR', label: 'R' },
+  redButton: { code: 'KeyR', label: 'R', shiftKey: true },
   laser: { code: 'KeyL', label: 'L' },
   soulSwap: { code: 'KeyS', label: 'S' },
   eraser: { code: 'KeyE', label: 'E' },
@@ -110,7 +115,6 @@ function hotkeyTitle(hotkey: Hotkey) {
 }
 
 const TRI_LABEL: Record<TriangleCorner, string> = { tl: '◤', tr: '◥', bl: '◣', br: '◢' };
-const TRIANGLE_YELLOW_MSG = '삼각 벽 칸에는 노란 버튼·노란 벽을 함께 둘 수 없습니다';
 const PLAYER_LASER_MSG = '플레이어가 시작하자마자 레이저에 맞는 배치는 만들 수 없습니다';
 
 interface Pos { r: number; c: number; }
@@ -188,7 +192,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
   const [terrainFillMode, setTerrainFillMode] = useState<TerrainFillMode | null>('cool');
   const [treeHeight, setTreeHeight] = useState<number>(2);
   const [laserDir, setLaserDir] = useState<'right'|'left'|'up'|'down'>('right');
-  // 초록 · 노랑 버튼을 놓을 때의 요구 질량(1~3). 2026-11-13 팀 결정: 질량 = 크기.
+  // 초록 · 노랑 · 빨강 버튼을 놓을 때의 요구 질량(1~3). 2026-11-13 팀 결정: 질량 = 크기.
   const [buttonMassChoice, setButtonMassChoice] = useState<1 | 2 | 3>(1);
   const [triCorner, setTriCorner] = useState<TriangleCorner>('tl');
   const [showImportExport, setShowImportExport] = useState(false);
@@ -203,6 +207,22 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     placeMsgTimerRef.current = window.setTimeout(() => setPlaceMsg(null), 2200);
   };
   const dragLevelRef = useRef<Level | null>(null);
+
+  // Cells that break the same-cell rules — they come from older maps or imported codes,
+  // since the brushes refuse new ones — and red walls on a map without a red button. The
+  // editor only points at them (banner + cell marks): nothing is rewritten and saving is
+  // never blocked, so the map code and its registered solutions stay as they are.
+  const conflicts = useMemo(() => cellConflicts(level), [level]);
+  const conflictCells = useMemo(() => new Set(conflicts.map(({ row, col }) => cellKey(row, col))), [conflicts]);
+  const conflictGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const { row, col, message } of conflicts) {
+      groups.set(message, [...(groups.get(message) ?? []), `${row + 1}행 ${col + 1}열`]);
+    }
+    return [...groups].map(([message, cells]) => ({ message, cells }));
+  }, [conflicts]);
+  const conflictSignature = conflicts.map(({ row, col, message }) => `${row},${col},${message}`).join('|');
+  const [dismissedConflicts, setDismissedConflicts] = useState<string | null>(null);
 
   // === Undo / redo stacks ===
   const [undoStack, setUndoStack] = useState<Level[]>(initialSession?.undo ?? []);
@@ -643,6 +663,15 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     // inside the board mask.
     if (tile.isVoid && tool !== 'removeGround' && tool !== 'restoreGround') return;
 
+    // Same-cell rules (tileRules.ts): a brush that would make a forbidden pair — a button
+    // with a crack or hole, a triangle with a yellow/red button or wall, red with red or
+    // with another button/wall color — leaves the cell as it is and says why.
+    const refusal = brushRefusal(tile, tool);
+    if (refusal) {
+      showPlaceMsg(refusal);
+      return;
+    }
+
     // Placing an object clears a hole in that cell (no objects on holes).
     if (OBJECT_TOOLS.includes(tool)) tile.isHole = false;
 
@@ -691,16 +720,21 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         tile.isKeyTile = true;
         tile.buttonMass = buttonMassChoice > 1 ? buttonMassChoice : undefined;
         break;
-      // A triangle wall and a yellow button/wall cannot share a cell: the map code stores
-      // both in the same slot, so the yellow part would silently vanish on save (B-12).
+      // A triangle wall and a yellow/red button or wall never share a cell (brushRefusal
+      // above; the map code stores triangle and yellow in the same slot, B-12).
       case 'yellowButton':
-        if (tile.triangle) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.isYellowButton = true;
         tile.buttonMass = buttonMassChoice > 1 ? buttonMassChoice : undefined;
         break;
       case 'yellowWall':
-        if (tile.triangle) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.isYellowWall = true;
+        break;
+      case 'redButton':
+        tile.isRedButton = true;
+        tile.buttonMass = buttonMassChoice > 1 ? buttonMassChoice : undefined;
+        break;
+      case 'redWall':
+        tile.isRedWall = true;
         break;
       case 'hole':
         // A hole can't hold an object or a crack.
@@ -758,7 +792,6 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
         lv.objects[row][col] = { type: 'laser', size: 1, isMelting: false, laserDirection: laserDir, createdAt: 0 };
         break;
       case 'triangle':
-        if (tile.isYellowButton || tile.isYellowWall) { showPlaceMsg(TRIANGLE_YELLOW_MSG); break; }
         tile.triangle = triCorner;
         break;
       case 'eraser':
@@ -782,13 +815,23 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
           tile.isHole = false;
           break;
         }
+        if (tile.isRedWall) {
+          tile.isRedWall = false;
+          break;
+        }
         if (tile.isYellowWall) {
           tile.isYellowWall = false;
           break;
         }
+        // The buttons of one cell share its required mass: drop it with the last button.
+        if (tile.isRedButton) {
+          tile.isRedButton = false;
+          if (!tile.isKeyTile && !tile.isYellowButton) delete tile.buttonMass;
+          break;
+        }
         if (tile.isYellowButton) {
           tile.isYellowButton = false;
-          if (!tile.isKeyTile) delete tile.buttonMass;
+          if (!tile.isKeyTile && !tile.isRedButton) delete tile.buttonMass;
           break;
         }
         if (tile.isKeyTile) {
@@ -1000,6 +1043,8 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     yellowWall: { label: '벽', emoji: '🟨' },
     keyTile: { label: '초록 버튼', emoji: '🟢' },
     yellowButton: { label: '버튼', emoji: '🟡' },
+    redWall: { label: '벽', emoji: '🟥' },
+    redButton: { label: '버튼', emoji: '🛑' },
     laser: { label: '레이저', emoji: '🔴' },
     soulSwap: { label: '영혼 발판', emoji: '🌀' },
     hole: { label: '구멍', emoji: '🕳️' },
@@ -1036,6 +1081,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     { label: '장애물', tools: ['wall', 'tree', 'triangle', 'block'], columns: 2 },
     { label: '터널', tools: ['columnTunnel', 'rowTunnel'] },
     { label: '노랑', tools: ['yellowWall', 'yellowButton'] },
+    { label: '빨강', tools: ['redWall', 'redButton'] },
     { label: '특수', tools: ['keyTile', 'laser', 'soulSwap'], columns: 2 },
   ];
 
@@ -1199,7 +1245,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
               </label>
             </div>
           )}
-          {(selectedTool === 'keyTile' || selectedTool === 'yellowButton') && (
+          {(selectedTool === 'keyTile' || selectedTool === 'yellowButton' || selectedTool === 'redButton') && (
             <div className="tree-height-input">
               <span style={{fontSize:12,color:'var(--text-dim)',marginBottom:4,display:'block'}}>요구 질량 (이만큼 무거운 것이 올라가야 눌림)</span>
               <div style={{display:'flex',gap:4}} role="group" aria-label="버튼 요구 질량">
@@ -1207,7 +1253,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
                   <button key={m}
                     aria-pressed={buttonMassChoice === m}
                     title={m === 1 ? '무엇이든 올라가면 눌림' : `크기 ${m} 이상이 올라가야 눌림`}
-                    style={{flex:1,padding:'3px 0',fontSize:13,fontWeight:700,background:buttonMassChoice===m?(selectedTool==='keyTile'?'#2f9e57':'#c99a1e'):'var(--surface)',color:buttonMassChoice===m?'#fff':'var(--text)',border:`1px solid ${buttonMassChoice===m?'transparent':'var(--border-strong)'}`,borderRadius:4,cursor:'pointer'}}
+                    style={{flex:1,padding:'3px 0',fontSize:13,fontWeight:700,background:buttonMassChoice===m?(selectedTool==='keyTile'?'#2f9e57':selectedTool==='redButton'?'#c0392b':'#c99a1e'):'var(--surface)',color:buttonMassChoice===m?'#fff':'var(--text)',border:`1px solid ${buttonMassChoice===m?'transparent':'var(--border-strong)'}`,borderRadius:4,cursor:'pointer'}}
                     onClick={() => setButtonMassChoice(m)}>
                     {m}
                   </button>
@@ -1242,6 +1288,23 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
       </div>
 
       <div className="editor-grid-area">
+        {conflicts.length > 0 && dismissedConflicts !== conflictSignature && (
+          <div className="editor-rule-warning" role="status">
+            <div className="editor-rule-warning-head">
+              <strong>규칙에 맞지 않는 칸이 있습니다</strong>
+              <span>점선으로 표시한 칸 · 저장은 됩니다</span>
+              <button type="button" aria-label="경고 닫기" title="닫기 (칸 표시는 남습니다)"
+                onClick={() => setDismissedConflicts(conflictSignature)}>×</button>
+            </div>
+            <ul>
+              {conflictGroups.map(({ message, cells }) => (
+                <li key={message}>
+                  {message} — {cells.slice(0, 6).join(', ')}{cells.length > 6 ? ` 외 ${cells.length - 6}칸` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <Grid level={level}
           onCellClick={handleCellClick}
           onCellDrag={handleCellDrag}
@@ -1254,6 +1317,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
           edgeMode={EDGE_TOOLS.includes(selectedTool)}
           selectedCells={selection}
           previewSelectionCells={previewSelection}
+          warningCells={conflictCells}
           moveGhost={moveGhost} />
       </div>
 

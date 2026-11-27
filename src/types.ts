@@ -37,12 +37,18 @@ export interface Tile {
   // Yellow button: while ALL yellow buttons are pressed, every yellow wall
   // disappears (toggles back when any yellow button stops being pressed).
   isYellowButton?: boolean;
-  // Required mass of the green/yellow button on this tile (2026-11-13 team decision):
+  // Required mass of the green/yellow/red button on this tile (2026-11-13 team decision):
   // the button counts as pressed only while the object on it has mass (= size) of at
   // least this much. 1..3; undefined = 1, which is how every pre-existing button reads.
   buttonMass?: number;
   // Yellow wall: acts like a solid wall unless all yellow buttons are pressed.
   isYellowWall?: boolean;
+  // Red button (2026-11-28 user request): while ANY red button is pressed (OR), every
+  // red wall disappears. Same required mass (buttonMass) as the other buttons.
+  isRedButton?: boolean;
+  // Red wall: acts like a solid wall unless at least one red button is pressed; with no
+  // red button on the map it never opens (like yellow).
+  isRedWall?: boolean;
   // (Orange buttons/walls and portals were removed from the game on 2026-11-03 by team
   // decision. Old map codes still carry their bits; the decoder reads and drops them, so
   // such a cell is plain ground — see levelCode.ts and dropRemovedFeatures in level.ts.)

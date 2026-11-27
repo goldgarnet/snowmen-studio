@@ -30,7 +30,7 @@ const V4_MARKER = 0b101;
 // the flag list included: the decoder reads their three bits and drops them (that cell
 // is plain ground, keeping its other tile data), and the encoder always writes 0 there.
 // Studio levelCode.ts, adventure editor/src/utils/levelCode.js and game/rules/level_io.gd
-// keep this same layout.
+// keep this same layout (red section included).
 const EXT_MAGIC = 0b10100101; // 0xA5, 8 bits
 const EXT_INDEX_BITS = 11;    // tile index r*width+c (max 33*33-1 = 1088 < 2048)
 const EXT_COUNT_BITS = 11;
@@ -55,6 +55,18 @@ const VOID_MAGIC = 0b0110; // 4 bits
 // level_io.gd, adventure levelCode.js) stop after the void list and read such a map with
 // every button at mass 1 until they are ported.
 const BUTTON_MASS_MAGIC = 0b1001; // 4 bits
+// Optional red sub-section (2026-11-28): red walls and red buttons, right after the mass
+// list (the last section). [RED_MAGIC(4)] [count(11)] [index(11) + code(2)]*count, cells
+// in row-major order; code 0 = red wall, 1..3 = red button needing that mass. A red
+// button's mass lives only in its entry (the mass list stays green/yellow only, so its
+// decoding order does not matter). The two flags cannot share one cell here — the editor
+// refuses that pair; given both, the button is kept. Void cells are never written, and
+// entries out of range or on a void cell are skipped when reading. A map without red
+// has no such section and encodes byte-for-byte like before; older decoders stop before
+// it and read a red cell as plain ground. The magic differs from the four magics before
+// it, since with none of those sections present it sits where they are looked for.
+const RED_MAGIC = 0b1100; // 4 bits
+const RED_WALL_CODE = 0;
 
 const TRI_CORNERS: TriangleCorner[] = ['tl', 'tr', 'bl', 'br'];
 
@@ -212,12 +224,16 @@ export function encodeLevelCode(level: Level): string {
   const triangleObjects: { idx: number; obj: GameObject }[] = [];
   const voidTiles: number[] = [];
   const massButtons: { idx: number; mass: number }[] = [];
+  const redCells: { idx: number; code: number }[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       if (level.tiles[r][c].isVoid) voidTiles.push(r * level.width + c);
       const tile = level.tiles[r][c];
       if (!tile.isVoid && (tile.isKeyTile || tile.isYellowButton) && buttonMass(tile) > 1) {
         massButtons.push({ idx: r * level.width + c, mass: buttonMass(tile) });
+      }
+      if (!tile.isVoid && (tile.isRedButton || tile.isRedWall)) {
+        redCells.push({ idx: r * level.width + c, code: tile.isRedButton ? buttonMass(tile) : RED_WALL_CODE });
       }
       const obj = level.objects[r][c];
       if (obj && obj.type === 'block' && obj.triangleCorner) {
@@ -229,7 +245,8 @@ export function encodeLevelCode(level: Level): string {
     }
   }
 
-  if (special.length > 0 || triBlocks.length > 0 || triangleObjects.length > 0 || voidTiles.length > 0 || massButtons.length > 0) {
+  if (special.length > 0 || triBlocks.length > 0 || triangleObjects.length > 0 || voidTiles.length > 0
+    || massButtons.length > 0 || redCells.length > 0) {
     pushBits(bits, EXT_MAGIC, 8);
     pushBits(bits, special.length, EXT_COUNT_BITS);
     for (const s of special) {
@@ -263,6 +280,14 @@ export function encodeLevelCode(level: Level): string {
       for (const b of massButtons) {
         pushBits(bits, b.idx, EXT_INDEX_BITS);
         pushBits(bits, b.mass, 2);
+      }
+    }
+    if (redCells.length > 0) {
+      pushBits(bits, RED_MAGIC, 4);
+      pushBits(bits, redCells.length, EXT_COUNT_BITS);
+      for (const cell of redCells) {
+        pushBits(bits, cell.idx, EXT_INDEX_BITS);
+        pushBits(bits, cell.code, 2);
       }
     }
   }
@@ -495,6 +520,28 @@ function decodeLevelCodeWith(code: string, onTileFlags?: (index: number, flags: 
           if (r < 0 || r >= height || c < 0 || c >= width) continue;
           const t = tiles[r][c];
           if ((t.isKeyTile || t.isYellowButton) && mass >= 2) t.buttonMass = mass;
+        }
+      }
+
+      // Red walls and buttons (see RED_MAGIC): read after every other section, so a void
+      // cell is already known here and its entry is dropped.
+      if (pos + 4 <= bits.length && readBits(bits, pos, 4) === RED_MAGIC) {
+        pos += 4;
+        const redCount = readBits(bits, pos, EXT_COUNT_BITS); pos += EXT_COUNT_BITS;
+        for (let i = 0; i < redCount; i++) {
+          const idx = readBits(bits, pos, EXT_INDEX_BITS); pos += EXT_INDEX_BITS;
+          const code = readBits(bits, pos, 2); pos += 2;
+          const r = Math.floor(idx / width);
+          const c = idx % width;
+          if (r < 0 || r >= height || c < 0 || c >= width) continue;
+          const t = tiles[r][c];
+          if (t.isVoid) continue;
+          if (code === RED_WALL_CODE) {
+            t.isRedWall = true;
+          } else {
+            t.isRedButton = true;
+            if (code >= 2) t.buttonMass = code;
+          }
         }
       }
     }

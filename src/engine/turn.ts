@@ -2,7 +2,7 @@ import { Level, Direction, GameStatus, Position } from '../types';
 import { cloneLevel, findPlayer } from '../utils/level';
 import { recalcShadows, clearShadows } from './shadow';
 import { executePush } from './push';
-import { isButtonPressed, yellowWallsSolid } from './helpers';
+import { isButtonPressed, closedWallJudge } from './helpers';
 
 export interface TurnResult {
   level: Level;
@@ -71,10 +71,13 @@ export function isLevelCleared(level: Level): boolean {
 /**
  * Every cell a laser beam currently passes through (the lasers' own cells excluded).
  * The beam melts every snow object it passes (Q-07: it pierces them) and stops at a
- * blocker object, a closed partition, or the board edge. It passes through triangle walls.
+ * blocker object, a closed partition (yellow or red wall), or the board edge. It passes
+ * through triangle walls. One call is one snapshot: each color's wall state is judged
+ * once, on the board as it stands when the check starts, and the hits are removed only
+ * afterwards (a hit that unpresses a red button closes the walls from the next check on).
  */
 export function laserBeamCells(level: Level): Position[] {
-  const ySolid = yellowWallsSolid(level);
+  const closed = closedWallJudge(level);
   const cells: Position[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
@@ -82,7 +85,7 @@ export function laserBeamCells(level: Level): Position[] {
       if (!obj || obj.type !== 'laser') continue;
       // A laser trapped inside a closed partition cannot fire out of it — the wall
       // encloses the whole cell, exactly as it blocks a beam coming from outside.
-      if (ySolid && level.tiles[r][c].isYellowWall) continue;
+      if (closed(level.tiles[r][c])) continue;
       const [dr, dc] = DIR_DELTA[obj.laserDirection ?? 'right'];
       let cr = r + dr;
       let cc = c + dc;
@@ -90,9 +93,9 @@ export function laserBeamCells(level: Level): Position[] {
         if (level.tiles[cr][cc].isVoid) break;
         const hit = level.objects[cr][cc];
         if (hit && LASER_BLOCKERS.has(hit.type)) break;
-        // A solid yellow wall blocks the beam BEFORE its cell, like a real wall (so it
-        // also shields anything trapped inside that cell).
-        if (ySolid && level.tiles[cr][cc].isYellowWall) break;
+        // A closed yellow/red wall blocks the beam BEFORE its cell, like a real wall (so
+        // it also shields anything trapped inside that cell).
+        if (closed(level.tiles[cr][cc])) break;
         cells.push({ row: cr, col: cc });
         cr += dr;
         cc += dc;

@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useRef, useEffect, useId, useLayoutEffect, type TouchEvent as ReactTouchEvent } from 'react';
 import { BodySkin, GameObject, Level, Tile } from '../../types';
-import { buttonMass, isButtonPressed, isPressedBy, yellowWallsSolid } from '../../engine/helpers';
+import { buttonMass, isButtonPressed, isPressedBy, redWallsSolid, yellowWallsSolid } from '../../engine/helpers';
 import './Grid.css';
 
 interface GridProps {
@@ -20,6 +20,8 @@ interface GridProps {
   thumbnail?: boolean;
   selectedCells?: Set<string>;
   previewSelectionCells?: Set<string> | null;
+  // Editor: cells that break a same-cell rule (tileRules.ts), outlined as a warning.
+  warningCells?: Set<string>;
   moveGhost?: {
     sourceCells: { row: number; col: number }[];
     delta: { dr: number; dc: number };
@@ -40,10 +42,12 @@ interface GridCellProps {
   cellSize: number;
   goalActive: boolean;
   yellowSolid: boolean;
+  redSolid: boolean;
   highlightPlayer?: boolean;
   thumbnail?: boolean;
   editorInteractive: boolean;
   isSelected: boolean;
+  isWarned: boolean;
   snowmanFilterId: string;
   goalGradientId: string;
   onMouseDown: (row: number, col: number, button: number, toggleSelection: boolean) => void;
@@ -85,8 +89,8 @@ function collectMotionPositions(level: Level): Map<string, MotionPosition> {
 // references. Compare their primitive fields and retain the existing DOM/SVG subtree
 // unless that particular cell actually changed.
 const GridCell = memo(function GridCell({
-  row, col, tile, obj, cellSize, goalActive, yellowSolid,
-  highlightPlayer, thumbnail, editorInteractive, isSelected, snowmanFilterId, goalGradientId,
+  row, col, tile, obj, cellSize, goalActive, yellowSolid, redSolid,
+  highlightPlayer, thumbnail, editorInteractive, isSelected, isWarned, snowmanFilterId, goalGradientId,
   onMouseDown, onMouseEnter,
   onTouchStart,
 }: GridCellProps) {
@@ -104,6 +108,8 @@ const GridCell = memo(function GridCell({
     tile.isKeyTile ? 'key' : '',
     tile.isYellowButton ? 'ybutton' : '',
     tile.isYellowWall ? (yellowSolid ? 'ywall ywall-solid' : 'ywall ywall-open') : '',
+    tile.isRedButton ? 'rbutton' : '',
+    tile.isRedWall ? (redSolid ? 'rwall rwall-solid' : 'rwall rwall-open') : '',
     tile.isHole ? 'hole' : '',
   ].filter(Boolean).join(' ');
 
@@ -127,7 +133,9 @@ const GridCell = memo(function GridCell({
       {tile.isSoulSwap && <SoulSwapOverlay size={cellSize} />}
       {tile.isKeyTile && <GreenButtonOverlay size={cellSize} mass={obj ? null : buttonMass(tile)} />}
       {tile.isYellowButton && <YellowButtonOverlay size={cellSize} mass={obj ? null : buttonMass(tile)} />}
-      {tile.isYellowWall && <YellowWallOverlay size={cellSize} solid={yellowSolid} />}
+      {tile.isRedButton && <RedButtonOverlay size={cellSize} mass={obj ? null : buttonMass(tile)} />}
+      {tile.isYellowWall && <ColorWallOverlay size={cellSize} solid={yellowSolid} palette={YELLOW_WALL} />}
+      {tile.isRedWall && <ColorWallOverlay size={cellSize} solid={redSolid} palette={RED_WALL} />}
       {tile.isHole && <HoleOverlay size={cellSize} />}
       {tile.isCrack && <CrackOverlay size={cellSize} warm={!!tile.isWarm} armed={!!tile.crackArmed} />}
       {tile.triangle && <TriangleOverlay corner={tile.triangle} size={cellSize} />}
@@ -140,14 +148,15 @@ const GridCell = memo(function GridCell({
         </div>
       )}
       {/* 버튼 위에 무언가 있으면 요구 질량을 모서리에 — 눌렸으면 칠한다 (2026-11-13) */}
-      {!tile.isVoid && obj && (tile.isKeyTile || tile.isYellowButton) && cellSize >= 18 && (
+      {!tile.isVoid && obj && (tile.isKeyTile || tile.isYellowButton || tile.isRedButton) && cellSize >= 18 && (
         <ButtonMassBadge
           size={cellSize}
           mass={buttonMass(tile)}
-          green={!!tile.isKeyTile}
+          color={tile.isRedButton ? 'red' : tile.isKeyTile ? 'green' : 'yellow'}
           pressed={isPressedBy(tile, obj)}
         />
       )}
+      {isWarned && <div className="cell-warning-overlay" />}
       {isSelected && <div className="cell-selection-overlay" />}
     </div>
   );
@@ -157,10 +166,12 @@ const GridCell = memo(function GridCell({
   prev.cellSize === next.cellSize &&
   prev.goalActive === next.goalActive &&
   prev.yellowSolid === next.yellowSolid &&
+  prev.redSolid === next.redSolid &&
   prev.highlightPlayer === next.highlightPlayer &&
   prev.thumbnail === next.thumbnail &&
   prev.editorInteractive === next.editorInteractive &&
   prev.isSelected === next.isSelected &&
+  prev.isWarned === next.isWarned &&
   prev.snowmanFilterId === next.snowmanFilterId &&
   prev.goalGradientId === next.goalGradientId &&
   prev.onMouseDown === next.onMouseDown &&
@@ -172,7 +183,7 @@ const GridCell = memo(function GridCell({
 
 export default function Grid({
   level, onCellClick, onCellDrag, onCellErase, onEdgeClick, onEdgePaint, onEdgeErase, onBackgroundClick, edgeMode, highlightPlayer,
-  thumbnail, selectedCells, previewSelectionCells, moveGhost, onGridMouseLeave, animateObjects = false, animationDurationMs = 150,
+  thumbnail, selectedCells, previewSelectionCells, warningCells, moveGhost, onGridMouseLeave, animateObjects = false, animationDurationMs = 150,
 }: GridProps) {
   const interactionRef = useRef({ onCellClick, onCellDrag, onCellErase, onEdgePaint, onEdgeErase });
   useEffect(() => {
@@ -386,8 +397,10 @@ export default function Grid({
     }
   }
 
-  // Yellow walls are solid (visible/blocking) unless all yellow buttons are pressed.
+  // Yellow walls are solid (visible/blocking) unless all yellow buttons are pressed;
+  // red walls unless at least one red button is pressed (OR).
   const yellowSolid = yellowWallsSolid(level);
+  const redSolid = redWallsSolid(level);
   const moveGhostDestinationKeys = new Set(
     moveGhost?.sourceCells.map(({ row, col }) => (
       `${row + moveGhost.delta.dr},${col + moveGhost.delta.dc}`
@@ -453,10 +466,12 @@ export default function Grid({
                   cellSize={cellSize}
                   goalActive={goalActive}
                   yellowSolid={yellowSolid}
+                  redSolid={redSolid}
                   highlightPlayer={highlightPlayer}
                   thumbnail={thumbnail}
                   editorInteractive={!!onCellClick}
                   isSelected={isSelected}
+                  isWarned={!!warningCells?.has(key)}
                   snowmanFilterId={snowmanFilterId}
                   goalGradientId={goalGradientId}
                   onMouseDown={handleMouseDown}
@@ -497,7 +512,7 @@ export default function Grid({
         )}
 
         {/* Laser beam overlay */}
-        <LaserBeamOverlay level={level} cellSize={cellSize} yellowSolid={yellowSolid} />
+        <LaserBeamOverlay level={level} cellSize={cellSize} yellowSolid={yellowSolid} redSolid={redSolid} />
 
         {/* Arch visuals overlay (absolute pixel positioning over the grid) */}
         <div className="edge-overlay" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3 }}>
@@ -778,44 +793,86 @@ function YellowButtonOverlay({ size, mass }: { size: number; mass: number | null
   );
 }
 
+// Red button (2026-11-28): pressing any one of them removes every red wall. Hexagonal so
+// it never relies on color alone — green and yellow are round here, and red/green is the
+// pair color-blind players confuse most. Placeholder art; the team decides the final look.
+function hexPoints(r: number, cx = 20, cy = 20): string {
+  return [0, 60, 120, 180, 240, 300]
+    .map((deg) => {
+      const a = (deg * Math.PI) / 180;
+      return `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`;
+    })
+    .join(' ');
+}
+
+function RedButtonOverlay({ size, mass }: { size: number; mass: number | null }) {
+  return (
+    <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
+      <polygon points={hexPoints(13)} fill="none" stroke="#b8372d" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
+      <polygon points={hexPoints(10)} fill="#de4b3f" stroke="#a02a21" strokeWidth="1.8" strokeLinejoin="round" opacity="0.95" />
+      <polygon points={hexPoints(mass == null ? 5 : 7)} fill="#ffb4aa" opacity="0.95" />
+      {mass != null && <ButtonMassText mass={mass} color="#6e1510" size={size} />}
+    </svg>
+  );
+}
+
 // 물체가 올라간 버튼의 요구 질량 — 물체에 가리지 않게 칸 오른쪽 위에. 눌렸으면(질량이 넉넉하면) 칠한다.
-function ButtonMassBadge({ size, mass, green, pressed }: { size: number; mass: number; green: boolean; pressed: boolean }) {
+// 빨간 버튼의 배지는 버튼처럼 육각형이다(색만으로 구분하지 않는다).
+function ButtonMassBadge({ size, mass, color, pressed }: {
+  size: number; mass: number; color: 'green' | 'yellow' | 'red'; pressed: boolean;
+}) {
   const d = Math.max(13, Math.round(size * 0.34));
+  const title = pressed ? `요구 질량 ${mass} · 눌림` : `요구 질량 ${mass} · 아직 안 눌림`;
+  if (color === 'red') {
+    return (
+      <svg className={`button-mass-badge red${pressed ? ' pressed' : ''}`} width={d} height={d} viewBox="0 0 40 40">
+        <title>{title}</title>
+        <polygon points={hexPoints(18.5)} strokeWidth="3" strokeLinejoin="round" />
+        <text x="20" y="27.5" textAnchor="middle" fontSize="23" fontWeight="800"
+          fontFamily="Pretendard, -apple-system, 'Malgun Gothic', sans-serif">{mass}</text>
+      </svg>
+    );
+  }
   return (
     <div
-      className={`button-mass-badge ${green ? 'green' : 'yellow'}${pressed ? ' pressed' : ''}`}
+      className={`button-mass-badge ${color}${pressed ? ' pressed' : ''}`}
       style={{ width: d, height: d, fontSize: Math.round(d * 0.66) }}
-      title={pressed ? `요구 질량 ${mass} · 눌림` : `요구 질량 ${mass} · 아직 안 눌림`}
+      title={title}
     >{mass}</div>
   );
 }
 
-// Yellow wall: solid unless all yellow buttons are pressed; when "open" it shows a
-// faint dashed outline of where it will reappear.
-function YellowWallOverlay({ size, solid }: { size: number; solid: boolean }) {
+interface WallPalette { fill: string; line: string; edge: string; open: string }
+const YELLOW_WALL: WallPalette = { fill: '#e6b422', line: '#c99320', edge: '#b5860f', open: 'rgba(230,180,34,0.10)' };
+const RED_WALL: WallPalette = { fill: '#d24b3e', line: '#a8352b', edge: '#8c2820', open: 'rgba(210,75,62,0.10)' };
+
+// Yellow/red wall: solid unless its buttons open it (yellow: all pressed, red: any one
+// pressed); when "open" it shows a faint dashed outline of where it will reappear. The red
+// wall is the yellow drawing in red (placeholder until the team's art).
+function ColorWallOverlay({ size, solid, palette }: { size: number; solid: boolean; palette: WallPalette }) {
   if (solid) {
     // Keep the wall above objects, while the central block-sized cutout lets the
     // underlying tile show through.
     return (
       <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40" style={{ zIndex: 3 }}>
-        <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="#e6b422" fillRule="evenodd" />
-        <g stroke="#c99320" strokeWidth="1">
+        <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill={palette.fill} fillRule="evenodd" />
+        <g stroke={palette.line} strokeWidth="1">
           <line x1="1" y1="20" x2="8" y2="20" />
           <line x1="32" y1="20" x2="39" y2="20" />
           <line x1="20" y1="1" x2="20" y2="8" />
           <line x1="10" y1="32" x2="10" y2="39" />
           <line x1="30" y1="32" x2="30" y2="39" />
         </g>
-        <rect x="1" y="1" width="38" height="38" fill="none" stroke="#b5860f" strokeWidth="2" />
-        <rect x="8" y="8" width="24" height="24" fill="none" stroke="#c99320" strokeWidth="1.5" />
+        <rect x="1" y="1" width="38" height="38" fill="none" stroke={palette.edge} strokeWidth="2" />
+        <rect x="8" y="8" width="24" height="24" fill="none" stroke={palette.line} strokeWidth="1.5" />
       </svg>
     );
   }
   return (
     <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
-      <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill="rgba(230,180,34,0.10)" fillRule="evenodd" />
-      <rect x="1" y="1" width="38" height="38" fill="none" stroke="#e6b422" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
-      <rect x="8" y="8" width="24" height="24" fill="none" stroke="#e6b422" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
+      <path d="M1,1 H39 V39 H1 Z M8,8 H32 V32 H8 Z" fill={palette.open} fillRule="evenodd" />
+      <rect x="1" y="1" width="38" height="38" fill="none" stroke={palette.fill} strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
+      <rect x="8" y="8" width="24" height="24" fill="none" stroke={palette.fill} strokeWidth="1.4" strokeDasharray="3 3" opacity="0.65" />
     </svg>
   );
 }
@@ -882,11 +939,15 @@ const BEAM_DIRS: Record<string, [number, number]> = {
   right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1],
 };
 
-function LaserBeamOverlay({ level, cellSize, yellowSolid }: {
+function LaserBeamOverlay({ level, cellSize, yellowSolid, redSolid }: {
   level: Level;
   cellSize: number;
   yellowSolid: boolean;
+  redSolid: boolean;
 }) {
+  const closed = (tile: Tile | undefined) => !!tile && (
+    (yellowSolid && !!tile.isYellowWall) || (redSolid && !!tile.isRedWall)
+  );
   const beams: React.ReactElement[] = [];
   const gw = level.width;
   const gh = level.height;
@@ -895,8 +956,7 @@ function LaserBeamOverlay({ level, cellSize, yellowSolid }: {
       const obj = level.objects[row]?.[col];
       if (!obj || obj.type !== 'laser') continue;
       // A laser trapped inside a closed partition cannot fire out of it (engine rule).
-      const home = level.tiles[row]?.[col];
-      if (yellowSolid && home?.isYellowWall) continue;
+      if (closed(level.tiles[row]?.[col])) continue;
 
       const dir = (obj as { laserDirection?: string }).laserDirection ?? 'right';
       const [dx, dy] = BEAM_DIRS[dir] ?? [1, 0];
@@ -909,8 +969,8 @@ function LaserBeamOverlay({ level, cellSize, yellowSolid }: {
         if (level.tiles[cy]?.[cx]?.isVoid) break;
         const hit = level.objects[cy]?.[cx];
         if (hit && LASER_BLOCKERS.has(hit.type)) break;
-        // Solid yellow wall stops the beam BEFORE its cell, like a real wall.
-        if (yellowSolid && level.tiles[cy]?.[cx]?.isYellowWall) break;
+        // A closed yellow/red wall stops the beam BEFORE its cell, like a real wall.
+        if (closed(level.tiles[cy]?.[cx])) break;
         endCol = cx; endRow = cy;
         cx += dx; cy += dy;
       }

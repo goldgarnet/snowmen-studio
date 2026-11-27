@@ -30,7 +30,7 @@ export function objectMass(obj: GameObject): number {
   return obj.size;
 }
 
-/** A green/yellow button is pressed while the object on it is at least as heavy as it requires. */
+/** A green/yellow/red button is pressed while the object on it is at least as heavy as it requires. */
 export function isPressedBy(tile: Tile, obj: GameObject | null | undefined): boolean {
   return !!obj && objectMass(obj) >= buttonMass(tile);
 }
@@ -55,6 +55,48 @@ export function yellowWallsSolid(level: Level): boolean {
     }
   }
   return !hasButton; // no buttons → solid; all buttons pressed → not solid
+}
+
+/**
+ * Red walls (2026-11-28 user request) are solid unless at least ONE red button is
+ * currently pressed (OR). With no red buttons — or none pressed — they behave like
+ * plain walls, as yellow walls do. Independent of the yellow walls and of the goal.
+ */
+export function redWallsSolid(level: Level): boolean {
+  for (let r = 0; r < level.height; r++) {
+    for (let c = 0; c < level.width; c++) {
+      if (level.tiles[r][c].isRedButton && isButtonPressed(level, r, c)) return false; // one pressed → open
+    }
+  }
+  return true; // no button pressed (or no button at all) → solid
+}
+
+/**
+ * Is this tile a closed colored partition right now — a yellow wall while the yellow
+ * walls are solid, or a red wall while the red walls are solid? The board is scanned for
+ * a color's buttons only when the tile is a wall of that color (the solver runs this
+ * engine, so plain cells must stay cheap). No cache: it judges the board as it is when
+ * asked, which keeps every caller's timing exactly as before.
+ */
+export function isClosedWallTile(level: Level, tile: Tile): boolean {
+  if (tile.isYellowWall && yellowWallsSolid(level)) return true;
+  if (tile.isRedWall && redWallsSolid(level)) return true;
+  return false;
+}
+
+/**
+ * The same judgement for a whole pass over the board (laser beams, shadows): each color's
+ * state is computed at most once per judge, and only if a wall of that color is asked
+ * about. Make one judge per pass, so the pass sees a single snapshot of the walls.
+ */
+export function closedWallJudge(level: Level): (tile: Tile) => boolean {
+  let yellow: boolean | undefined;
+  let red: boolean | undefined;
+  return (tile: Tile) => {
+    if (tile.isYellowWall && (yellow ??= yellowWallsSolid(level))) return true;
+    if (tile.isRedWall && (red ??= redWallsSolid(level))) return true;
+    return false;
+  };
 }
 
 /**
@@ -116,8 +158,9 @@ export function canEnterTile(level: Level, pos: Position, dir: Direction, obj: G
     return false;
   }
 
-  // Solid yellow wall: impassable (only scan buttons when this is a yellow-wall tile).
-  if (tile.isYellowWall && yellowWallsSolid(level)) {
+  // Closed yellow/red wall: impassable (a color's buttons are scanned only when this is
+  // a wall tile of that color).
+  if (isClosedWallTile(level, tile)) {
     return false;
   }
 
@@ -148,12 +191,13 @@ export function canLeaveTile(level: Level, pos: Position, dir: Direction, obj: G
     return false;
   }
 
-  // Yellow walls are partitions: an object can enter the cell only while the wall is
+  // Yellow/red walls are partitions: an object can enter the cell only while the wall is
   // open (buttons pressed), but once it re-solidifies whatever is inside can no longer
   // leave — it is trapped. Because this is evaluated per cell-step (during a roll,
   // canLeaveTile runs each cell), a snowball that rolls over the button and on into the
-  // wall cell gets sealed in the instant it steps off the button.
-  if (tile.isYellowWall && yellowWallsSolid(level)) return false;
+  // wall cell gets sealed in the instant it steps off the button (for red: the last
+  // pressed red button).
+  if (isClosedWallTile(level, tile)) return false;
 
   return true;
 }
@@ -213,8 +257,8 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
   if (tile.triangle && TRI_SOLID[tile.triangle].includes(dir)) return true;
   if (nextTile.triangle && TRI_SOLID[nextTile.triangle].includes(getOppositeDirection(dir))) return true;
 
-  // A solid yellow wall at the next cell backs the push like a wall.
-  if (nextTile.isYellowWall && yellowWallsSolid(level)) return true;
+  // A closed yellow/red wall at the next cell backs the push like a wall.
+  if (isClosedWallTile(level, nextTile)) return true;
 
   // Check perpendicular tunnel blockage (existing arch-tile semantics): rowArch
   // blocks left/right movement; columnArch blocks up/down movement.
@@ -230,11 +274,10 @@ export function isBacked(level: Level, pos: Position, dir: Direction): boolean {
 }
 
 /**
- * A solid (closed) yellow partition encloses its whole cell: nothing enters or leaves
- * it, its trapped object casts no shadow outside, and a laser standing inside cannot
- * fire out of it. (Its interior is not shade — the sun still gets in, 2026-10-29.)
+ * A solid (closed) yellow or red partition encloses its whole cell: nothing enters or
+ * leaves it, its trapped object casts no shadow outside, and a laser standing inside
+ * cannot fire out of it. (Its interior is not shade — the sun still gets in, 2026-10-29.)
  */
 export function isClosedPartition(level: Level, pos: Position): boolean {
-  const tile = level.tiles[pos.row][pos.col];
-  return !!tile.isYellowWall && yellowWallsSolid(level);
+  return isClosedWallTile(level, level.tiles[pos.row][pos.col]);
 }

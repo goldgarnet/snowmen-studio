@@ -88,7 +88,7 @@ setup: (board) => {
 
 - `.player(row, col, size)`, `.snowball(row, col, size)`, `.snowman(row, col, size)`, `.laser(row, col, direction)`로 자주 쓰는 오브젝트를 놓는다.
 - `.object(row, col, type, size, patch?)`는 `wall`, `block`, `tree`, `triangleBlock` 등 모든 오브젝트에 사용한다. 일반 벽처럼 크기가 의미 없는 단단한 물체는 기존 케이스처럼 `100`을 쓴다.
-- `.tile(row, col, patch)`는 타일 속성을 덮어쓴다. 예: `{ isFlake: true }`, `{ isHole: true }`, `{ isCrack: true }`, `{ isYellowButton: true }`, `{ isYellowWall: true }`, `{ triangle: 'br' }`. (포털·주황 버튼·주황 벽은 2026-11-03 삭제)
+- `.tile(row, col, patch)`는 타일 속성을 덮어쓴다. 예: `{ isFlake: true }`, `{ isHole: true }`, `{ isCrack: true }`, `{ isYellowButton: true }`, `{ isYellowWall: true }`, `{ isRedButton: true, buttonMass: 2 }`, `{ isRedWall: true }`, `{ triangle: 'br' }`. (포털·주황 버튼·주황 벽은 2026-11-03 삭제)
 - `.edgeArch(row, col, direction, height)`는 그 칸에서 `direction`으로 나갈 때 넘는 경계에 높이 1 또는 2 아치를 둔다.
 - 레벨 옵션이 필요하면 기존 케이스처럼 `board.level.soulSwapEnabled = true`로 설정한다.
 
@@ -155,6 +155,7 @@ expectFrame(
 - `found-bugs-2026-11.scenario.ts`는 같은 날 엔진 점검에서 찾아 고친 버그(`bugs/B-005`~`B-009`)를 담는다. 버그 파일의 판을 맵 코드 그대로 불러오고, 작은 보드로 경계를 더한다. (B-004 '한 tick에 한 공은 한 열차만 흡수'는 포털로만 생기던 경우라 2026-11-03 포털 삭제와 함께 지웠다.) 눈사람의 아치·터널 검사는 B 칸 눈송이를 먹은 뒤 크기로 한다. 지형에만 받쳐진 B1도 P2가 B2 너머로 밀면 부서진다. 그림자를 끈 맵에는 터널 그늘도 없다. 영혼 순환이 꺼진 맵에서 M은 풀이 재생에서도 아무 일도 하지 않는다. 한 frame 안의 `motionId`는 물체마다 하나다.
 - `b013-heavier-triangle.scenario.ts`는 B-013 사용자 결정 ①(2026-11-03)을 담는다. 더 무거운 굴림이 삼각 칸에 멈춘 더 가벼운 묶음을 치면 묶음은 거울 출구로 나가고 굴러온 열차가 따라 꺾여 함께 굴러간다. 보고서의 판(맵 코드), 네 삼각형 × 네 방향, 막힌 출구, 열차, 꺾인 길 위의 구멍·눈송이·금을 본다.
 - `legacy-portal-orange-codes.scenario.ts`는 포털·주황 버튼·주황 벽 삭제(2026-11-03)를 담는다. 그 비트가 남은 예전 맵 코드(팀 맵 「Maze」·「one way」, `bugs/B-004` 판, 옛 인코더로 만든 작은 판)가 그대로 열리고 그 칸은 평범한 바닥인지, 다시 인코드하면 비트가 0인지, Studio JSON·`newGameState`가 그 필드를 지우는지 본다.
+- `red-or.scenario.ts`는 빨간 버튼·빨간 벽(2026-11-28 사용자 요청)을 담는다. 빨간 버튼이 하나라도 눌리면 모든 빨간 벽이 열린다(OR). 닫힌 빨간 칸은 닫힌 노랑 칸과 같은 칸막이이고 판정 시점도 같다. 굴림 tick 잠깐 누름, 버튼 옆 벽 칸 갇힘과 다른 버튼이 눌린 OR 대조, 열차, 레이저 스냅숏(대기·0턴), 쪼개기 Q-01, 닫힌 칸 안 레이저, 그림자, 받침·부숨, 갇힌 플레이어의 M, 요구 질량과 녹아서 닫힘, 노랑과 독립·목표와 무관을 본다. RED 맵 코드 구간(빨강 없는 맵은 바이트 그대로), 에디터 같은 칸 규칙(`src/utils/tileRules.ts` — 버튼+균열·구멍 등)과 이미 겹친 맵 3개의 경고도 여기서 시험한다.
 - `player-hole.scenario.ts`는 플레이어가 구멍에 걸어 들어가는 규칙(2026-10-26 변경)을 담는다. 이동은 유효한 턴이고, 몸은 구멍 처리에서 빠지며 영혼은 턴 맨 끝(녹기 뒤, 2026-11-25 판정 순서)에 가장 가까운 눈사람(거리 → 나이 → 읽기 순서)으로 옮겨 간다. `judgment-order.scenario.ts`가 그 순서(레이저 사망 뒤 녹아 사라진 가까운 눈사람 건너뛰기, 후보 없음 게임오버, Q-14 클리어, 녹기 뒤 발동하는 영혼 발판)를 담는다. 눈사람이 없으면 게임오버, 목표 위 눈사람이면 클리어, 구멍은 그대로 남아 다음 몸도 빠진다.
 - 높이 1 아치에서 뒤쪽 크기 2 눈덩이는 멈추고, 이미 앞쪽에 있던 `1, 1, 2` suffix는 계속 굴러가는 경우
 - 굴러온 눈덩이가 마지막 노란 버튼을 누르는 동일 tick에 벽이 열리고 레이저가 플레이어를 제거하는 경우

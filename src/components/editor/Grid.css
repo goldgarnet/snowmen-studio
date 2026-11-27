@@ -128,6 +128,9 @@
 .grid-cell.ybutton {
   box-shadow: inset 0 0 0 2px rgba(242, 197, 58, 0.55);
 }
+.grid-cell.rbutton {
+  box-shadow: inset 0 0 0 2px rgba(222, 75, 63, 0.5);
+}
 .grid-cell.soul.key {
   box-shadow: inset 0 0 0 2px rgba(168, 108, 255, 0.55), inset 0 0 0 4px rgba(63, 191, 106, 0.45);
 }
@@ -267,3 +270,20 @@
 .button-mass-badge.yellow { border-color: #bd9018; color: #7a5507; }
 .button-mass-badge.green.pressed { background: #2f9e57; color: #fff; }
 .button-mass-badge.yellow.pressed { background: #d9a520; color: #fff; }
+/* Red: an SVG hexagon (shape, not only color), so no circle border/background here. */
+.button-mass-badge.red { border: none; border-radius: 0; background: none; overflow: visible; }
+.button-mass-badge.red polygon { fill: rgba(255, 255, 255, 0.92); stroke: #a02a21; }
+.button-mass-badge.red text { fill: #8a1c14; }
+.button-mass-badge.red.pressed polygon { fill: #c93a2f; }
+.button-mass-badge.red.pressed text { fill: #fff; }
+
+/* Editor: a cell that breaks a same-cell rule (tileRules.ts). */
+.cell-warning-overlay {
+  position: absolute;
+  inset: 1px;
+  border: 2px dashed #e07b00;
+  border-radius: 3px;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 5;
+}

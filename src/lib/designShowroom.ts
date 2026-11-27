@@ -4,14 +4,16 @@ import type { GameObject, Level, ObjectType, Tile } from '../types';
 // 맵 코드에는 플레이어 크기가 없어(늘 크기 2) 코드 대신 레벨을 그대로 게임에 넘긴다.
 //   # 벽 · 1~4 나무 · o O 눈덩이 · s S Z 눈사람 · B 블록 · L 레이저 · P 플레이어
 //   , 따뜻한 바닥 · h 구멍 · c 금 · f 눈꽃 · a 영혼 발판 · t 삼각 벽
-//   y 노란 버튼 · Y 노란 벽 · g 초록 버튼 · G 목표
+//   y 노란 버튼 · Y 노란 벽 · r 빨간 버튼 · R 빨간 벽 · g 초록 버튼 · G 목표
+// 빨간 버튼은 플레이어 바로 아래라 한 걸음 내려서면 빨간 벽이 열린다. 게임이 빨강을 읽기
+// 전(포팅·index.pck 올리기 전)에는 두 칸이 평범한 바닥으로 보인다.
 const ROWS = [
   '#1#2#3#4#1#2#',
   '1...........2',
   '#.o.O.s.S.Z.#',
   '3...........4',
   '#.,,,.P.B.t.#',
-  '2.,,,.....L.1',
+  '2.,,,.r.R.L.1',
   '#.h.c.f.a...#',
   '4.y.Y.g...G.3',
   '1...........2',
@@ -27,6 +29,8 @@ const TILES: Record<string, Partial<Tile>> = {
   t: { triangle: 'bl' },
   y: { isYellowButton: true },
   Y: { isYellowWall: true },
+  r: { isRedButton: true },
+  R: { isRedWall: true },
   g: { isKeyTile: true },
   G: { isGoal: true },
 };
