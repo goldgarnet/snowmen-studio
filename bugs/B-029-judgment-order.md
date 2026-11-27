@@ -43,6 +43,10 @@
 
 1~5·7은 이미 배포된 순서 그대로이고, 6만 엔진을 바꿨다(등록 풀이의 결과·판 변화 없음).
 
+## 회귀 수정 (2026-11-28)
+
+영혼 이동을 턴 맨 끝으로 옮기면서 `moveSoul` 의 사망 분기가 `resolveSoulFootplate` 를 건너뛰게 됐고, 그 결과 발판 무장(`soulSwapArmedAt`)이 남았다. 그래서 발판에 무장한 플레이어가 죽은 뒤, 새 몸이 다음 턴 그 발판에 올라서면 기다리지 않고 바로 발동했다(세 엔진 모두, 독립 점검에서 찾음). 사망 분기에서 무장을 푼다. 시나리오 'a player that dies leaves the footplate unarmed', adventure 골든 `soul-plate-death-2026-11-28.json` 2개(고치기 전 엔진에서는 3수째 판이 틀린다). 등록 풀이 441개는 매 수 판과 무장까지 같다.
+
 ## 테스트
 
 `test/engine/cases/judgment-order.scenario.ts`(7 — 위 3·6·7 포함) · `player-hole.scenario.ts` 고친 1. 무작위 대칭 검사(좌우 뒤집기·전치, 6만 판 × 12수)에서 불일치·불변 조건 위반 0.

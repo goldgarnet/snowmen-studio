@@ -159,4 +159,31 @@ export const scenarios: ScenarioDefinition[] = [
       expect(!result.level.soulSwapArmedAt, 'the plate is spent');
     },
   }),
+  defineScenario({
+    // P2 steps on the footplate (armed), then walks into the hole and dies; the soul goes to
+    // the S1 at (1,3). The arming goes with the dead body, so the new body that steps on the
+    // plate only arms it and fires one turn later (regression found 2026-11-28: the death
+    // branch kept the old arming and the new body fired the moment it stepped on).
+    name: 'a player that dies leaves the footplate unarmed: the next body on it waits its turn',
+    width: 5,
+    height: 3,
+    setup: (board) => {
+      board
+        .snowman(0, 0, 1)
+        .player(1, 1, 2)
+        .tile(1, 2, { isSoulSwap: true })
+        .snowman(1, 3, 1)
+        .tile(2, 2, { isHole: true });
+    },
+    actions: ['right', 'down', 'left', 'wait'],
+    verify: (result) => {
+      const armed = (turn: number) => result.turns[turn].level.soulSwapArmedAt;
+      expect(armed(0)?.row === 1 && armed(0)?.col === 2, 'stepping on the plate arms it');
+      expect(!armed(1), 'the player died in the hole: the arming goes with the dead body');
+      expectObject(result.turns[2].level, 1, 2, 'player', 1);
+      expect(armed(2)?.row === 1 && armed(2)?.col === 2, 'the new body stepping on the plate only arms it');
+      expectObject(result.level, 0, 0, 'player', 1);
+      expectObject(result.level, 1, 2, 'snowman', 1);
+    },
+  }),
 ];

@@ -168,6 +168,10 @@ function moveSoul(level: Level, ts: number): void {
   const diedAt = level.soulDiedAt;
   if (diedAt) {
     level.soulDiedAt = null;
+    // The dead body has left any footplate it was waiting on: the arming goes with it, so a
+    // new body that steps on that plate waits its turn like any other (regression from the
+    // 2026-11-25 order change — the death branch skipped resolveSoulFootplate's reset).
+    level.soulSwapArmedAt = null;
     if (!findPlayer(level)) soulTransfer(level, diedAt);
     return;
   }
