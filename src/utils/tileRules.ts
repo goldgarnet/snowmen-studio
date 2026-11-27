@@ -1,7 +1,7 @@
 import type { Level, Tile } from '../types';
 
-// Same-cell placement rules (2026-11-28 user request: a button may not share its cell
-// with a crack or a hole; red buttons/walls). The editor's brushes refuse a forbidden
+// Same-cell placement rules (2026-11-28 user request: a button, a soul footplate or the goal
+// may not share its cell with a crack or a hole; red buttons/walls). The editor's brushes refuse a forbidden
 // pair with a short notice, and the editor warns about pairs already in an opened map.
 // Engine and decoder never strip them: old map codes and their saved solutions keep
 // working exactly as before. Pure functions so the engine test runner can check them.
@@ -14,7 +14,9 @@ export type CellFeature =
   | 'redWall'
   | 'crack'
   | 'hole'
-  | 'triangle';
+  | 'triangle'
+  | 'soulSwap'
+  | 'goal';
 
 const HAS: Record<CellFeature, (tile: Tile) => boolean> = {
   greenButton: (tile) => !!tile.isKeyTile,
@@ -25,9 +27,13 @@ const HAS: Record<CellFeature, (tile: Tile) => boolean> = {
   crack: (tile) => !!tile.isCrack,
   hole: (tile) => !!tile.isHole,
   triangle: (tile) => !!tile.triangle,
+  soulSwap: (tile) => !!tile.isSoulSwap,
+  goal: (tile) => !!tile.isGoal,
 };
 
 export const BUTTON_FLOOR_MSG = '버튼은 균열·구멍과 같은 칸에 둘 수 없습니다';
+export const SOUL_PLATE_FLOOR_MSG = '영혼 발판은 균열·구멍과 같은 칸에 둘 수 없습니다';
+export const GOAL_FLOOR_MSG = '목표는 균열·구멍과 같은 칸에 둘 수 없습니다';
 export const RED_BUTTON_WALL_MSG = '빨간 버튼과 빨간 벽은 같은 칸에 둘 수 없습니다';
 export const YELLOW_RED_WALL_MSG = '노란 벽과 빨간 벽은 같은 칸에 둘 수 없습니다';
 export const RED_BUTTON_MIX_MSG = '빨간 버튼은 초록·노란 버튼과 같은 칸에 둘 수 없습니다';
@@ -42,7 +48,8 @@ export const RED_WALL_NO_BUTTON_MSG = '빨간 버튼이 없어 빨간 벽이 열
  * Unordered same-cell pairs the editor refuses, each with the notice it shows. Allowed on
  * purpose: a button of another color inside a red or yellow wall cell, a wall with a
  * crack/hole/goal/flake/warmth/footplate/arch, and the green + yellow button pair that
- * older maps already use. (Footplate/goal + crack/hole is not decided yet.)
+ * older maps already use. A soul footplate or the goal on a crack/hole is refused too (user
+ * decision 2026-11-28 — waiting on the plate would drop the body, a goal would fall in).
  */
 export const FORBIDDEN_PAIRS: readonly { a: CellFeature; b: CellFeature; message: string }[] = [
   { a: 'greenButton', b: 'crack', message: BUTTON_FLOOR_MSG },
@@ -51,6 +58,10 @@ export const FORBIDDEN_PAIRS: readonly { a: CellFeature; b: CellFeature; message
   { a: 'yellowButton', b: 'hole', message: BUTTON_FLOOR_MSG },
   { a: 'redButton', b: 'crack', message: BUTTON_FLOOR_MSG },
   { a: 'redButton', b: 'hole', message: BUTTON_FLOOR_MSG },
+  { a: 'soulSwap', b: 'crack', message: SOUL_PLATE_FLOOR_MSG },
+  { a: 'soulSwap', b: 'hole', message: SOUL_PLATE_FLOOR_MSG },
+  { a: 'goal', b: 'crack', message: GOAL_FLOOR_MSG },
+  { a: 'goal', b: 'hole', message: GOAL_FLOOR_MSG },
   { a: 'redButton', b: 'redWall', message: RED_BUTTON_WALL_MSG },
   { a: 'yellowWall', b: 'redWall', message: YELLOW_RED_WALL_MSG },
   { a: 'redButton', b: 'greenButton', message: RED_BUTTON_MIX_MSG },
@@ -72,6 +83,8 @@ export const BRUSH_FEATURE: Readonly<Record<string, CellFeature>> = {
   crackWarm: 'crack',
   crackCool: 'crack',
   triangle: 'triangle',
+  soulSwap: 'soulSwap',
+  goal: 'goal',
 };
 
 /**

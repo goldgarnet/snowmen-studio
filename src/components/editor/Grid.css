@@ -272,7 +272,7 @@
 .button-mass-badge.yellow.pressed { background: #d9a520; color: #fff; }
 /* Red: an SVG hexagon (shape, not only color), so no circle border/background here. */
 .button-mass-badge.red { border: none; border-radius: 0; background: none; overflow: visible; }
-.button-mass-badge.red polygon { fill: rgba(255, 255, 255, 0.92); stroke: #a02a21; }
+.button-mass-badge.red polygon { fill: rgba(255, 255, 255, 0.92); stroke: #942e42; }
 .button-mass-badge.red text { fill: #8a1c14; }
 .button-mass-badge.red.pressed polygon { fill: #c93a2f; }
 .button-mass-badge.red.pressed text { fill: #fff; }

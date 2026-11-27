@@ -6,6 +6,8 @@ import { createLevel } from '../../../src/utils/level';
 import { decodeLevelCode, encodeLevelCode, readLevelCodeTileFlags } from '../../../src/utils/levelCode';
 import {
   BUTTON_FLOOR_MSG,
+  GOAL_FLOOR_MSG,
+  SOUL_PLATE_FLOOR_MSG,
   RED_BUTTON_MIX_MSG,
   RED_BUTTON_WALL_MSG,
   RED_WALL_NO_BUTTON_MSG,
@@ -896,7 +898,7 @@ export const scenarios: ScenarioDefinition[] = [
 
   // ---------------------------------------------------------------- 에디터 같은 칸 규칙
   defineScenario({
-    name: 'brush rules: a button never shares its cell with a crack or a hole, in either order',
+    name: 'brush rules: a button, a soul footplate or the goal never shares its cell with a crack or a hole, in either order',
     width: 1, height: 1, setup: () => {}, actions: [],
     verify: () => {
       const tile = (patch: object) => ({ ...createLevel(1, 1).tiles[0][0], ...patch });
@@ -908,6 +910,15 @@ export const scenarios: ScenarioDefinition[] = [
       for (const brush of ['hole', 'crackWarm', 'crackCool']) {
         for (const button of [{ isKeyTile: true }, { isYellowButton: true }, { isRedButton: true, buttonMass: 2 }]) {
           expect(brushRefusal(tile(button), brush) === BUTTON_FLOOR_MSG, `${brush} on ${JSON.stringify(button)} is refused`);
+        }
+      }
+      // A soul footplate and the goal follow the same rule (user decision 2026-11-28).
+      for (const [brush, flag, message] of [['soulSwap', 'isSoulSwap', SOUL_PLATE_FLOOR_MSG], ['goal', 'isGoal', GOAL_FLOOR_MSG]] as const) {
+        for (const floor of [{ isCrack: true }, { isCrack: true, isWarm: true }, { isHole: true }]) {
+          expect(brushRefusal(tile(floor), brush) === message, `${brush} on ${JSON.stringify(floor)} is refused`);
+        }
+        for (const floorBrush of ['hole', 'crackWarm', 'crackCool']) {
+          expect(brushRefusal(tile({ [flag]: true }), floorBrush) === message, `${floorBrush} on ${flag} is refused`);
         }
       }
       expect(brushRefusal(tile({ isCrack: true }), 'hole') === null, 'a hole still replaces a crack');
@@ -966,8 +977,8 @@ export const scenarios: ScenarioDefinition[] = [
         [{ isRowArch: true }, 'redButton'],
         [{ isRedButton: true }, 'block'],
         [{ isRedButton: true }, 'eraser'],
-        [{ isCrack: true }, 'soulSwap'],
-        [{ isCrack: true }, 'goal'],
+        [{ isSoulSwap: true }, 'keyTile'],
+        [{ isGoal: true }, 'keyTile'],
       ];
       for (const [patch, brush] of allowed) {
         const got = brushRefusal(tile(patch), brush);
@@ -1019,8 +1030,16 @@ export const scenarios: ScenarioDefinition[] = [
       Object.assign(fine.tiles[0][1], { isYellowWall: true, isCrack: true });
       Object.assign(fine.tiles[0][2], { isRedWall: true, isKeyTile: true });
       fine.tiles[0][3].isRedButton = true;
-      Object.assign(fine.tiles[0][4], { isRedWall: true, isHole: true, isGoal: true });
+      Object.assign(fine.tiles[0][4], { isRedWall: true, isHole: true });
       expect(cellConflicts(fine).length === 0, `allowed combinations raise nothing, got ${JSON.stringify(cellConflicts(fine))}`);
+
+      // A soul footplate or the goal on a crack/hole is pointed at too (user decision 2026-11-28).
+      const floors = createLevel(2, 1);
+      Object.assign(floors.tiles[0][0], { isSoulSwap: true, isHole: true });
+      Object.assign(floors.tiles[0][1], { isGoal: true, isCrack: true, isWarm: true });
+      const floorMessages = cellConflicts(floors).map(({ col, message }) => `${col}:${message}`);
+      expect(JSON.stringify(floorMessages) === JSON.stringify([`0:${SOUL_PLATE_FLOOR_MSG}`, `1:${GOAL_FLOOR_MSG}`]),
+        `unexpected footplate/goal warnings ${JSON.stringify(floorMessages)}`);
     },
   }),
 ];

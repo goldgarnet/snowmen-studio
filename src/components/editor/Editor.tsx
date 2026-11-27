@@ -221,7 +221,9 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
     }
     return [...groups].map(([message, cells]) => ({ message, cells }));
   }, [conflicts]);
-  const conflictSignature = conflicts.map(({ row, col, message }) => `${row},${col},${message}`).join('|');
+  // Closing the banner hides it until a new kind of problem appears — not on every new cell of a
+  // kind already shown (painting red walls before their button kept bringing it back).
+  const conflictSignature = [...new Set(conflicts.map(({ message }) => message))].sort().join('|');
   const [dismissedConflicts, setDismissedConflicts] = useState<string | null>(null);
 
   // === Undo / redo stacks ===
@@ -1253,7 +1255,7 @@ const Editor = forwardRef<EditorToolbarApi, EditorProps>(function Editor({ level
                   <button key={m}
                     aria-pressed={buttonMassChoice === m}
                     title={m === 1 ? '무엇이든 올라가면 눌림' : `크기 ${m} 이상이 올라가야 눌림`}
-                    style={{flex:1,padding:'3px 0',fontSize:13,fontWeight:700,background:buttonMassChoice===m?(selectedTool==='keyTile'?'#2f9e57':selectedTool==='redButton'?'#c0392b':'#c99a1e'):'var(--surface)',color:buttonMassChoice===m?'#fff':'var(--text)',border:`1px solid ${buttonMassChoice===m?'transparent':'var(--border-strong)'}`,borderRadius:4,cursor:'pointer'}}
+                    style={{flex:1,padding:'3px 0',fontSize:13,fontWeight:700,background:buttonMassChoice===m?(selectedTool==='keyTile'?'#2f9e57':selectedTool==='redButton'?'#b23a52':'#c99a1e'):'var(--surface)',color:buttonMassChoice===m?'#fff':'var(--text)',border:`1px solid ${buttonMassChoice===m?'transparent':'var(--border-strong)'}`,borderRadius:4,cursor:'pointer'}}
                     onClick={() => setButtonMassChoice(m)}>
                     {m}
                   </button>

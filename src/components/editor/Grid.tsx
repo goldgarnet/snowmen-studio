@@ -809,7 +809,7 @@ function RedButtonOverlay({ size, mass }: { size: number; mass: number | null })
   return (
     <svg className="tile-overlay" width={size} height={size} viewBox="0 0 40 40">
       <polygon points={hexPoints(13)} fill="none" stroke="#b8372d" strokeWidth="1.2" strokeDasharray="2.5 2.5" opacity="0.7" />
-      <polygon points={hexPoints(10)} fill="#de4b3f" stroke="#a02a21" strokeWidth="1.8" strokeLinejoin="round" opacity="0.95" />
+      <polygon points={hexPoints(10)} fill="#cc4d61" stroke="#942e42" strokeWidth="1.8" strokeLinejoin="round" opacity="0.95" />
       <polygon points={hexPoints(mass == null ? 5 : 7)} fill="#ffb4aa" opacity="0.95" />
       {mass != null && <ButtonMassText mass={mass} color="#6e1510" size={size} />}
     </svg>
@@ -844,7 +844,9 @@ function ButtonMassBadge({ size, mass, color, pressed }: {
 
 interface WallPalette { fill: string; line: string; edge: string; open: string }
 const YELLOW_WALL: WallPalette = { fill: '#e6b422', line: '#c99320', edge: '#b5860f', open: 'rgba(230,180,34,0.10)' };
-const RED_WALL: WallPalette = { fill: '#d24b3e', line: '#a8352b', edge: '#8c2820', open: 'rgba(210,75,62,0.10)' };
+// Crimson placeholder like the game's C_RED — the earlier tomato red read as an armed crack or a
+// laser beam. The final look is the team's call.
+const RED_WALL: WallPalette = { fill: '#c44a5e', line: '#9a3348', edge: '#7e2639', open: 'rgba(204,77,97,0.10)' };
 
 // Yellow/red wall: solid unless its buttons open it (yellow: all pressed, red: any one
 // pressed); when "open" it shows a faint dashed outline of where it will reappear. The red
