@@ -52,11 +52,11 @@ export function applyForce(
     const moved2 = plan2 !== null;
 
     if (!moved1 && !moved2) {
-      // Both sides blocked: the two halves compact into a size-1 snowman.
+      // Both sides blocked: the two halves compact into a size-1 snowman. Like a built
+      // snowman it leaves the cell's warmth alone (user decision 2026-11-28).
       level.objects[pos.row][pos.col] = {
         type: 'snowman', size: 1, isMelting: false, createdAt: turnCount,
       };
-      level.tiles[pos.row][pos.col].isWarm = false;
       // Like any new snowman it absorbs a snowflake under it (Q-10).
       absorbFlake(level, pos);
       return true;

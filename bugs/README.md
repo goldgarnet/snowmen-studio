@@ -45,6 +45,7 @@
 | B-027 | 굴림 도중 정해진 클리어가 같은 굴림의 뒤 사망보다 우선 — 초록 버튼이 없는 맵에도 | medium | studio·JS·GD (B-002 뒤) | DECIDE → 팀 결정 | 고침 — 클리어가 정해지면 판이 멈춤(2026-11-05) | [B-027-clear-then-death-same-roll.md](B-027-clear-then-death-same-roll.md) |
 | B-028 | 삼각벽은 항상 밀리는 판정 — 쪼갠 반쪽의 밀기도 꺾임. 같은 날 수정: 다리는 밖에서 보면 벽(둘째 규칙 되돌림), 줄의 어느 공이든 삼각 칸에서 꺾임 | medium | studio·JS·GD | DECIDE → 사용자 결정 | `261a2b2` 배포 · 같은 날 수정은 작업 트리 `fix/triangle-bend-any`(Studio·JS·GD, 커밋 전) | [B-028-triangle-always-push.md](B-028-triangle-always-push.md) |
 | B-029 | 판정 순서 — 즉사 → 클리어 → 이동 → 따뜻한 칸 → 즉사 재판정 → 영혼 이동. 영혼(사망·발판)은 턴 맨 끝에 옮겨 간다 | high | studio·JS·GD | DECIDE → 사용자 결정 | 고침(2026-11-25) — 등록 풀이 4개 영향 | [B-029-judgment-order.md](B-029-judgment-order.md) |
+| B-030 | 눈사람을 만들면(쪼개기 양쪽 막힘 포함) 그 칸이 차가워짐 — 그늘의 따뜻한 칸에서 만든 눈사람이 그늘이 걷혀도 안 녹는 별해 | medium | studio·JS·GD | 사용자 보고 → 사용자 결정 | 고침(2026-11-28) — 만들어도 칸은 식지 않는다. 등록 풀이 영향 없음 | [B-030-build-keeps-warmth.md](B-030-build-keeps-warmth.md) |
 
 ## 분류
 

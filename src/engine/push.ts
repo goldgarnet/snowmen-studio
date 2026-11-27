@@ -517,10 +517,12 @@ function doBuildSnowman(
     return { level, playerMoved: false };
   }
 
-  // A and B merge into a snowman at B's position
+  // A and B merge into a snowman at B's position. Building does not cool the cell: a
+  // snowman built on a warm cell melts there like any other once the sun reaches it
+  // (user decision 2026-11-28 — until then the build turned B's cell cold, which let a
+  // snowman built in shade stand safe after the shade left).
   level.objects[posA.row][posA.col] = null;
   level.objects[posB.row][posB.col] = completedSnowman;
-  level.tiles[posB.row][posB.col].isWarm = false;
   // A snowflake left under B (a size-2 ball does not consume one) is absorbed by the
   // new snowman like any snow object standing on it (Q-10).
   pickFlake(level, posB);
