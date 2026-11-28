@@ -191,7 +191,9 @@ export function applyHoles(level: Level): void {
   const fallen: Position[] = [];
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
-      if (level.tiles[r][c].isHole && level.objects[r][c]) fallen.push({ row: r, col: c });
+      // A wall stays put even over a hole (user decision 2026-11-28); a tree, box or laser falls.
+      const obj = level.objects[r][c];
+      if (level.tiles[r][c].isHole && obj && obj.type !== 'wall') fallen.push({ row: r, col: c });
     }
   }
   removeObjects(level, fallen, false);
@@ -218,7 +220,10 @@ function armCoveredCracks(level: Level): void {
   for (let r = 0; r < level.height; r++) {
     for (let c = 0; c < level.width; c++) {
       const tile = level.tiles[r][c];
-      if (tile.isCrack && (level.objects[r][c] || tile.crackRolled)) {
+      // A wall standing on a crack does not arm it: the wall stays and so does the crack
+      // (user decision 2026-11-28 — a tree on a crack still falls in two turns later).
+      const obj = level.objects[r][c];
+      if (tile.isCrack && ((obj && obj.type !== 'wall') || tile.crackRolled)) {
         tile.crackArmed = true;
       }
       if (tile.crackRolled) delete tile.crackRolled;
